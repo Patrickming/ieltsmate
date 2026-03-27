@@ -87,7 +87,7 @@ export default function KnowledgeDetail() {
                 {/* Synonyms */}
                 {note.synonyms && note.synonyms.length > 0 && (
                   <div>
-                    <div className="text-xs font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
                     <div className="flex flex-wrap gap-2">
                       {note.synonyms.map((syn) => {
                         const saved = savedSynonyms.includes(syn)
@@ -100,7 +100,7 @@ export default function KnowledgeDetail() {
                               : { background: '#1a1a28', borderColor: '#27272a' }
                             }
                           >
-                            <span className="text-sm text-text-primary">{syn}</span>
+                            <span className="text-[15px] text-text-primary">{syn}</span>
                             <button
                               onClick={() => setSavedSynonyms((prev) =>
                                 saved ? prev.filter((s) => s !== syn) : [...prev, syn]
@@ -108,8 +108,8 @@ export default function KnowledgeDetail() {
                               className="flex items-center gap-1"
                               style={{ color: saved ? '#34d399' : '#818cf8' }}
                             >
-                              {saved ? <Check size={9} /> : <Plus size={9} />}
-                              <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
+                              {saved ? <Check size={10} /> : <Plus size={10} />}
+                              <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
                             </button>
                           </div>
                         )
@@ -121,7 +121,7 @@ export default function KnowledgeDetail() {
                 {/* Antonyms */}
                 {note.antonyms && note.antonyms.length > 0 && (
                   <div>
-                    <div className="text-xs font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
                     <div className="flex flex-wrap gap-2">
                       {note.antonyms.map((ant) => {
                         const saved = savedAntonyms.includes(ant)
@@ -134,7 +134,7 @@ export default function KnowledgeDetail() {
                               : { background: '#1a1a28', borderColor: '#27272a' }
                             }
                           >
-                            <span className="text-sm text-text-primary">{ant}</span>
+                            <span className="text-[15px] text-text-primary">{ant}</span>
                             <button
                               onClick={() => setSavedAntonyms((prev) =>
                                 saved ? prev.filter((s) => s !== ant) : [...prev, ant]
@@ -142,8 +142,8 @@ export default function KnowledgeDetail() {
                               className="flex items-center gap-1"
                               style={{ color: saved ? '#34d399' : '#818cf8' }}
                             >
-                              {saved ? <Check size={9} /> : <Plus size={9} />}
-                              <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
+                              {saved ? <Check size={10} /> : <Plus size={10} />}
+                              <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
                             </button>
                           </div>
                         )
@@ -155,10 +155,10 @@ export default function KnowledgeDetail() {
                 {/* Phonetic */}
                 {note.phonetic && (
                   <div>
-                    <div className="text-xs font-semibold text-text-muted mb-2.5">🔊 音标</div>
-                    <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-2.5 w-fit">
-                      <Volume2 size={14} className="text-primary" />
-                      <span className="text-sm text-[#a5b4fc]">{note.phonetic}</span>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🔊 音标</div>
+                    <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+                      <Volume2 size={16} className="text-primary" />
+                      <span className="text-[15px] text-[#a5b4fc]">{note.phonetic}</span>
                     </div>
                   </div>
                 )}
@@ -166,9 +166,9 @@ export default function KnowledgeDetail() {
                 {/* Example */}
                 {note.example && (
                   <div>
-                    <div className="text-xs font-semibold text-text-muted mb-2.5">💬 例句</div>
-                    <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3">
-                      <p className="text-sm text-text-secondary italic">"{note.example}"</p>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">💬 例句</div>
+                    <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5">
+                      <p className="text-[15px] text-text-secondary italic">"{note.example}"</p>
                     </div>
                   </div>
                 )}
@@ -183,7 +183,7 @@ export default function KnowledgeDetail() {
                   key={i}
                   className="flex items-start gap-2 mb-2 pl-3 border-l-2 border-primary/40"
                 >
-                  <p className="text-xs text-text-muted flex-1 leading-relaxed">{n}</p>
+                  <p className="text-[13px] text-text-muted flex-1 leading-relaxed">{n}</p>
                 </div>
               ))}
               <AnimatePresence>
@@ -200,15 +200,15 @@ export default function KnowledgeDetail() {
                       onChange={(e) => setNewNote(e.target.value)}
                       placeholder="添加备注..."
                       rows={2}
-                      className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-2 text-xs text-text-primary placeholder-text-subtle outline-none resize-none mb-2 mt-2"
+                      className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-2 text-sm text-text-primary placeholder-text-subtle outline-none resize-none mb-2 mt-2"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveNote() }
                         if (e.key === 'Escape') setAddingNote(false)
                       }}
                     />
                     <div className="flex gap-2">
-                      <button onClick={handleSaveNote} className="text-xs px-2.5 py-1 bg-primary-btn text-white rounded-sm">保存</button>
-                      <button onClick={() => setAddingNote(false)} className="text-xs px-2.5 py-1 border border-border text-text-dim rounded-sm">取消</button>
+                      <button onClick={handleSaveNote} className="text-sm px-3 py-1 bg-primary-btn text-white rounded-sm">保存</button>
+                      <button onClick={() => setAddingNote(false)} className="text-sm px-3 py-1 border border-border text-text-dim rounded-sm">取消</button>
                     </div>
                   </motion.div>
                 )}
@@ -216,7 +216,7 @@ export default function KnowledgeDetail() {
               {!addingNote && (
                 <button
                   onClick={() => setAddingNote(true)}
-                  className="flex items-center gap-1.5 mt-2 text-xs border border-primary/40 rounded-sm px-3 py-1.5 text-primary hover:bg-[#1e1b4b] transition-colors w-full justify-center"
+                  className="flex items-center gap-1.5 mt-2 text-sm border border-primary/40 rounded-sm px-3 py-1.5 text-primary hover:bg-[#1e1b4b] transition-colors w-full justify-center"
                 >
                   <Plus size={11} />
                   添加备注
@@ -233,15 +233,15 @@ export default function KnowledgeDetail() {
               <div className="grid grid-cols-3 gap-2 mb-3">
                 <div className="flex flex-col items-center gap-1 bg-[#1e1e28] rounded-md py-2.5">
                   <span className="text-xl font-bold text-primary">{note.reviewCount ?? 0}</span>
-                  <span className="text-[10px] text-text-dim">复习次数</span>
+                  <span className="text-[11px] text-text-dim">复习次数</span>
                 </div>
                 <div className="flex flex-col items-center gap-1 bg-[#1e2e1e] rounded-md py-2.5">
                   <span className="text-xl font-bold text-cat-phrase">{note.correctCount ?? 0}</span>
-                  <span className="text-[10px] text-text-dim">正确 {accuracy}%</span>
+                  <span className="text-[11px] text-text-dim">正确 {accuracy}%</span>
                 </div>
                 <div className="flex flex-col items-center gap-1 bg-[#2e1e1e] rounded-md py-2.5">
                   <span className="text-xl font-bold text-cat-sentence">{note.wrongCount ?? 0}</span>
-                  <span className="text-[10px] text-text-dim">错误 {100 - accuracy}%</span>
+                  <span className="text-[11px] text-text-dim">错误 {100 - accuracy}%</span>
                 </div>
               </div>
               <div className="h-1.5 bg-[#27272a] rounded-full overflow-hidden mb-2">
@@ -253,7 +253,7 @@ export default function KnowledgeDetail() {
                 />
               </div>
               {note.lastReview && (
-                <p className="text-[11px] text-text-subtle">上次复习: {note.lastReview}</p>
+                <p className="text-xs text-text-subtle">上次复习: {note.lastReview}</p>
               )}
             </div>
 
@@ -261,12 +261,12 @@ export default function KnowledgeDetail() {
             <div className="bg-surface-card border border-border rounded-xl p-4">
               <div className="text-sm font-semibold text-text-secondary mb-3">操作</div>
               <div className="flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-1.5 h-8 border border-border rounded-sm text-text-muted hover:text-text-secondary hover:bg-[#27272a] text-xs transition-colors">
-                  <Pencil size={12} />
+                <button className="flex-1 flex items-center justify-center gap-1.5 h-9 border border-border rounded-sm text-text-muted hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors">
+                  <Pencil size={13} />
                   编辑
                 </button>
-                <button className="flex-1 flex items-center justify-center gap-1.5 h-8 bg-[#2e1520] border border-[#fb7185]/40 rounded-sm text-[#fb7185] hover:bg-[#450a0a] text-xs transition-colors">
-                  <Trash2 size={12} />
+                <button className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-[#2e1520] border border-[#fb7185]/40 rounded-sm text-[#fb7185] hover:bg-[#450a0a] text-sm transition-colors">
+                  <Trash2 size={13} />
                   删除
                 </button>
               </div>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Plus, ChevronDown, Database, Download, Upload } from 'lucide-react'
+import { Plus, Database, Download, Upload, Sun, Moon } from 'lucide-react'
+import { motion } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { useAppStore } from '../store/useAppStore'
 import { mockProviders } from '../data/mockData'
@@ -8,13 +9,28 @@ function SectionTitle({ children }: { children: string }) {
   return <h2 className="text-lg font-semibold text-text-primary">{children}</h2>
 }
 
-export default function Settings() {
-  const { openAIConfig } = useAppStore()
-  const [providers] = useState(mockProviders)
+const MODEL_SLOTS = [
+  { id: 'classify', label: '分类识别', tip: '用于自动识别笔记分类' },
+  { id: 'review', label: '复习联想', tip: '用于复习时生成延伸内容' },
+  { id: 'chat', label: 'AI 助手', tip: '用于 AI 对话助手' },
+]
 
-  const MODELS = ['分类识别', '复习联想', 'AI 助手']
+export default function Settings() {
+  const { openAIConfig, theme, setTheme } = useAppStore()
+  const [providers] = useState(mockProviders)
+  const [classifyModel, setClassifyModel] = useState(providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
+  const [reviewModel, setReviewModel] = useState(providers[1]?.selectedModel?.split('/').pop() ?? 'MiniMax-M2.5')
+  const [chatModel, setChatModel] = useState(providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
+
+  const modelValues = { classify: classifyModel, review: reviewModel, chat: chatModel }
+  const modelSetters = { classify: setClassifyModel, review: setReviewModel, chat: setChatModel }
 
   const maskKey = (key?: string) => key ? `${key.slice(0, 4)}****` : 'sk-****'
+
+  // Build all available model names from all providers
+  const allModels = providers.flatMap((p) =>
+    p.models.map((m) => ({ model: m.split('/').pop() ?? m, providerName: p.name }))
+  )
 
   return (
     <Layout title="设置">
@@ -33,7 +49,7 @@ export default function Settings() {
             </button>
           </div>
 
-          {/* Provider list — config summary only, no edit/delete buttons */}
+          {/* Provider list — show name, key, selected model, status */}
           <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
             {providers.map((p, i) => (
               <div
@@ -46,8 +62,14 @@ export default function Settings() {
                     openai-compatible · {maskKey(p.apiKey)}
                   </div>
                 </div>
+                {/* Show selected model name */}
+                {p.selectedModel && (
+                  <span className="text-xs text-text-subtle truncate max-w-[160px] hidden sm:block">
+                    {p.selectedModel.split('/').pop()}
+                  </span>
+                )}
                 <div
-                  className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0"
                   style={{
                     background: p.connected ? '#064e3b' : '#27272a',
                     color: p.connected ? '#34d399' : '#71717a',
@@ -60,26 +82,78 @@ export default function Settings() {
             ))}
           </div>
 
-          {/* Default model assignment */}
+          {/* Default model assignment — three independent dropdowns */}
           <div>
             <div className="text-sm font-medium text-text-muted mb-3">默认模型分配</div>
             <div className="grid grid-cols-3 gap-3">
-              {MODELS.map((m) => (
-                <div key={m} className="flex flex-col gap-1.5">
-                  <span className="text-xs text-text-dim">{m}</span>
-                  <button className="flex items-center justify-between h-8 bg-[#232328] border border-border rounded-sm px-3 text-xs text-text-muted hover:border-border-strong transition-colors">
-                    <span>{providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash'}</span>
-                    <ChevronDown size={11} className="text-text-subtle" />
-                  </button>
-                </div>
-              ))}
+              {MODEL_SLOTS.map((slot) => {
+                const currentVal = modelValues[slot.id as keyof typeof modelValues]
+                const setter = modelSetters[slot.id as keyof typeof modelSetters]
+                return (
+                  <div key={slot.id} className="flex flex-col gap-1.5">
+                    <span className="text-xs text-text-dim">{slot.label}</span>
+                    <select
+                      value={currentVal}
+                      onChange={(e) => setter(e.target.value)}
+                      className="h-8 bg-[#232328] border border-border rounded-sm px-2 text-xs text-text-muted hover:border-border-strong transition-colors outline-none appearance-none cursor-pointer"
+                    >
+                      {allModels.map(({ model, providerName }) => (
+                        <option key={`${providerName}-${model}`} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </section>
 
         <div className="h-px bg-border" />
 
-        {/* Section 2: 数据管理 */}
+        {/* Section 2: 界面主题 */}
+        <section className="flex flex-col gap-4">
+          <SectionTitle>界面主题</SectionTitle>
+          <div className="bg-surface-card border border-border rounded-xl p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-medium text-text-secondary">颜色主题</div>
+                <div className="text-xs text-text-dim mt-0.5">切换日间或夜间显示模式</div>
+              </div>
+              <div className="flex items-center bg-[#232328] rounded-lg p-0.5 gap-0.5">
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setTheme('dark')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    theme === 'dark'
+                      ? 'bg-primary-btn text-white'
+                      : 'text-text-dim hover:text-text-muted'
+                  }`}
+                >
+                  <Moon size={12} />
+                  暗色
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setTheme('light')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                    theme === 'light'
+                      ? 'bg-primary-btn text-white'
+                      : 'text-text-dim hover:text-text-muted'
+                  }`}
+                >
+                  <Sun size={12} />
+                  日间
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="h-px bg-border" />
+
+        {/* Section 3: 数据管理 */}
         <section className="flex flex-col gap-5">
           <div className="flex items-center gap-2">
             <Database size={18} className="text-text-dim" />

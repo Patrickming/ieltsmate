@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Volume2, Plus, Check, Sparkles } from 'lucide-react'
+import { Volume2, Plus, Check, Sparkles, HelpCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
@@ -8,7 +8,6 @@ import { useAppStore } from '../store/useAppStore'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
 
-// Per-category card back content strategy (per prompt)
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
   if (category === '口语' || category === '单词') return 'word-speech'
   if (category === '短语') return 'phrase'
@@ -18,26 +17,60 @@ function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' |
   return 'word-speech'
 }
 
+// AI tooltip component
+function AITip({ label, tip }: { label: string; tip: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="flex items-center gap-1.5 relative">
+      <span className="text-sm font-semibold text-text-muted">{label}</span>
+      <button
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        className="text-text-subtle hover:text-text-dim transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <HelpCircle size={12} />
+      </button>
+      <AnimatePresence>
+        {show && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="absolute left-0 top-6 w-60 bg-[#1a1a28] border border-border rounded-md p-3 text-[11px] text-text-muted z-20 shadow-modal pointer-events-none"
+          >
+            <div className="flex items-center gap-1 mb-1.5 text-primary">
+              <Sparkles size={9} />
+              <span className="font-semibold">AI 操作说明</span>
+            </div>
+            {tip}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 function CardFront({ note, cardType }: { note: Note; cardType: ReturnType<typeof getCardType> }) {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-5 px-8">
       <Badge category={note.category} size="md" />
       {cardType === 'spelling' ? (
         <div className="text-center">
-          <p className="text-lg text-text-muted mb-3">请拼出这个单词</p>
-          <p className="text-3xl font-bold text-text-primary">{note.translation}</p>
+          <p className="text-xl text-text-muted mb-3">请拼出这个单词</p>
+          <p className="text-4xl font-bold text-text-primary">{note.translation}</p>
           {note.content && (
-            <p className="text-text-dim text-base mt-2">
+            <p className="text-text-dim text-lg mt-2">
               首字母: <span className="text-primary font-semibold">{note.content[0].toUpperCase()}</span>
             </p>
           )}
         </div>
       ) : (
-        <h2 className="text-[2.5rem] font-bold text-text-primary text-center leading-tight">
+        <h2 className="text-[2.8rem] font-bold text-text-primary text-center leading-tight">
           {note.content}
         </h2>
       )}
-      <p className="text-sm text-text-dim">点击卡片或按空格键翻转</p>
+      <p className="text-base text-text-dim">点击卡片或按空格键翻转</p>
     </div>
   )
 }
@@ -52,34 +85,37 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
 
   return (
-    <div className="flex flex-col gap-4 p-7 overflow-y-auto h-full">
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={(e) => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
-        <span className="text-xs text-text-dim">已翻转</span>
+        <span className="text-sm text-text-dim">已翻转</span>
       </div>
 
       {/* Phonetic */}
       {note.phonetic && (
-        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3 py-2.5 w-fit">
-          <Volume2 size={14} className="text-primary" />
-          <span className="text-sm text-[#a5b4fc]">{note.phonetic}</span>
+        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+          <Volume2 size={16} className="text-primary" />
+          <span className="text-[16px] text-[#a5b4fc]">{note.phonetic}</span>
         </div>
       )}
 
       {/* Meaning */}
       <div>
-        <div className="text-[11px] font-semibold text-text-dim mb-1">中文意思</div>
-        <p className="text-base text-text-primary">{note.translation}</p>
+        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
       </div>
 
       {/* Divider */}
       <div className="h-px bg-border" />
 
-      {/* Synonyms — for all types */}
+      {/* Synonyms */}
       {note.synonyms && note.synonyms.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-text-muted mb-2">🔄 同义短语</div>
-          <div className="flex flex-wrap gap-2">
+          <AITip
+            label="🔄 同义短语"
+            tip="AI 基于原词实时生成，点击「存入」可保存到知识库与原词关联"
+          />
+          <div className="flex flex-wrap gap-2 mt-2.5">
             {note.synonyms.map((syn) => {
               const saved = savedSyn.includes(syn)
               return (
@@ -91,10 +127,10 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
                     : { background: '#1a1a28', borderColor: '#27272a' }
                   }
                 >
-                  <span className="text-sm text-text-primary">{syn}</span>
+                  <span className="text-[15px] text-text-primary">{syn}</span>
                   <button onClick={() => onSaveSyn(syn)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
-                    {saved ? <Check size={9} /> : <Plus size={9} />}
-                    <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
+                    {saved ? <Check size={10} /> : <Plus size={10} />}
+                    <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
                   </button>
                 </div>
               )
@@ -106,8 +142,11 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
       {/* Antonyms */}
       {note.antonyms && note.antonyms.length > 0 && (
         <div>
-          <div className="text-xs font-semibold text-text-muted mb-2">🔀 反义短语</div>
-          <div className="flex flex-wrap gap-2">
+          <AITip
+            label="🔀 反义短语"
+            tip="AI 生成的语义对立词/短语，供扩展记忆，点击「存入」可关联到知识库"
+          />
+          <div className="flex flex-wrap gap-2 mt-2.5">
             {note.antonyms.map((ant) => {
               const saved = savedAnt.includes(ant)
               return (
@@ -119,10 +158,10 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
                     : { background: '#1a1a28', borderColor: '#27272a' }
                   }
                 >
-                  <span className="text-sm text-text-primary">{ant}</span>
+                  <span className="text-[15px] text-text-primary">{ant}</span>
                   <button onClick={() => onSaveAnt(ant)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
-                    {saved ? <Check size={9} /> : <Plus size={9} />}
-                    <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
+                    {saved ? <Check size={10} /> : <Plus size={10} />}
+                    <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
                   </button>
                 </div>
               )
@@ -134,24 +173,24 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
       {/* Memory tip */}
       {note.memoryTip && (
         <div
-          className="rounded-lg border px-4 py-3"
+          className="rounded-lg border px-4 py-3.5"
           style={{ background: '#1e1a2e', borderColor: barColor + '40' }}
         >
-          <div className="flex items-center gap-1.5 mb-1.5 text-primary">
-            <Sparkles size={11} />
-            <span className="text-[11px] font-semibold">记忆技巧</span>
-          </div>
-          <p className="text-xs text-[#c4b5fd] leading-relaxed">{note.memoryTip}</p>
+          <AITip
+            label="✨ 记忆技巧"
+            tip="AI 基于词源/联想生成记忆辅助，每次复习可能不同，帮助加深印象"
+          />
+          <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{note.memoryTip}</p>
         </div>
       )}
 
       {/* Example */}
       {note.example && (
         <div>
-          <div className="h-px bg-border mb-3" />
-          <div className="text-xs font-semibold text-text-muted mb-2">💬 例句</div>
-          <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3">
-            <p className="text-sm text-text-secondary italic leading-relaxed">"{note.example}"</p>
+          <div className="h-px bg-border mb-4" />
+          <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
+          <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5">
+            <p className="text-[14px] text-text-secondary italic leading-relaxed">"{note.example}"</p>
           </div>
         </div>
       )}
@@ -165,7 +204,7 @@ export default function ReviewCards() {
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
   const [savedAnt, setSavedAnt] = useState<string[]>([])
-  const [exiting, setExiting] = useState(false)
+  // No exiting state — use flip-back + setTimeout instead
 
   const session = reviewSession
   const card = session?.cards[session.current]
@@ -195,20 +234,18 @@ export default function ReviewCards() {
   const barColor = CATEGORY_BAR[card.category] ?? '#818cf8'
 
   const handleRate = (rating: 'easy' | 'again') => {
-    if (exiting) return
     rateCard(card.id, rating)
-    setExiting(true)
+    // First flip back to front face, then transition to next card
+    setFlipped(false)
+    setSavedSyn([])
+    setSavedAnt([])
     setTimeout(() => {
       if (current + 1 >= total) {
         navigate('/review/summary')
       } else {
-        setFlipped(false)
-        setSavedSyn([])
-        setSavedAnt([])
-        setExiting(false)
-        nextCard()
+        nextCard() // key change triggers AnimatePresence — card is already front-facing, no rotation visible
       }
-    }, 220)
+    }, 300)
   }
 
   return (
@@ -230,11 +267,11 @@ export default function ReviewCards() {
 
       {/* Card area */}
       <div className="flex flex-col items-center gap-6 px-12 py-8 h-[calc(100vh-112px)]">
-        {/* Card wrapper — fixed height, no flex-1 stretch */}
+        {/* Card wrapper */}
         <div className="w-full max-w-[920px] flex-1 flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
-              key={card.id + String(exiting)}
+              key={card.id}
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.97 }}
@@ -244,12 +281,12 @@ export default function ReviewCards() {
               {/* Flip container */}
               <div
                 className="perspective w-full h-full cursor-pointer"
-                onClick={() => !exiting && setFlipped((f) => !f)}
+                onClick={() => setFlipped((f) => !f)}
               >
                 <motion.div
                   className="preserve-3d relative w-full h-full"
                   animate={{ rotateY: flipped ? 180 : 0 }}
-                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                  transition={{ duration: 0.42, ease: [0.16, 1, 0.3, 1] }}
                   style={{ minHeight: '360px' }}
                 >
                   {/* Front */}
@@ -279,7 +316,7 @@ export default function ReviewCards() {
           </AnimatePresence>
         </div>
 
-        {/* Rating buttons — shrink-0 so they don't compress card */}
+        {/* Rating buttons */}
         <div className="shrink-0 pb-4">
           <AnimatePresence>
             {flipped && (
@@ -287,6 +324,7 @@ export default function ReviewCards() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.15 }}
                 className="flex items-center gap-6"
               >
                 <motion.button

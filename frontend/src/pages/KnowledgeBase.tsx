@@ -166,7 +166,7 @@ export default function KnowledgeBase() {
                   <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: '#94a3b8' }} />
                   <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2">
                     <span
-                      className="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] leading-4 font-medium rounded whitespace-nowrap"
+                      className="self-start w-fit inline-flex items-center gap-1 px-1.5 py-0 text-[10px] leading-4 font-medium rounded whitespace-nowrap"
                       style={{ color: '#94a3b8', background: '#1e293b', border: '1px solid #334155' }}
                     >
                       <FileText size={9} />写作

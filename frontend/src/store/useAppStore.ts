@@ -9,6 +9,10 @@ interface ReviewSession {
 }
 
 interface AppState {
+  // Theme
+  theme: 'dark' | 'light'
+  setTheme: (t: 'dark' | 'light') => void
+
   // Notes
   notes: Note[]
   selectedNote: Note | null
@@ -49,6 +53,12 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  theme: 'dark',
+  setTheme: (t) => {
+    document.documentElement.classList.toggle('light', t === 'light')
+    set({ theme: t })
+  },
+
   notes: mockNotes,
   selectedNote: null,
   setSelectedNote: (note) => set({ selectedNote: note }),

@@ -19,6 +19,27 @@
   --text-subtle: #52525b;
 }
 
+/* Light mode overrides */
+.light {
+  --bg: #f8f8fb;
+  --sidebar: #f0f0f5;
+  --card: #ffffff;
+  --border: #e2e2e8;
+  --border-strong: #c8c8d4;
+  --primary: #6366f1;
+  --primary-btn: #4f46e5;
+  --text-primary: #09090b;
+  --text-secondary: #27272a;
+  --text-muted: #52525b;
+  --text-dim: #71717a;
+  --text-subtle: #a1a1aa;
+}
+
+.light body {
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
 * {
   box-sizing: border-box;
 }
