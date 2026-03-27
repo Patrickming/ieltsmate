@@ -8,10 +8,57 @@ interface ReviewSession {
   results: { id: string; rating: 'easy' | 'hard' | 'again' }[]
 }
 
+export interface ProviderConfig {
+  id: string
+  name: string
+  displayName: string
+  apiKey: string
+  baseUrl: string
+  models: { id: string; verified: boolean }[]
+  presetId: string
+  color: string
+  selectedModel?: string
+}
+
+export const DEFAULT_PROVIDERS: ProviderConfig[] = [
+  {
+    id: 'p1', name: 'SiliconFlow', displayName: 'SiliconFlow',
+    apiKey: 'sk-jhyeofdhmibwjesijkipkwihboldvghwcmnjlzjuuemivmdm',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    models: [{ id: 'Pro/zai-org/GLM-5', verified: true }, { id: 'Pro/moonshotai/Kimi-K2.5', verified: false }],
+    presetId: 'siliconflow', color: '#818cf8', selectedModel: 'Pro/zai-org/GLM-5',
+  },
+  {
+    id: 'p2', name: 'OpenRouter', displayName: 'OpenRouter',
+    apiKey: '',
+    baseUrl: 'https://openrouter.ai/api/v1',
+    models: [{ id: 'anthropic/claude-3.5-sonnet', verified: true }],
+    presetId: 'openrouter', color: '#60a5fa', selectedModel: 'anthropic/claude-3.5-sonnet',
+  },
+  {
+    id: 'p3', name: 'Google Gemini', displayName: 'Google Gemini',
+    apiKey: '',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    models: [{ id: 'gemini-2.0-flash', verified: true }],
+    presetId: 'gemini', color: '#fbbf24', selectedModel: 'gemini-2.0-flash',
+  },
+  {
+    id: 'p4', name: 'Anthropic', displayName: 'Anthropic',
+    apiKey: '',
+    baseUrl: 'https://api.anthropic.com/v1',
+    models: [],
+    presetId: 'anthropic', color: '#fb7185',
+  },
+]
+
 interface AppState {
   // Theme
   theme: 'dark' | 'light'
   setTheme: (t: 'dark' | 'light') => void
+
+  // Providers (shared between Settings and AIModelConfigModal)
+  providers: ProviderConfig[]
+  setProviders: (p: ProviderConfig[]) => void
 
   // Notes
   notes: Note[]
@@ -58,6 +105,9 @@ export const useAppStore = create<AppState>((set) => ({
     document.documentElement.classList.toggle('light', t === 'light')
     set({ theme: t })
   },
+
+  providers: DEFAULT_PROVIDERS,
+  setProviders: (p) => set({ providers: p }),
 
   notes: mockNotes,
   selectedNote: null,

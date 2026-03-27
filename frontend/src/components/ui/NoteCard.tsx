@@ -26,12 +26,15 @@ export function NoteCard({ note }: NoteCardProps) {
       whileTap={{ scale: 0.99 }}
       className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer group"
     >
-      {/* Left color bar */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-[3px]"
+      {/* Left color bar — extends on hover */}
+      <motion.div
+        className="absolute left-0 top-0 w-[3px] rounded-r-full"
         style={{ background: barColor }}
+        initial={{ height: '70%', top: '15%' }}
+        whileHover={{ height: '100%', top: '0%' }}
+        transition={{ duration: 0.22, ease: 'easeOut' }}
       />
-      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2">
+      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2 items-start">
         <Badge category={note.category} />
         <div className="text-[15px] font-semibold text-text-primary group-hover:text-white transition-colors">
           {note.content}

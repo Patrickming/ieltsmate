@@ -13,7 +13,7 @@ export function Badge({ category, size = 'sm' }: BadgeProps) {
 
   return (
     <span
-      className={`self-start w-fit inline-flex items-center rounded font-medium tracking-wide whitespace-nowrap ${padding}`}
+      className={`w-fit inline-flex items-center rounded font-medium tracking-wide whitespace-nowrap ${padding}`}
       style={{ color: colors.color, background: colors.bg, border: `1px solid ${colors.border}` }}
     >
       {category}

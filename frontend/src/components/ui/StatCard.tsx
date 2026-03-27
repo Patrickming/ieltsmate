@@ -35,7 +35,8 @@ export function StatCard({ value, label, sublabel, accentColor }: StatCardProps)
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className="flex-1 bg-surface-card border border-border rounded-lg overflow-hidden"
+      whileHover={{ y: -3, boxShadow: `0 8px 32px ${accentColor}22` }}
+      className="flex-1 bg-surface-card border border-border rounded-lg overflow-hidden cursor-default transition-shadow"
     >
       <div className="h-[3px] w-full" style={{ background: accentColor }} />
       <div className="p-5 flex flex-col gap-2">

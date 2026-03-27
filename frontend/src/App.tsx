@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import Dashboard from './pages/Dashboard'
 import KnowledgeBase from './pages/KnowledgeBase'
 import KnowledgeDetail from './pages/KnowledgeDetail'
+import WritingNoteDetail from './pages/WritingNoteDetail'
 import ReviewSelection from './pages/ReviewSelection'
 import ReviewCards from './pages/ReviewCards'
 import ReviewSummary from './pages/ReviewSummary'
@@ -56,6 +57,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/kb" element={<KnowledgeBase />} />
+        <Route path="/kb/w:id" element={<WritingNoteDetail />} />
         <Route path="/kb/:id" element={<KnowledgeDetail />} />
         <Route path="/review" element={<ReviewSelection />} />
         <Route path="/review/cards" element={<ReviewCards />} />

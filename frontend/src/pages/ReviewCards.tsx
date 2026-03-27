@@ -51,38 +51,71 @@ function AITip({ label, tip }: { label: string; tip: string }) {
   )
 }
 
-function CardFront({ note, cardType }: { note: Note; cardType: ReturnType<typeof getCardType> }) {
+function CardFront({ note, cardType, answer, onAnswerChange }: {
+  note: Note
+  cardType: ReturnType<typeof getCardType>
+  answer?: string
+  onAnswerChange?: (v: string) => void
+}) {
+  // Generate placeholder like "c___" for a word starting with 'c'
+  const spellingHint = note.content
+    ? `${note.content[0].toLowerCase()}${'_'.repeat(Math.max(0, note.content.length - 1))}`
+    : ''
+
+  // Parse translation into structured lines for dictionary display
+  const translationLines = note.translation
+    ? note.translation.split(/[；;]/).map(s => s.trim()).filter(Boolean)
+    : []
+
   return (
     <div className="flex flex-col items-center justify-center h-full gap-5 px-8">
       <Badge category={note.category} size="md" />
       {cardType === 'spelling' ? (
-        <div className="text-center">
-          <p className="text-xl text-text-muted mb-3">请拼出这个单词</p>
-          <p className="text-4xl font-bold text-text-primary">{note.translation}</p>
-          {note.content && (
-            <p className="text-text-dim text-lg mt-2">
-              首字母: <span className="text-primary font-semibold">{note.content[0].toUpperCase()}</span>
-            </p>
-          )}
+        <div className="flex flex-col items-center gap-4 w-full max-w-[520px]">
+          <p className="text-xl font-semibold text-text-muted">请拼出这个单词</p>
+          {/* Dictionary-style definitions */}
+          <div className="w-full bg-[#141420] border border-[#27272a] rounded-xl px-5 py-4 text-left">
+            {translationLines.map((line, i) => (
+              <p key={i} className="text-[15px] text-text-secondary leading-relaxed">
+                {line}
+              </p>
+            ))}
+          </div>
+          {/* Answer input */}
+          <input
+            value={answer ?? ''}
+            onChange={e => onAnswerChange?.(e.target.value)}
+            placeholder={spellingHint}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => e.stopPropagation()}
+            className="h-12 w-72 bg-[#18181b] border border-border rounded-xl px-4 text-[18px] text-center text-text-primary outline-none focus:border-primary/60 transition-colors font-mono placeholder-text-subtle tracking-widest"
+          />
         </div>
       ) : (
         <h2 className="text-[2.8rem] font-bold text-text-primary text-center leading-tight">
           {note.content}
         </h2>
       )}
-      <p className="text-base text-text-dim">点击卡片或按空格键翻转</p>
+      <p className="text-base text-text-dim">
+        {cardType === 'spelling' ? '输入答案后点击卡片或按空格键翻转查看' : '点击卡片或按空格键翻转'}
+      </p>
     </div>
   )
 }
 
-function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
+function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer }: {
   note: Note
   savedSyn: string[]
   savedAnt: string[]
   onSaveSyn: (s: string) => void
   onSaveAnt: (s: string) => void
+  spellingAnswer?: string
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
+  const isSpelling = note.category === '拼写'
+  const spellingCorrect = isSpelling && spellingAnswer
+    ? spellingAnswer.trim().toLowerCase() === note.content.toLowerCase()
+    : null
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={(e) => e.stopPropagation()}>
@@ -90,6 +123,34 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
+
+      {/* Spelling answer comparison */}
+      {isSpelling && spellingAnswer && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+          style={{
+            background: spellingCorrect ? '#0d2b1f' : '#2e0f0f',
+            borderColor: spellingCorrect ? '#34d399' : '#fb7185',
+          }}
+        >
+          <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
+          <div>
+            <p className="text-sm text-text-dim mb-0.5">你的答案</p>
+            <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>
+              {spellingAnswer}
+            </p>
+          </div>
+          {!spellingCorrect && (
+            <>
+              <div className="w-px h-10 bg-border mx-1" />
+              <div>
+                <p className="text-sm text-text-dim mb-0.5">正确答案</p>
+                <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Phonetic */}
       {note.phonetic && (
@@ -204,6 +265,7 @@ export default function ReviewCards() {
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
   const [savedAnt, setSavedAnt] = useState<string[]>([])
+  const [spellingAnswer, setSpellingAnswer] = useState('')
   // No exiting state — use flip-back + setTimeout instead
 
   const session = reviewSession
@@ -239,6 +301,7 @@ export default function ReviewCards() {
     setFlipped(false)
     setSavedSyn([])
     setSavedAnt([])
+    setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= total) {
         navigate('/review/summary')
@@ -257,6 +320,7 @@ export default function ReviewCards() {
           <div className="w-48 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
             <motion.div
               className="h-full rounded-full bg-primary"
+              initial={{ width: 0 }}
               animate={{ width: `${progress}%` }}
               transition={{ duration: 0.3 }}
             />
@@ -294,7 +358,12 @@ export default function ReviewCards() {
                     className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden"
                     style={{ borderTopColor: barColor, borderTopWidth: 3 }}
                   >
-                    <CardFront note={card} cardType={cardType} />
+                    <CardFront
+                      note={card}
+                      cardType={cardType}
+                      answer={spellingAnswer}
+                      onAnswerChange={setSpellingAnswer}
+                    />
                   </div>
 
                   {/* Back */}
@@ -308,6 +377,7 @@ export default function ReviewCards() {
                       savedAnt={savedAnt}
                       onSaveSyn={(s) => setSavedSyn((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
                       onSaveAnt={(s) => setSavedAnt((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
+                      spellingAnswer={spellingAnswer}
                     />
                   </div>
                 </motion.div>

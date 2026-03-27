@@ -3,7 +3,6 @@ import { Plus, Database, Download, Upload, Sun, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { useAppStore } from '../store/useAppStore'
-import { mockProviders } from '../data/mockData'
 
 function SectionTitle({ children }: { children: string }) {
   return <h2 className="text-lg font-semibold text-text-primary">{children}</h2>
@@ -16,8 +15,7 @@ const MODEL_SLOTS = [
 ]
 
 export default function Settings() {
-  const { openAIConfig, theme, setTheme } = useAppStore()
-  const [providers] = useState(mockProviders)
+  const { openAIConfig, theme, setTheme, providers } = useAppStore()
   const [classifyModel, setClassifyModel] = useState(providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
   const [reviewModel, setReviewModel] = useState(providers[1]?.selectedModel?.split('/').pop() ?? 'MiniMax-M2.5')
   const [chatModel, setChatModel] = useState(providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
@@ -29,7 +27,7 @@ export default function Settings() {
 
   // Build all available model names from all providers
   const allModels = providers.flatMap((p) =>
-    p.models.map((m) => ({ model: m.split('/').pop() ?? m, providerName: p.name }))
+    p.models.map((m) => ({ model: m.id.split('/').pop() ?? m.id, providerName: p.name, fullId: m.id }))
   )
 
   return (
@@ -68,16 +66,27 @@ export default function Settings() {
                     {p.selectedModel.split('/').pop()}
                   </span>
                 )}
-                <div
-                  className="px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0"
-                  style={{
-                    background: p.connected ? '#064e3b' : '#27272a',
-                    color: p.connected ? '#34d399' : '#71717a',
-                    border: `1px solid ${p.connected ? '#34d399' : '#3f3f46'}`,
-                  }}
-                >
-                  {p.connected ? '已连接' : '未连接'}
-                </div>
+                {/* Fallback: show first model if no selectedModel */}
+                {!p.selectedModel && p.models.length > 0 && (
+                  <span className="text-xs text-text-subtle truncate max-w-[160px] hidden sm:block">
+                    {p.models[0].id.split('/').pop()}
+                  </span>
+                )}
+                {(() => {
+                  const connected = p.apiKey.length > 0
+                  return (
+                    <div
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0"
+                      style={{
+                        background: connected ? '#064e3b' : '#27272a',
+                        color: connected ? '#34d399' : '#71717a',
+                        border: `1px solid ${connected ? '#34d399' : '#3f3f46'}`,
+                      }}
+                    >
+                      {connected ? '已连接' : '未连接'}
+                    </div>
+                  )
+                })()}
               </div>
             ))}
           </div>
@@ -97,8 +106,8 @@ export default function Settings() {
                       onChange={(e) => setter(e.target.value)}
                       className="h-8 bg-[#232328] border border-border rounded-sm px-2 text-xs text-text-muted hover:border-border-strong transition-colors outline-none appearance-none cursor-pointer"
                     >
-                      {allModels.map(({ model, providerName }) => (
-                        <option key={`${providerName}-${model}`} value={model}>
+                      {allModels.map(({ model, providerName, fullId }) => (
+                        <option key={`${providerName}-${fullId}`} value={model}>
                           {model}
                         </option>
                       ))}

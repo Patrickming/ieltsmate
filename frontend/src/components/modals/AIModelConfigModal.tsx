@@ -19,21 +19,7 @@ const PRESET_PROVIDERS = [
   { id: 'custom', name: '自定义', icon: Globe, color: '#71717a', baseUrl: '', recommended: [] },
 ]
 
-interface ProviderConfig {
-  id: string
-  name: string
-  displayName: string
-  apiKey: string
-  baseUrl: string
-  models: { id: string; verified: boolean }[]
-  presetId: string
-  color: string
-}
-
-const DEFAULT_PROVIDERS: ProviderConfig[] = [
-  { id: 'p1', name: 'SiliconFlow', displayName: 'SiliconFlow', apiKey: 'sk-jhyeofdhmibwjesijkipkwihboldvghwcmnjlzjuuemivmdm', baseUrl: 'https://api.siliconflow.cn/v1', models: [{ id: 'Pro/zai-org/GLM-5', verified: true }, { id: 'Pro/moonshotai/Kimi-K2.5', verified: false }], presetId: 'siliconflow', color: '#818cf8' },
-  { id: 'p2', name: 'OpenRouter', displayName: 'OpenRouter', apiKey: '', baseUrl: 'https://openrouter.ai/api/v1', models: [], presetId: 'openrouter', color: '#60a5fa' },
-]
+import type { ProviderConfig } from '../../store/useAppStore'
 
 function ProviderIcon({ presetId, size = 14 }: { presetId: string; size?: number }) {
   const preset = PRESET_PROVIDERS.find((p) => p.id === presetId)
@@ -43,12 +29,14 @@ function ProviderIcon({ presetId, size = 14 }: { presetId: string; size?: number
 }
 
 export function AIModelConfigModal() {
-  const { showAIConfig, closeAIConfig } = useAppStore()
-  const [providers, setProviders] = useState<ProviderConfig[]>(DEFAULT_PROVIDERS)
+  const { showAIConfig, closeAIConfig, providers, setProviders } = useAppStore()
   const [selectedId, setSelectedId] = useState(providers[0]?.id ?? '')
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [showUnverified, setShowUnverified] = useState(true)
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
+  // Per-model test results for sequential testing
+  const [modelTestResults, setModelTestResults] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'fail'>>({})
+  const [testProgress, setTestProgress] = useState<{ done: number; total: number } | null>(null)
   const [showKey, setShowKey] = useState(false)
   const [newModelId, setNewModelId] = useState('')
   const [showRecommended, setShowRecommended] = useState(false)
@@ -57,17 +45,32 @@ export function AIModelConfigModal() {
   const preset = current ? PRESET_PROVIDERS.find((p) => p.id === current.presetId) : null
 
   const updateCurrent = (patch: Partial<ProviderConfig>) => {
-    setProviders((prev) => prev.map((p) => p.id === selectedId ? { ...p, ...patch } : p))
+    setProviders(providers.map((p) => p.id === selectedId ? { ...p, ...patch } : p))
   }
 
   const handleTest = async () => {
-    if (!current) return
+    if (!current || current.models.length === 0) return
+    const models = current.models
+    setTestProgress({ done: 0, total: models.length })
+    setModelTestResults({})
     setTestStatus('testing')
-    // Simulate test
+
+    for (let i = 0; i < models.length; i++) {
+      const m = models[i]
+      setModelTestResults((prev) => ({ ...prev, [m.id]: 'testing' }))
+      await new Promise<void>((resolve) => setTimeout(resolve, 800 + Math.random() * 400))
+      const result = current.apiKey.length > 10 ? 'ok' : 'fail'
+      setModelTestResults((prev) => ({ ...prev, [m.id]: result }))
+      setTestProgress({ done: i + 1, total: models.length })
+    }
+
+    // All done
+    const allOk = current.apiKey.length > 10
+    setTestStatus(allOk ? 'ok' : 'fail')
     setTimeout(() => {
-      setTestStatus(current.apiKey.length > 10 ? 'ok' : 'fail')
-      setTimeout(() => setTestStatus('idle'), 2500)
-    }, 1200)
+      setTestStatus('idle')
+      setTestProgress(null)
+    }, 3000)
   }
 
   const handleAddProvider = (presetId: string) => {
@@ -84,13 +87,13 @@ export function AIModelConfigModal() {
       presetId: preset.id,
       color: preset.color,
     }
-    setProviders((prev) => [...prev, newP])
+    setProviders([...providers, newP])
     setSelectedId(newId)
     setShowAddDropdown(false)
   }
 
   const handleDeleteProvider = (id: string) => {
-    setProviders((prev) => prev.filter((p) => p.id !== id))
+    setProviders(providers.filter((p) => p.id !== id))
     setSelectedId(providers.find((p) => p.id !== id)?.id ?? '')
   }
 
@@ -312,10 +315,11 @@ export function AIModelConfigModal() {
                             'bg-primary-btn hover:bg-[#4338ca] text-white disabled:opacity-50'
                           }`}
                         >
-                          {testStatus === 'testing' ? '测试中...' :
-                           testStatus === 'ok' ? '✓ 通过' :
-                           testStatus === 'fail' ? '✗ 失败' :
-                           '测试'}
+                          {testStatus === 'testing'
+                            ? testProgress ? `${testProgress.done}/${testProgress.total} 测试中` : '测试中...'
+                            : testStatus === 'ok' ? '✓ 全部通过'
+                            : testStatus === 'fail' ? '✗ 部分失败'
+                            : '逐一测试'}
                         </motion.button>
                       </div>
                     </div>
@@ -392,29 +396,63 @@ export function AIModelConfigModal() {
                     {/* Model list */}
                     {displayedModels.length > 0 && (
                       <div className="flex flex-col gap-1.5">
-                        {displayedModels.map((m) => (
-                          <div
-                            key={m.id}
-                            className="flex items-center gap-3 h-11 px-3 bg-[#18181b] border border-border rounded-lg"
-                          >
-                            {m.verified ? (
-                              <div className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center shrink-0">
-                                <Check size={11} className="text-[#34d399]" />
-                              </div>
-                            ) : (
-                              <div className="w-5 h-5 rounded-full bg-[#1a1a0d] border border-[#fbbf24] flex items-center justify-center shrink-0">
-                                <Zap size={10} className="text-[#fbbf24]" />
-                              </div>
-                            )}
-                            <span className="flex-1 text-sm text-text-primary font-mono truncate">{m.id}</span>
-                            <button
-                              onClick={() => handleRemoveModel(m.id)}
-                              className="text-text-subtle hover:text-text-muted transition-colors shrink-0"
+                        {displayedModels.map((m) => {
+                          const mResult = modelTestResults[m.id]
+                          return (
+                            <div
+                              key={m.id}
+                              className="flex items-center gap-3 h-11 px-3 bg-[#18181b] border rounded-lg transition-colors"
+                              style={{
+                                borderColor: mResult === 'ok' ? '#34d399' : mResult === 'fail' ? '#fb7185' : mResult === 'testing' ? '#818cf8' : '#27272a',
+                              }}
                             >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
+                              {/* Test result or default verified state */}
+                              <AnimatePresence mode="wait">
+                                {mResult === 'testing' ? (
+                                  <motion.div
+                                    key="testing"
+                                    initial={{ scale: 0 }}
+                                    animate={{ scale: 1, rotate: 360 }}
+                                    transition={{ rotate: { repeat: Infinity, duration: 0.8, ease: 'linear' }, scale: { duration: 0.15 } }}
+                                    className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent shrink-0"
+                                  />
+                                ) : mResult === 'ok' ? (
+                                  <motion.div key="ok" initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                    className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center shrink-0">
+                                    <Check size={11} className="text-[#34d399]" />
+                                  </motion.div>
+                                ) : mResult === 'fail' ? (
+                                  <motion.div key="fail" initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                    className="w-5 h-5 rounded-full bg-[#2e0f0f] border border-[#fb7185] flex items-center justify-center shrink-0">
+                                    <X size={11} className="text-[#fb7185]" />
+                                  </motion.div>
+                                ) : m.verified ? (
+                                  <div key="verified" className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center shrink-0">
+                                    <Check size={11} className="text-[#34d399]" />
+                                  </div>
+                                ) : (
+                                  <div key="unverified" className="w-5 h-5 rounded-full bg-[#1a1a0d] border border-[#fbbf24] flex items-center justify-center shrink-0">
+                                    <Zap size={10} className="text-[#fbbf24]" />
+                                  </div>
+                                )}
+                              </AnimatePresence>
+                              <span className="flex-1 text-sm text-text-primary font-mono truncate">{m.id}</span>
+                              {/* Test timing hint */}
+                              {mResult === 'ok' && (
+                                <span className="text-[10px] text-[#34d399] shrink-0">通过</span>
+                              )}
+                              {mResult === 'fail' && (
+                                <span className="text-[10px] text-[#fb7185] shrink-0">失败</span>
+                              )}
+                              <button
+                                onClick={() => handleRemoveModel(m.id)}
+                                className="text-text-subtle hover:text-text-muted transition-colors shrink-0 ml-1"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>

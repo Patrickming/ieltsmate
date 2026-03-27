@@ -15,15 +15,6 @@ const NAV_ITEMS = [
 
 const GROUPS = ['杂笔记', '写作']
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  '口语': '🗣',
-  '短语': '💬',
-  '句子': '📝',
-  '同义替换': '🔄',
-  '拼写': '✏',
-  '单词': '📖',
-  '写作': '✍',
-}
 
 const GROUP_EMOJI: Record<string, string> = {
   '杂笔记': '📒',
@@ -77,20 +68,35 @@ export function Sidebar() {
           return (
             <NavLink key={path} to={path} end={path === '/'}>
               <div
-                className={`relative flex items-center gap-2.5 h-9 mx-2 px-3 rounded-md transition-all ${
+                className={`relative flex items-center gap-2.5 h-9 mx-2 px-3 rounded-md transition-colors ${
                   active
-                    ? 'bg-[#1e1b4b] text-[#c7d2fe]'
-                    : 'text-text-muted hover:text-text-secondary hover:bg-[#27272a]/60'
+                    ? 'text-[#c7d2fe]'
+                    : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
+                {/* Animated background using layoutId */}
                 {active && (
-                  <div className="absolute left-0 top-1 bottom-1 w-[3px] bg-primary rounded-full" />
+                  <motion.div
+                    layoutId="nav-active-bg"
+                    className="absolute inset-0 bg-[#1e1b4b] rounded-md"
+                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  />
+                )}
+                {!active && (
+                  <motion.div
+                    whileHover={{ opacity: 1 }}
+                    initial={{ opacity: 0 }}
+                    className="absolute inset-0 bg-[#27272a]/60 rounded-md"
+                  />
+                )}
+                {active && (
+                  <div className="absolute left-0 top-1 bottom-1 w-[3px] bg-primary rounded-full z-10" />
                 )}
                 <Icon
                   size={15}
-                  className={active ? 'text-primary ml-0.5' : 'text-text-dim ml-0.5'}
+                  className={`relative z-10 ${active ? 'text-primary ml-0.5' : 'text-text-dim ml-0.5'}`}
                 />
-                <span className={`text-[13px] ${active ? 'font-semibold' : 'font-medium'}`}>
+                <span className={`relative z-10 text-[13px] ${active ? 'font-semibold' : 'font-medium'}`}>
                   {label}
                 </span>
               </div>
@@ -137,9 +143,8 @@ export function Sidebar() {
                         key={name}
                         onClick={() => handleCategoryClick(name, group)}
                         className="flex items-center gap-2 h-7 w-full text-text-dim hover:text-text-muted hover:bg-[#27272a]/40 transition-colors"
-                        style={{ paddingLeft: '2.5rem', paddingRight: '1rem' }}
+                        style={{ paddingLeft: '2.75rem', paddingRight: '1rem' }}
                       >
-                        <span className="text-sm">{CATEGORY_EMOJI[name]}</span>
                         <div
                           className="w-1.5 h-1.5 rounded-full shrink-0"
                           style={{ background: CATEGORY_BAR[name] ?? '#71717a' }}

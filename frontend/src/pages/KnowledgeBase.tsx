@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, Tag, ChevronDown, FileText, CirclePlus, Plus } from 'lucide-react'
+import { Search, Tag, ChevronDown, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
@@ -75,55 +75,77 @@ export default function KnowledgeBase() {
           </motion.button>
         </div>
 
-        {/* Group Tabs */}
-        <div className="flex items-center gap-2">
-          {(['全部', '杂笔记', '写作'] as const).map((g) => (
-            <button
+        {/* Group Tabs — with icons and note counts */}
+        <div className="flex items-center gap-1.5">
+          {([
+            { g: '全部' as const, icon: LayoutGrid, count: notes.length + WRITING_NOTES.length },
+            { g: '杂笔记' as const, icon: NotebookPen, count: notes.length },
+            { g: '写作' as const, icon: FileText, count: WRITING_NOTES.length },
+          ]).map(({ g, icon: Icon, count }) => (
+            <motion.button
               key={g}
+              whileTap={{ scale: 0.97 }}
               onClick={() => { setGroupFilter(g); setSubFilter('全部') }}
-              className={`h-8 px-4 rounded-sm text-[13px] font-medium border transition-all ${
+              className={`flex items-center gap-1.5 h-9 px-4 rounded-md text-[13px] font-medium border transition-all ${
                 groupFilter === g
-                  ? 'bg-[#312e81] border-[#4338ca] text-[#c7d2fe]'
-                  : 'border-border text-text-dim hover:border-border-strong hover:text-text-muted'
+                  ? 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]'
+                  : 'border-border text-text-dim hover:border-border-strong hover:text-text-muted hover:bg-[#27272a]/40'
               }`}
             >
+              <Icon size={13} className={groupFilter === g ? 'text-primary' : 'text-text-subtle'} />
               {g}
-            </button>
+              <span className={`text-[10px] font-normal px-1.5 py-0.5 rounded-full ml-0.5 ${
+                groupFilter === g ? 'bg-primary/20 text-primary' : 'bg-border text-text-subtle'
+              }`}>
+                {count}
+              </span>
+            </motion.button>
           ))}
         </div>
 
-        {/* Sub-type pills — only when 杂笔记 or 全部 */}
+        {/* Sub-type pills — with color dots and note counts */}
         {(groupFilter === '杂笔记' || groupFilter === '全部') && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {SUB_CATS.map((cat) => {
               const color = cat !== '全部' ? CATEGORY_COLORS[cat]?.color : undefined
               const bg = cat !== '全部' ? CATEGORY_COLORS[cat]?.bg : undefined
               const border = cat !== '全部' ? CATEGORY_COLORS[cat]?.border : undefined
+              const dotColor = cat !== '全部' ? CATEGORY_BAR[cat] : undefined
+              const catCount = cat === '全部'
+                ? notes.length
+                : notes.filter((n) => n.category === cat).length
               const isActive = subFilter === cat
               return (
                 <motion.button
                   key={cat}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setSubFilter(cat)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     isActive && cat !== '全部'
                       ? ''
                       : isActive
                         ? 'bg-primary-btn text-white'
-                        : 'border border-border text-text-dim hover:text-text-muted'
+                        : 'border border-border text-text-dim hover:text-text-muted hover:border-border-strong'
                   }`}
                   style={isActive && cat !== '全部' ? { color, background: bg, border: `1px solid ${border}` } : {}}
                 >
+                  {dotColor && (
+                    <div
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ background: dotColor }}
+                    />
+                  )}
                   {cat}
+                  <span className={`text-[10px] opacity-50 ml-0.5`}>{catCount}</span>
                 </motion.button>
               )
             })}
           </div>
         )}
 
-        {/* Search row */}
+        {/* Search row — deeper bg, taller */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 flex items-center gap-2 h-9 bg-surface-sidebar border border-border rounded-sm px-3">
+          <div className="flex-1 flex items-center gap-2 h-11 bg-[#0d0d10] border border-border rounded-md px-3.5 focus-within:border-primary/40 transition-colors">
             <Search size={14} className="text-text-dim shrink-0" />
             <input
               value={search}
@@ -164,7 +186,7 @@ export default function KnowledgeBase() {
                   className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
                 >
                   <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: '#94a3b8' }} />
-                  <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2">
+                  <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2 items-start">
                     <span
                       className="self-start w-fit inline-flex items-center gap-1 px-1.5 py-0 text-[10px] leading-4 font-medium rounded whitespace-nowrap"
                       style={{ color: '#94a3b8', background: '#1e293b', border: '1px solid #334155' }}
@@ -213,7 +235,7 @@ export default function KnowledgeBase() {
                       className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
                     >
                       <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: barColor }} />
-                      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2">
+                      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2 items-start">
                         <Badge category={note.category} />
                         <div className="text-[14px] font-semibold text-text-primary group-hover:text-white transition-colors">
                           {note.content}
@@ -238,18 +260,29 @@ export default function KnowledgeBase() {
                 </AnimatePresence>
               </div>
             ) : (
-              <div className="flex flex-col items-center gap-3 py-16 text-text-dim">
-                <CirclePlus size={32} className="text-border-strong" />
-                <span className="text-sm">
-                  {search ? '未找到相关笔记' : `添加更多${subFilter !== '全部' ? subFilter : ''}笔记以填充知识库`}
-                </span>
-                <button
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="col-span-3 flex flex-col items-center gap-5 py-20"
+              >
+                <div className="w-16 h-16 rounded-2xl bg-surface-card border border-border flex items-center justify-center">
+                  <CirclePlus size={28} className="text-border-strong" />
+                </div>
+                <div className="text-center">
+                  <p className="text-text-muted text-sm font-medium">
+                    {search ? '未找到相关笔记' : `暂无${subFilter !== '全部' ? subFilter : ''}笔记`}
+                  </p>
+                  <p className="text-text-subtle text-xs mt-1">点击下方按钮快速记录新笔记</p>
+                </div>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
                   onClick={openQuickNote}
-                  className="text-xs text-primary hover:text-[#a5b4fc] transition-colors"
+                  className="flex items-center gap-1.5 h-9 px-5 bg-primary-btn hover:bg-[#4338ca] rounded-md text-white text-sm font-medium transition-colors"
                 >
-                  + 添加笔记
-                </button>
-              </div>
+                  <Plus size={14} />
+                  添加笔记
+                </motion.button>
+              </motion.div>
             )}
           </div>
         )}

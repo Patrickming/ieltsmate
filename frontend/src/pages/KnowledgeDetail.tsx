@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Volume2, Sparkles, Plus, Check, ChevronLeft, ChevronRight, Trash2, Pencil } from 'lucide-react'
+import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { Layout } from '../components/layout/Layout'
@@ -10,8 +10,6 @@ export default function KnowledgeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { notes } = useAppStore()
-  const [savedSynonyms, setSavedSynonyms] = useState<string[]>([])
-  const [savedAntonyms, setSavedAntonyms] = useState<string[]>([])
   const [newNote, setNewNote] = useState('')
   const [userNotes, setUserNotes] = useState<string[]>([])
   const [addingNote, setAddingNote] = useState(false)
@@ -84,70 +82,38 @@ export default function KnowledgeDetail() {
               </div>
 
               <div className="p-5 flex flex-col gap-5">
-                {/* Synonyms */}
+                {/* Synonyms — read-only, already stored */}
                 {note.synonyms && note.synonyms.length > 0 && (
                   <div>
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
                     <div className="flex flex-wrap gap-2">
-                      {note.synonyms.map((syn) => {
-                        const saved = savedSynonyms.includes(syn)
-                        return (
-                          <div
-                            key={syn}
-                            className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
-                            style={saved
-                              ? { background: '#1a2e22', borderColor: '#34d399' }
-                              : { background: '#1a1a28', borderColor: '#27272a' }
-                            }
-                          >
-                            <span className="text-[15px] text-text-primary">{syn}</span>
-                            <button
-                              onClick={() => setSavedSynonyms((prev) =>
-                                saved ? prev.filter((s) => s !== syn) : [...prev, syn]
-                              )}
-                              className="flex items-center gap-1"
-                              style={{ color: saved ? '#34d399' : '#818cf8' }}
-                            >
-                              {saved ? <Check size={10} /> : <Plus size={10} />}
-                              <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                            </button>
-                          </div>
-                        )
-                      })}
+                      {note.synonyms.map((syn) => (
+                        <div
+                          key={syn}
+                          className="flex items-center gap-2 px-3 py-2 rounded-md border"
+                          style={{ background: '#1a1a28', borderColor: '#27272a' }}
+                        >
+                          <span className="text-[15px] text-text-primary">{syn}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* Antonyms */}
+                {/* Antonyms — read-only, already stored */}
                 {note.antonyms && note.antonyms.length > 0 && (
                   <div>
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
                     <div className="flex flex-wrap gap-2">
-                      {note.antonyms.map((ant) => {
-                        const saved = savedAntonyms.includes(ant)
-                        return (
-                          <div
-                            key={ant}
-                            className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
-                            style={saved
-                              ? { background: '#1a2e22', borderColor: '#34d399' }
-                              : { background: '#1a1a28', borderColor: '#27272a' }
-                            }
-                          >
-                            <span className="text-[15px] text-text-primary">{ant}</span>
-                            <button
-                              onClick={() => setSavedAntonyms((prev) =>
-                                saved ? prev.filter((s) => s !== ant) : [...prev, ant]
-                              )}
-                              className="flex items-center gap-1"
-                              style={{ color: saved ? '#34d399' : '#818cf8' }}
-                            >
-                              {saved ? <Check size={10} /> : <Plus size={10} />}
-                              <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                            </button>
-                          </div>
-                        )
-                      })}
+                      {note.antonyms.map((ant) => (
+                        <div
+                          key={ant}
+                          className="flex items-center gap-2 px-3 py-2 rounded-md border"
+                          style={{ background: '#1a1a28', borderColor: '#27272a' }}
+                        >
+                          <span className="text-[15px] text-text-primary">{ant}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

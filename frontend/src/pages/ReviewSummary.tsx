@@ -1,9 +1,27 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { RefreshCw, Home } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, useMotionValue, useSpring } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { useAppStore } from '../store/useAppStore'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
+
+function CountUp({ target, suffix = '' }: { target: number; suffix?: string }) {
+  const [display, setDisplay] = useState(0)
+  const raw = useMotionValue(0)
+  const spring = useSpring(raw, { stiffness: 60, damping: 15 })
+
+  useEffect(() => {
+    raw.set(target)
+  }, [raw, target])
+
+  useEffect(() => {
+    const unsub = spring.on('change', (v) => setDisplay(Math.round(v)))
+    return unsub
+  }, [spring])
+
+  return <span>{display}{suffix}</span>
+}
 
 export default function ReviewSummary() {
   const navigate = useNavigate()
@@ -64,14 +82,18 @@ export default function ReviewSummary() {
           {/* Title */}
           <h1 className="text-2xl font-bold text-text-primary text-center">本轮复习完成 🎉</h1>
 
-          {/* Big stats */}
+          {/* Big stats with count-up animation */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col items-center gap-1.5 py-5 rounded-xl" style={{ background: '#1e1e28' }}>
-              <span className="text-4xl font-bold text-primary">{total}</span>
+              <span className="text-4xl font-bold text-primary">
+                <CountUp target={total} />
+              </span>
               <span className="text-sm text-text-dim">复习张数</span>
             </div>
             <div className="flex flex-col items-center gap-1.5 py-5 rounded-xl" style={{ background: '#1e2e22' }}>
-              <span className="text-4xl font-bold text-cat-phrase">{accuracy}%</span>
+              <span className="text-4xl font-bold text-cat-phrase">
+                <CountUp target={accuracy} suffix="%" />
+              </span>
               <span className="text-sm text-text-dim">正确率</span>
             </div>
           </div>
