@@ -73,7 +73,7 @@ export function SearchModal() {
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.96, opacity: 0, y: -10 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed left-1/2 top-[20%] -translate-x-1/2 z-50 w-[560px] bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal overflow-hidden"
+            className="fixed left-1/2 top-[18%] -translate-x-1/2 z-50 w-[560px] bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal overflow-hidden"
           >
             {/* Search input */}
             <div className="flex items-center gap-2.5 h-13 px-4 border-b border-border">

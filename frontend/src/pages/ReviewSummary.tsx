@@ -1,117 +1,125 @@
 import { useNavigate } from 'react-router-dom'
-import { Trophy, RotateCcw, Home, CheckCircle2, XCircle, Minus } from 'lucide-react'
+import { RefreshCw, Home } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { useAppStore } from '../store/useAppStore'
+import { CATEGORY_BAR, type Category } from '../data/mockData'
 
 export default function ReviewSummary() {
   const navigate = useNavigate()
-  const { reviewSession, endReview, notes } = useAppStore()
+  const { reviewSession, endReview, startReview, notes } = useAppStore()
 
   const results = reviewSession?.results ?? []
-  const easy = results.filter((r) => r.rating === 'easy').length
-  const hard = results.filter((r) => r.rating === 'hard').length
-  const again = results.filter((r) => r.rating === 'again').length
-  const total = results.length
+  const cards = reviewSession?.cards ?? []
+  const total = results.length || cards.length
+  const correct = results.filter((r) => r.rating === 'easy').length
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
 
-  const accuracy = total > 0 ? Math.round((easy / total) * 100) : 0
+  // Category breakdown
+  const catStats: Record<string, { correct: number; total: number }> = {}
+  cards.forEach((card) => {
+    const cat = card.category
+    if (!catStats[cat]) catStats[cat] = { correct: 0, total: 0 }
+    catStats[cat].total++
+  })
+  results.forEach((r) => {
+    const card = cards.find((c) => c.id === r.id)
+    if (card && r.rating === 'easy') {
+      catStats[card.category].correct++
+    }
+  })
+
+  // Simulated saved extensions count
+  const savedExtensions = results.length > 0 ? Math.floor(results.length * 0.6) : 0
 
   const handleHome = () => {
     endReview()
     navigate('/')
   }
 
-  const handleReview = () => {
-    const failed = results.filter((r) => r.rating !== 'easy')
-    const cards = failed.map((r) => notes.find((n) => n.id === r.id)).filter(Boolean) as typeof notes
-    if (cards.length > 0) {
-      useAppStore.getState().startReview(cards)
+  const handleAgain = () => {
+    const wrongCards = results
+      .filter((r) => r.rating === 'again')
+      .map((r) => notes.find((n) => n.id === r.id))
+      .filter(Boolean) as typeof notes
+
+    if (wrongCards.length > 0) {
+      startReview(wrongCards)
+      navigate('/review/cards')
+    } else {
+      startReview(cards)
       navigate('/review/cards')
     }
   }
 
   return (
     <Layout title="复习总结">
-      <div className="flex flex-col items-center justify-center min-h-full p-8">
+      <div className="flex items-center justify-center min-h-full p-8">
         <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
+          initial={{ scale: 0.92, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 80, damping: 16 }}
-          className="w-full max-w-lg"
+          className="w-full max-w-[560px] bg-surface-card border border-border rounded-2xl p-10 flex flex-col gap-7"
         >
-          {/* Trophy */}
-          <div className="flex flex-col items-center mb-8">
-            <motion.div
-              initial={{ rotateY: -90 }}
-              animate={{ rotateY: 0 }}
-              transition={{ delay: 0.2, duration: 0.5 }}
-              className="w-16 h-16 rounded-full bg-[#1e1b4b] flex items-center justify-center mb-4"
-            >
-              <Trophy size={28} className="text-primary" />
-            </motion.div>
-            <h1 className="text-2xl font-bold text-text-primary">复习完成！</h1>
-            <p className="text-text-dim text-sm mt-1">
-              {accuracy >= 80 ? '太棒了，保持下去！' : accuracy >= 50 ? '继续努力！' : '没关系，多复习几遍就好'}
-            </p>
-          </div>
+          {/* Title */}
+          <h1 className="text-2xl font-bold text-text-primary text-center">本轮复习完成 🎉</h1>
 
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            {[
-              { label: '掌握', count: easy, color: '#34d399', bg: '#064e3b', icon: CheckCircle2 },
-              { label: '模糊', count: hard, color: '#fbbf24', bg: '#2a1f0a', icon: Minus },
-              { label: '不会', count: again, color: '#fb7185', bg: '#450a0a', icon: XCircle },
-            ].map(({ label, count, color, bg, icon: Icon }) => (
-              <motion.div
-                key={label}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.15 }}
-                className="flex flex-col items-center gap-2 p-4 rounded-lg border"
-                style={{ background: bg, borderColor: color + '60' }}
-              >
-                <Icon size={20} style={{ color }} />
-                <span className="text-2xl font-bold" style={{ color }}>{count}</span>
-                <span className="text-xs text-text-dim">{label}</span>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Accuracy */}
-          <div className="bg-surface-card border border-border rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between text-sm mb-2">
-              <span className="text-text-muted">掌握率</span>
-              <span className="font-semibold text-text-primary">{accuracy}%</span>
+          {/* Big stats */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col items-center gap-1.5 py-5 rounded-xl" style={{ background: '#1e1e28' }}>
+              <span className="text-4xl font-bold text-primary">{total}</span>
+              <span className="text-sm text-text-dim">复习张数</span>
             </div>
-            <div className="h-2 bg-[#27272a] rounded-full overflow-hidden">
-              <motion.div
-                className="h-full rounded-full"
-                style={{ background: accuracy >= 80 ? '#34d399' : accuracy >= 50 ? '#fbbf24' : '#fb7185' }}
-                initial={{ width: 0 }}
-                animate={{ width: `${accuracy}%` }}
-                transition={{ delay: 0.3, duration: 0.6 }}
-              />
+            <div className="flex flex-col items-center gap-1.5 py-5 rounded-xl" style={{ background: '#1e2e22' }}>
+              <span className="text-4xl font-bold text-cat-phrase">{accuracy}%</span>
+              <span className="text-sm text-text-dim">正确率</span>
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Category stats */}
+          {Object.keys(catStats).length > 0 && (
+            <div className="bg-[#18181b] rounded-xl p-4 flex flex-col gap-2.5">
+              <div className="text-xs font-semibold text-text-muted mb-1">分类统计</div>
+              {Object.entries(catStats).map(([cat, { correct: c, total: t }]) => (
+                <div key={cat} className="flex items-center gap-3">
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ background: CATEGORY_BAR[cat as Category] ?? '#71717a' }}
+                  />
+                  <span className="text-sm text-text-muted flex-1">{cat}</span>
+                  <span className="text-sm font-medium" style={{ color: '#fbbf24' }}>
+                    {c}/{t} 正确
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Saved extensions */}
+          {savedExtensions > 0 && (
+            <div className="flex items-center justify-between px-4 py-3 bg-[#1e1e2e] border border-primary/20 rounded-lg">
+              <span className="text-sm text-text-muted">本次新增延伸知识</span>
+              <span className="text-lg font-bold text-primary">{savedExtensions} 条</span>
+            </div>
+          )}
+
+          {/* Buttons */}
           <div className="flex gap-3">
             <button
               onClick={handleHome}
-              className="flex-1 flex items-center justify-center gap-2 h-10 bg-surface-card border border-border rounded-sm text-text-muted hover:text-text-secondary text-sm transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 h-11 border border-border rounded-lg text-text-muted hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors"
             >
               <Home size={15} />
               返回首页
             </button>
-            {again + hard > 0 && (
-              <button
-                onClick={handleReview}
-                className="flex-1 flex items-center justify-center gap-2 h-10 bg-primary-btn hover:bg-[#4338ca] rounded-sm text-white text-sm font-medium transition-colors"
-              >
-                <RotateCcw size={15} />
-                再练 {again + hard} 张
-              </button>
-            )}
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handleAgain}
+              className="flex-1 flex items-center justify-center gap-2 h-11 bg-primary-btn hover:bg-[#4338ca] rounded-lg text-white text-sm font-semibold transition-colors"
+            >
+              <RefreshCw size={15} />
+              再来一轮
+            </motion.button>
           </div>
         </motion.div>
       </div>

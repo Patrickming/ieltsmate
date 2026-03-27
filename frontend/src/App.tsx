@@ -12,11 +12,12 @@ import { QuickNoteModal } from './components/modals/QuickNoteModal'
 import { SearchModal } from './components/modals/SearchModal'
 import { AIPanel } from './components/modals/AIPanel'
 import { AIModelConfigModal } from './components/modals/AIModelConfigModal'
+import { ImportModal } from './components/modals/ImportModal'
 import { useAppStore } from './store/useAppStore'
 
 function GlobalShortcuts() {
   const location = useLocation()
-  const { openSearch, openAIPanel, closeAll, showSearch, showAIPanel, showQuickNote, showAIConfig } = useAppStore()
+  const { openSearch, openAIPanel, closeAll, showSearch, showAIPanel, showQuickNote, showAIConfig, showImport } = useAppStore()
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -36,7 +37,7 @@ function GlobalShortcuts() {
       }
       // Escape → close topmost
       if (e.key === 'Escape') {
-        if (showSearch || showQuickNote || showAIConfig || showAIPanel) {
+        if (showSearch || showQuickNote || showAIConfig || showAIPanel || showImport) {
           closeAll()
         }
       }
@@ -74,6 +75,7 @@ function AppInner() {
       <SearchModal />
       <AIPanel />
       <AIModelConfigModal />
+      <ImportModal />
     </>
   )
 }

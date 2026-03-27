@@ -19,6 +19,7 @@ interface AppState {
   showSearch: boolean
   showAIPanel: boolean
   showAIConfig: boolean
+  showImport: boolean
   openQuickNote: () => void
   closeQuickNote: () => void
   openSearch: () => void
@@ -27,6 +28,8 @@ interface AppState {
   closeAIPanel: () => void
   openAIConfig: () => void
   closeAIConfig: () => void
+  openImport: () => void
+  closeImport: () => void
   closeAll: () => void
 
   // Sidebar
@@ -54,6 +57,7 @@ export const useAppStore = create<AppState>((set) => ({
   showSearch: false,
   showAIPanel: false,
   showAIConfig: false,
+  showImport: false,
 
   openQuickNote: () => set({ showQuickNote: true }),
   closeQuickNote: () => set({ showQuickNote: false }),
@@ -63,11 +67,14 @@ export const useAppStore = create<AppState>((set) => ({
   closeAIPanel: () => set({ showAIPanel: false }),
   openAIConfig: () => set({ showAIConfig: true }),
   closeAIConfig: () => set({ showAIConfig: false }),
+  openImport: () => set({ showImport: true }),
+  closeImport: () => set({ showImport: false }),
   closeAll: () => set({
     showQuickNote: false,
     showSearch: false,
     showAIPanel: false,
     showAIConfig: false,
+    showImport: false,
   }),
 
   expandedGroups: ['杂笔记'],

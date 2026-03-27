@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, BookOpen, RefreshCw, Upload, Settings,
   ChevronDown, ChevronRight,
@@ -17,11 +17,24 @@ const GROUPS = ['杂笔记', '写作']
 
 export function Sidebar() {
   const location = useLocation()
-  const { expandedGroups, toggleGroup, openQuickNote } = useAppStore()
+  const navigate = useNavigate()
+  const { expandedGroups, toggleGroup, openImport } = useAppStore()
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/'
     return location.pathname.startsWith(path)
+  }
+
+  const handleCategoryClick = (name: string, group: string) => {
+    if (group === '写作') {
+      navigate(`/kb?group=写作`)
+    } else {
+      navigate(`/kb?group=杂笔记&cat=${encodeURIComponent(name)}`)
+    }
+  }
+
+  const handleGroupClick = (group: string) => {
+    toggleGroup(group)
   }
 
   return (
@@ -34,36 +47,34 @@ export function Sidebar() {
       </div>
 
       {/* Main nav */}
-      <nav className="flex-1 overflow-y-auto px-0 py-2">
-        <div className="px-4 py-2">
+      <nav className="flex-1 overflow-y-auto py-2">
+        <div className="px-4 pt-1 pb-1.5">
           <span className="text-[10px] font-semibold text-text-subtle tracking-[1.2px]">MAIN</span>
         </div>
 
-        {NAV_ITEMS.map(({ path, icon: Icon, label }) => (
-          <NavLink key={path} to={path} end={path === '/'}>
-            {() => {
-              const active = isActive(path)
-              return (
-                <div
-                  className={`flex items-center gap-2 h-9 px-4 relative transition-colors ${
-                    active
-                      ? 'bg-[#1e1b4b] text-[#c7d2fe]'
-                      : 'text-text-muted hover:text-text-secondary hover:bg-[#27272a]/50'
-                  }`}
-                >
-                  {active && (
-                    <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary" />
-                  )}
-                  <Icon size={16} className={active ? 'text-primary' : 'text-text-dim'} />
-                  <span className="text-[13px] font-medium">{label}</span>
-                </div>
-              )
-            }}
-          </NavLink>
-        ))}
+        {NAV_ITEMS.map(({ path, icon: Icon, label }) => {
+          const active = isActive(path)
+          return (
+            <NavLink key={path} to={path} end={path === '/'}>
+              <div
+                className={`flex items-center gap-2 h-9 px-4 relative transition-colors ${
+                  active
+                    ? 'bg-[#1e1b4b] text-[#c7d2fe]'
+                    : 'text-text-muted hover:text-text-secondary hover:bg-[#27272a]/50'
+                }`}
+              >
+                {active && (
+                  <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-primary" />
+                )}
+                <Icon size={16} className={active ? 'text-primary' : 'text-text-dim'} />
+                <span className="text-[13px] font-medium">{label}</span>
+              </div>
+            </NavLink>
+          )
+        })}
 
         {/* Categories */}
-        <div className="px-4 pt-4 pb-1">
+        <div className="px-4 pt-3 pb-1">
           <span className="text-[10px] font-semibold text-text-subtle tracking-[1.2px]">CATEGORIES</span>
         </div>
 
@@ -74,7 +85,7 @@ export function Sidebar() {
           return (
             <div key={group}>
               <button
-                onClick={() => toggleGroup(group)}
+                onClick={() => handleGroupClick(group)}
                 className="flex items-center gap-1 w-full h-8 px-4 text-text-dim hover:text-text-muted transition-colors"
               >
                 <span className="text-[13px] font-medium flex-1 text-left">{group}</span>
@@ -90,17 +101,17 @@ export function Sidebar() {
                     style={{ overflow: 'hidden' }}
                   >
                     {cats.map(({ name }) => (
-                      <NavLink key={name} to={`/kb?cat=${encodeURIComponent(name)}`}>
-                        {() => (
-                          <div className="flex items-center gap-2 h-7 pl-8 pr-4 text-text-dim hover:text-text-muted transition-colors">
-                            <div
-                              className="w-1.5 h-1.5 rounded-full shrink-0"
-                              style={{ background: CATEGORY_BAR[name] ?? '#71717a' }}
-                            />
-                            <span className="text-xs">{name}</span>
-                          </div>
-                        )}
-                      </NavLink>
+                      <button
+                        key={name}
+                        onClick={() => handleCategoryClick(name, group)}
+                        className="flex items-center gap-2 h-7 pl-8 pr-4 w-full text-text-dim hover:text-text-muted transition-colors"
+                      >
+                        <div
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ background: CATEGORY_BAR[name] ?? '#71717a' }}
+                        />
+                        <span className="text-xs">{name}</span>
+                      </button>
                     ))}
                   </motion.div>
                 )}
@@ -113,19 +124,17 @@ export function Sidebar() {
       {/* Bottom actions */}
       <div className="border-t border-border">
         <button
-          onClick={openQuickNote}
+          onClick={openImport}
           className="flex items-center gap-2 w-full h-9 px-4 text-text-muted hover:text-text-secondary hover:bg-[#27272a]/50 transition-colors"
         >
           <Upload size={16} className="text-text-dim" />
           <span className="text-[13px]">导入数据</span>
         </button>
         <NavLink to="/settings">
-          {() => (
-            <div className="flex items-center gap-2 w-full h-9 px-4 text-text-muted hover:text-text-secondary hover:bg-[#27272a]/50 transition-colors">
-              <Settings size={16} className="text-text-dim" />
-              <span className="text-[13px]">设置</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 w-full h-9 px-4 text-text-muted hover:text-text-secondary hover:bg-[#27272a]/50 transition-colors">
+            <Settings size={16} className="text-text-dim" />
+            <span className="text-[13px]">设置</span>
+          </div>
         </NavLink>
       </div>
     </aside>

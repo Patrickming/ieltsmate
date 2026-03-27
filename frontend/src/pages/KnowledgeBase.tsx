@@ -1,121 +1,249 @@
-import { useState } from 'react'
-import { Search, Filter } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Search, Tag, ChevronDown, FileText, CirclePlus, Plus } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
-import { NoteCard } from '../components/ui/NoteCard'
 import { Badge } from '../components/ui/Badge'
+import { CATEGORY_BAR, CATEGORY_COLORS, type Category } from '../data/mockData'
 import { useAppStore } from '../store/useAppStore'
-import { type Category } from '../data/mockData'
 
-const FILTERS: (Category | '全部')[] = ['全部', '口语', '短语', '句子', '同义替换', '拼写', '单词', '写作']
+const SUB_CATS: (Category | '全部')[] = ['全部', '口语', '短语', '句子', '同义替换', '拼写', '单词']
+
+// Mock writing notes
+const WRITING_NOTES = [
+  { id: 'w1', name: '雅思写作Task 2模板.md', path: '/notes/writing/task2-template.md', updatedAt: '2天前' },
+  { id: 'w2', name: '大作文高分句型整理.md', path: '/notes/writing/high-score-phrases.md', updatedAt: '5天前' },
+]
 
 export default function KnowledgeBase() {
-  const { notes } = useAppStore()
+  const { notes, openQuickNote } = useAppStore()
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<Category | '全部'>('全部')
-  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [groupFilter, setGroupFilter] = useState<'全部' | '杂笔记' | '写作'>('全部')
+  const [subFilter, setSubFilter] = useState<Category | '全部'>('全部')
+  const [showTagDrop, setShowTagDrop] = useState(false)
 
-  const filtered = notes.filter((n) => {
-    const matchCat = filter === '全部' || n.category === filter
+  // Sync URL params from sidebar clicks
+  useEffect(() => {
+    const group = searchParams.get('group')
+    const cat = searchParams.get('cat')
+    if (group === '写作') {
+      setGroupFilter('写作')
+      setSubFilter('全部')
+    } else if (group === '杂笔记') {
+      setGroupFilter('杂笔记')
+      if (cat) setSubFilter(cat as Category)
+      else setSubFilter('全部')
+    }
+  }, [searchParams])
+
+  const filteredNotes = notes.filter((n) => {
+    if (groupFilter === '写作') return false
+    if (groupFilter === '杂笔记') {
+      if (subFilter !== '全部' && n.category !== subFilter) return false
+    }
     const matchSearch = !search ||
       n.content.toLowerCase().includes(search.toLowerCase()) ||
       n.translation.includes(search)
-    return matchCat && matchSearch
+    return matchSearch
   })
+
+  const showWriting = groupFilter === '全部' || (groupFilter as string) === '写作'
+  const showNotes = groupFilter === '全部' || (groupFilter as string) === '杂笔记'
+
+  const allItems = [
+    ...(showNotes ? filteredNotes : []),
+  ]
 
   return (
     <Layout title="知识库">
-      <div className="p-8 flex flex-col gap-6">
+      <div className="p-8 flex flex-col gap-5">
         {/* Header */}
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-text-primary">知识库</h1>
-            <p className="text-sm text-text-dim mt-1">共 {notes.length} 条笔记</p>
+            <p className="text-sm text-text-dim mt-1">管理和浏览所有笔记</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setView('grid')}
-              className={`h-8 px-3 text-xs rounded-sm border transition-colors ${view === 'grid' ? 'border-primary bg-[#1e1b4b] text-primary' : 'border-border text-text-dim hover:text-text-muted'}`}
-            >
-              网格
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={`h-8 px-3 text-xs rounded-sm border transition-colors ${view === 'list' ? 'border-primary bg-[#1e1b4b] text-primary' : 'border-border text-text-dim hover:text-text-muted'}`}
-            >
-              列表
-            </button>
-          </div>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={openQuickNote}
+            className="flex items-center gap-1.5 h-9 px-4 bg-primary-btn hover:bg-[#4338ca] rounded-sm text-white text-[13px] font-medium transition-colors"
+          >
+            <Plus size={14} />
+            添加笔记
+          </motion.button>
         </div>
 
-        {/* Search + Filter */}
+        {/* Group Tabs */}
+        <div className="flex items-center gap-2">
+          {(['全部', '杂笔记', '写作'] as const).map((g) => (
+            <button
+              key={g}
+              onClick={() => { setGroupFilter(g); setSubFilter('全部') }}
+              className={`h-8 px-4 rounded-sm text-[13px] font-medium border transition-all ${
+                groupFilter === g
+                  ? 'bg-[#312e81] border-[#4338ca] text-[#c7d2fe]'
+                  : 'border-border text-text-dim hover:border-border-strong hover:text-text-muted'
+              }`}
+            >
+              {g}
+            </button>
+          ))}
+        </div>
+
+        {/* Sub-type pills — only when 杂笔记 or 全部 */}
+        {(groupFilter === '杂笔记' || groupFilter === '全部') && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {SUB_CATS.map((cat) => {
+              const color = cat !== '全部' ? CATEGORY_COLORS[cat]?.color : undefined
+              const bg = cat !== '全部' ? CATEGORY_COLORS[cat]?.bg : undefined
+              const border = cat !== '全部' ? CATEGORY_COLORS[cat]?.border : undefined
+              const isActive = subFilter === cat
+              return (
+                <motion.button
+                  key={cat}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setSubFilter(cat)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                    isActive && cat !== '全部'
+                      ? ''
+                      : isActive
+                        ? 'bg-primary-btn text-white'
+                        : 'border border-border text-text-dim hover:text-text-muted'
+                  }`}
+                  style={isActive && cat !== '全部' ? { color, background: bg, border: `1px solid ${border}` } : {}}
+                >
+                  {cat}
+                </motion.button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Search row */}
         <div className="flex items-center gap-3">
-          <div className="flex-1 flex items-center gap-2 h-9 bg-[#1c1c20] border border-border rounded-sm px-3">
+          <div className="flex-1 flex items-center gap-2 h-9 bg-surface-sidebar border border-border rounded-sm px-3">
             <Search size={14} className="text-text-dim shrink-0" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索笔记内容或释义..."
+              placeholder={`搜索${subFilter !== '全部' ? subFilter : ''}笔记...`}
               className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-subtle outline-none"
             />
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Filter size={14} className="text-text-dim" />
-            {FILTERS.map((f) => (
-              <motion.button
-                key={f}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setFilter(f)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                  filter === f
-                    ? 'bg-primary-btn text-white'
-                    : 'border border-border text-text-dim hover:text-text-muted'
-                }`}
-              >
-                {f}
-              </motion.button>
-            ))}
+          <div className="relative">
+            <button
+              onClick={() => setShowTagDrop(!showTagDrop)}
+              className="flex items-center gap-2 h-9 px-3 border border-border rounded-sm text-text-dim hover:text-text-muted hover:bg-[#27272a] transition-colors text-sm"
+            >
+              <Tag size={13} />
+              筛选标签
+              <ChevronDown size={12} />
+            </button>
           </div>
         </div>
 
         {/* Content */}
-        {view === 'grid' ? (
-          <div className="columns-3 gap-4">
-            {filtered.map((note, i) => (
-              <motion.div
-                key={note.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.03 }}
-                className="break-inside-avoid mb-4"
-              >
-                <NoteCard note={note} />
-              </motion.div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col divide-y divide-border">
-            {filtered.map((note, i) => (
-              <motion.div
-                key={note.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: i * 0.02 }}
-                className="flex items-center gap-4 py-3 hover:bg-[#27272a]/30 px-2 rounded transition-colors cursor-pointer"
-              >
-                <Badge category={note.category} />
-                <div className="flex-1 min-w-0">
-                  <span className="text-[14px] font-medium text-text-primary mr-2">{note.content}</span>
-                  <span className="text-[13px] text-text-muted">{note.translation}</span>
-                </div>
-                <span className="text-[11px] text-text-subtle shrink-0">{note.createdAt}</span>
-              </motion.div>
-            ))}
+        {showWriting && (
+          <div className="flex flex-col gap-3">
+            {groupFilter !== '杂笔记' && (
+              <h3 className="text-sm font-semibold text-text-muted">写作文件</h3>
+            )}
+            <div className="grid grid-cols-3 gap-4">
+              {WRITING_NOTES.map((w, i) => (
+                <motion.div
+                  key={w.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  onClick={() => navigate(`/kb/${w.id}`)}
+                  className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
+                >
+                  <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: '#94a3b8' }} />
+                  <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2">
+                    <span
+                      className="inline-flex items-center gap-1 px-1.5 py-0 text-[10px] leading-4 font-medium rounded whitespace-nowrap"
+                      style={{ color: '#94a3b8', background: '#1e293b', border: '1px solid #334155' }}
+                    >
+                      <FileText size={9} />写作
+                    </span>
+                    <div className="flex items-start gap-2">
+                      <FileText size={14} className="text-[#94a3b8] mt-0.5 shrink-0" />
+                      <div className="text-[13px] font-medium text-text-primary group-hover:text-white transition-colors leading-snug">
+                        {w.name}
+                      </div>
+                    </div>
+                    <div className="text-[11px] text-text-subtle truncate">{w.path}</div>
+                    <div className="flex items-center">
+                      <span className="text-[11px] text-text-subtle flex-1">{w.updatedAt}</span>
+                      <span className="text-[11px] text-[#94a3b8]">文件</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         )}
 
-        {filtered.length === 0 && (
-          <div className="text-center py-20 text-text-dim text-sm">未找到相关笔记</div>
+        {showNotes && (
+          <div className="flex flex-col gap-3">
+            {groupFilter === '全部' && (
+              <h3 className="text-sm font-semibold text-text-muted">杂笔记</h3>
+            )}
+            {allItems.length > 0 ? (
+              <div className="grid grid-cols-3 gap-4">
+                {allItems.map((note, i) => {
+                  const barColor = CATEGORY_BAR[note.category] ?? '#71717a'
+                  const catColors = CATEGORY_COLORS[note.category]
+                  return (
+                    <motion.div
+                      key={note.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                      onClick={() => navigate(`/kb/${note.id}`)}
+                      className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
+                    >
+                      <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: barColor }} />
+                      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2">
+                        <Badge category={note.category} />
+                        <div className="text-[14px] font-semibold text-text-primary group-hover:text-white transition-colors">
+                          {note.content}
+                        </div>
+                        <div className="text-[12px] text-text-muted leading-snug">{note.translation}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] text-text-subtle flex-1">{note.createdAt}</span>
+                          {note.dueToday && (
+                            <span className="text-[11px]" style={{ color: catColors?.color ?? '#818cf8' }}>待复习</span>
+                          )}
+                          {note.reviewStatus === 'mastered' && (
+                            <span className="text-[11px] text-cat-phrase">已掌握</span>
+                          )}
+                          {note.reviewStatus === 'learning' && (
+                            <span className="text-[11px] text-primary">学习中</span>
+                          )}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3 py-16 text-text-dim">
+                <CirclePlus size={32} className="text-border-strong" />
+                <span className="text-sm">
+                  {search ? '未找到相关笔记' : `添加更多${subFilter !== '全部' ? subFilter : ''}笔记以填充知识库`}
+                </span>
+                <button
+                  onClick={openQuickNote}
+                  className="text-xs text-primary hover:text-[#a5b4fc] transition-colors"
+                >
+                  + 添加笔记
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </Layout>

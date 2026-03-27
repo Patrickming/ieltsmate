@@ -86,7 +86,7 @@ export function QuickNoteModal() {
             role="dialog"
             aria-modal="true"
             aria-label="快速记录"
-            className="fixed left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 z-50 w-[520px] bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[520px] bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal"
           >
             <div className="p-6 flex flex-col gap-4">
               {/* Header */}

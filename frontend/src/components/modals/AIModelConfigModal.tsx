@@ -45,7 +45,7 @@ export function AIModelConfigModal() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[1100px] h-[740px] bg-[#111113] border border-border rounded-2xl shadow-modal flex flex-col overflow-hidden"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[min(1100px,95vw)] h-[740px] bg-[#111113] border border-border rounded-2xl shadow-modal flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="h-16 border-b border-border flex items-center gap-3 px-6 shrink-0">
