@@ -52,7 +52,8 @@ export function ImportModal() {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[480px] bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal"
+            style={{ position: 'fixed', left: '50%', top: '50%', translateX: '-50%', translateY: '-50%', zIndex: 50, width: 480 }}
+            className="bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal"
           >
             <div className="p-6 flex flex-col gap-5">
               {/* Header */}

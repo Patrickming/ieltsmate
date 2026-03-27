@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, Tag, ChevronDown, FileText, CirclePlus, Plus } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
@@ -151,12 +151,15 @@ export default function KnowledgeBase() {
               <h3 className="text-sm font-semibold text-text-muted">写作文件</h3>
             )}
             <div className="grid grid-cols-3 gap-4">
+              <AnimatePresence mode="popLayout">
               {WRITING_NOTES.map((w, i) => (
                 <motion.div
                   key={w.id}
+                  layout
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.04 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2, delay: i * 0.04 }}
                   onClick={() => navigate(`/kb/${w.id}`)}
                   className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
                 >
@@ -182,6 +185,7 @@ export default function KnowledgeBase() {
                   </div>
                 </motion.div>
               ))}
+              </AnimatePresence>
             </div>
           </div>
         )}
@@ -193,15 +197,18 @@ export default function KnowledgeBase() {
             )}
             {allItems.length > 0 ? (
               <div className="grid grid-cols-3 gap-4">
+                <AnimatePresence mode="popLayout">
                 {allItems.map((note, i) => {
                   const barColor = CATEGORY_BAR[note.category] ?? '#71717a'
                   const catColors = CATEGORY_COLORS[note.category]
                   return (
                     <motion.div
                       key={note.id}
+                      layout
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.03 }}
+                      exit={{ opacity: 0, scale: 0.95 }}
+                      transition={{ duration: 0.2, delay: i * 0.03 }}
                       onClick={() => navigate(`/kb/${note.id}`)}
                       className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
                     >
@@ -228,6 +235,7 @@ export default function KnowledgeBase() {
                     </motion.div>
                   )
                 })}
+                </AnimatePresence>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-3 py-16 text-text-dim">

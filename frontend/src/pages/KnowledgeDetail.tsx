@@ -44,7 +44,7 @@ export default function KnowledgeDetail() {
 
   return (
     <Layout title="笔记详情">
-      <div className="relative p-8 flex flex-col gap-5">
+      <div className="p-8 flex flex-col gap-5">
         {/* Back */}
         <button
           onClick={() => navigate('/kb')}
@@ -53,30 +53,6 @@ export default function KnowledgeDetail() {
           <ArrowLeft size={14} />
           返回知识库
         </button>
-
-        {/* Prev / Next navigation - absolute top right */}
-        <div className="absolute top-8 right-8 flex items-center gap-2">
-          {prevNote && (
-            <button
-              onClick={() => navigate(`/kb/${prevNote.id}`)}
-              className="flex items-center gap-1.5 h-8 px-3 border border-border rounded-sm text-text-dim hover:text-text-muted hover:bg-[#27272a] text-xs transition-colors"
-            >
-              <ChevronLeft size={13} />
-              上一个: <span className="text-text-muted ml-1 max-w-[80px] truncate">{prevNote.content}</span>
-              <span className="ml-1"><Badge category={prevNote.category} /></span>
-            </button>
-          )}
-          {nextNote && (
-            <button
-              onClick={() => navigate(`/kb/${nextNote.id}`)}
-              className="flex items-center gap-1.5 h-8 px-3 border border-border rounded-sm text-text-dim hover:text-text-muted hover:bg-[#27272a] text-xs transition-colors"
-            >
-              下一个: <span className="text-text-muted ml-1 max-w-[80px] truncate">{nextNote.content}</span>
-              <span className="ml-1"><Badge category={nextNote.category} /></span>
-              <ChevronRight size={13} />
-            </button>
-          )}
-        </div>
 
         {/* Main knowledge card */}
         <motion.div
@@ -94,146 +70,114 @@ export default function KnowledgeDetail() {
 
         {/* Two column layout */}
         <div className="flex gap-5 items-start">
-          {/* Left - AI extensions */}
-          <div className="flex-1 bg-surface-card border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <span className="text-sm font-semibold text-text-secondary">AI 延伸内容</span>
-              <div className="flex items-center gap-1.5 text-primary">
-                <Sparkles size={12} />
-                <span className="text-[11px] font-medium">AI 生成</span>
-              </div>
-            </div>
+          {/* Left column — AI extensions + 我的备注 */}
+          <div className="flex-1 flex flex-col gap-4 min-w-0">
 
-            <div className="p-5 flex flex-col gap-5 max-h-[500px] overflow-y-auto">
-              {/* Synonyms */}
-              {note.synonyms && note.synonyms.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
-                  <div className="flex flex-wrap gap-2">
-                    {note.synonyms.map((syn) => {
-                      const saved = savedSynonyms.includes(syn)
-                      return (
-                        <div
-                          key={syn}
-                          className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
-                          style={saved
-                            ? { background: '#1a2e22', borderColor: '#34d399' }
-                            : { background: '#1a1a28', borderColor: '#27272a' }
-                          }
-                        >
-                          <span className="text-sm text-text-primary">{syn}</span>
-                          <button
-                            onClick={() => setSavedSynonyms((prev) =>
-                              saved ? prev.filter((s) => s !== syn) : [...prev, syn]
-                            )}
-                            className="flex items-center gap-1"
-                            style={{ color: saved ? '#34d399' : '#818cf8' }}
+            {/* AI Extensions card */}
+            <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+                <span className="text-sm font-semibold text-text-secondary">AI 延伸内容</span>
+                <div className="flex items-center gap-1.5 text-primary">
+                  <Sparkles size={12} />
+                  <span className="text-[11px] font-medium">AI 生成</span>
+                </div>
+              </div>
+
+              <div className="p-5 flex flex-col gap-5">
+                {/* Synonyms */}
+                {note.synonyms && note.synonyms.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
+                    <div className="flex flex-wrap gap-2">
+                      {note.synonyms.map((syn) => {
+                        const saved = savedSynonyms.includes(syn)
+                        return (
+                          <div
+                            key={syn}
+                            className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
+                            style={saved
+                              ? { background: '#1a2e22', borderColor: '#34d399' }
+                              : { background: '#1a1a28', borderColor: '#27272a' }
+                            }
                           >
-                            {saved ? <Check size={9} /> : <Plus size={9} />}
-                            <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
-                          </button>
-                        </div>
-                      )
-                    })}
+                            <span className="text-sm text-text-primary">{syn}</span>
+                            <button
+                              onClick={() => setSavedSynonyms((prev) =>
+                                saved ? prev.filter((s) => s !== syn) : [...prev, syn]
+                              )}
+                              className="flex items-center gap-1"
+                              style={{ color: saved ? '#34d399' : '#818cf8' }}
+                            >
+                              {saved ? <Check size={9} /> : <Plus size={9} />}
+                              <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Antonyms */}
-              {note.antonyms && note.antonyms.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
-                  <div className="flex flex-wrap gap-2">
-                    {note.antonyms.map((ant) => {
-                      const saved = savedAntonyms.includes(ant)
-                      return (
-                        <div
-                          key={ant}
-                          className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
-                          style={saved
-                            ? { background: '#1a2e22', borderColor: '#34d399' }
-                            : { background: '#1a1a28', borderColor: '#27272a' }
-                          }
-                        >
-                          <span className="text-sm text-text-primary">{ant}</span>
-                          <button
-                            onClick={() => setSavedAntonyms((prev) =>
-                              saved ? prev.filter((s) => s !== ant) : [...prev, ant]
-                            )}
-                            className="flex items-center gap-1"
-                            style={{ color: saved ? '#34d399' : '#818cf8' }}
+                {/* Antonyms */}
+                {note.antonyms && note.antonyms.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
+                    <div className="flex flex-wrap gap-2">
+                      {note.antonyms.map((ant) => {
+                        const saved = savedAntonyms.includes(ant)
+                        return (
+                          <div
+                            key={ant}
+                            className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
+                            style={saved
+                              ? { background: '#1a2e22', borderColor: '#34d399' }
+                              : { background: '#1a1a28', borderColor: '#27272a' }
+                            }
                           >
-                            {saved ? <Check size={9} /> : <Plus size={9} />}
-                            <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
-                          </button>
-                        </div>
-                      )
-                    })}
+                            <span className="text-sm text-text-primary">{ant}</span>
+                            <button
+                              onClick={() => setSavedAntonyms((prev) =>
+                                saved ? prev.filter((s) => s !== ant) : [...prev, ant]
+                              )}
+                              className="flex items-center gap-1"
+                              style={{ color: saved ? '#34d399' : '#818cf8' }}
+                            >
+                              {saved ? <Check size={9} /> : <Plus size={9} />}
+                              <span className="text-[10px]">{saved ? '✓ 已存入' : '存入'}</span>
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Phonetic */}
-              {note.phonetic && (
-                <div>
-                  <div className="text-xs font-semibold text-text-muted mb-2.5">🔊 音标</div>
-                  <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-2.5 w-fit">
-                    <Volume2 size={14} className="text-primary" />
-                    <span className="text-sm text-[#a5b4fc]">{note.phonetic}</span>
+                {/* Phonetic */}
+                {note.phonetic && (
+                  <div>
+                    <div className="text-xs font-semibold text-text-muted mb-2.5">🔊 音标</div>
+                    <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-2.5 w-fit">
+                      <Volume2 size={14} className="text-primary" />
+                      <span className="text-sm text-[#a5b4fc]">{note.phonetic}</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Example */}
-              {note.example && (
-                <div>
-                  <div className="text-xs font-semibold text-text-muted mb-2.5">💬 例句</div>
-                  <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3">
-                    <p className="text-sm text-text-secondary italic">"{note.example}"</p>
+                {/* Example */}
+                {note.example && (
+                  <div>
+                    <div className="text-xs font-semibold text-text-muted mb-2.5">💬 例句</div>
+                    <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3">
+                      <p className="text-sm text-text-secondary italic">"{note.example}"</p>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right column - 320px */}
-          <div className="w-80 flex flex-col gap-4 shrink-0">
-            {/* Review stats */}
-            <div className="bg-surface-card border border-border rounded-xl p-4">
-              <div className="text-sm font-semibold text-text-secondary mb-3">复习统计</div>
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                <div className="flex flex-col items-center gap-1 bg-[#1e1e28] rounded-md py-2.5">
-                  <span className="text-xl font-bold text-primary">{note.reviewCount ?? 0}</span>
-                  <span className="text-[10px] text-text-dim">复习次数</span>
-                </div>
-                <div className="flex flex-col items-center gap-1 bg-[#1e2e1e] rounded-md py-2.5">
-                  <span className="text-xl font-bold text-cat-phrase">{note.correctCount ?? 0}</span>
-                  <span className="text-[10px] text-text-dim">正确 {accuracy}%</span>
-                </div>
-                <div className="flex flex-col items-center gap-1 bg-[#2e1e1e] rounded-md py-2.5">
-                  <span className="text-xl font-bold text-cat-sentence">{note.wrongCount ?? 0}</span>
-                  <span className="text-[10px] text-text-dim">错误 {100 - accuracy}%</span>
-                </div>
+                )}
               </div>
-              {/* Progress bar */}
-              <div className="h-1.5 bg-[#27272a] rounded-full overflow-hidden mb-2">
-                <motion.div
-                  className="h-full rounded-full bg-cat-phrase"
-                  initial={{ width: 0 }}
-                  animate={{ width: `${accuracy}%` }}
-                  transition={{ delay: 0.3, duration: 0.5 }}
-                />
-              </div>
-              {note.lastReview && (
-                <p className="text-[11px] text-text-subtle">上次复习: {note.lastReview}</p>
-              )}
             </div>
 
-            {/* User notes */}
+            {/* 我的备注 — below AI extensions */}
             <div className="bg-surface-card border border-border rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-semibold text-text-secondary">我的备注</div>
-              </div>
+              <div className="text-sm font-semibold text-text-secondary mb-3">我的备注</div>
               {allNotes.map((n, i) => (
                 <div
                   key={i}
@@ -256,7 +200,7 @@ export default function KnowledgeDetail() {
                       onChange={(e) => setNewNote(e.target.value)}
                       placeholder="添加备注..."
                       rows={2}
-                      className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-2 text-xs text-text-primary placeholder-text-subtle outline-none resize-none mb-2"
+                      className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-2 text-xs text-text-primary placeholder-text-subtle outline-none resize-none mb-2 mt-2"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveNote() }
                         if (e.key === 'Escape') setAddingNote(false)
@@ -279,6 +223,39 @@ export default function KnowledgeDetail() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Right column — review stats + actions only */}
+          <div className="w-72 flex flex-col gap-4 shrink-0">
+            {/* Review stats */}
+            <div className="bg-surface-card border border-border rounded-xl p-4">
+              <div className="text-sm font-semibold text-text-secondary mb-3">复习统计</div>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                <div className="flex flex-col items-center gap-1 bg-[#1e1e28] rounded-md py-2.5">
+                  <span className="text-xl font-bold text-primary">{note.reviewCount ?? 0}</span>
+                  <span className="text-[10px] text-text-dim">复习次数</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 bg-[#1e2e1e] rounded-md py-2.5">
+                  <span className="text-xl font-bold text-cat-phrase">{note.correctCount ?? 0}</span>
+                  <span className="text-[10px] text-text-dim">正确 {accuracy}%</span>
+                </div>
+                <div className="flex flex-col items-center gap-1 bg-[#2e1e1e] rounded-md py-2.5">
+                  <span className="text-xl font-bold text-cat-sentence">{note.wrongCount ?? 0}</span>
+                  <span className="text-[10px] text-text-dim">错误 {100 - accuracy}%</span>
+                </div>
+              </div>
+              <div className="h-1.5 bg-[#27272a] rounded-full overflow-hidden mb-2">
+                <motion.div
+                  className="h-full rounded-full bg-cat-phrase"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${accuracy}%` }}
+                  transition={{ delay: 0.3, duration: 0.5 }}
+                />
+              </div>
+              {note.lastReview && (
+                <p className="text-[11px] text-text-subtle">上次复习: {note.lastReview}</p>
+              )}
+            </div>
 
             {/* Actions */}
             <div className="bg-surface-card border border-border rounded-xl p-4">
@@ -296,6 +273,38 @@ export default function KnowledgeDetail() {
             </div>
           </div>
         </div>
+
+        {/* Prev / Next — bottom of page */}
+        {(prevNote || nextNote) && (
+          <div className="flex items-center justify-between mt-2 pt-4 border-t border-border">
+            <div>
+              {prevNote && (
+                <button
+                  onClick={() => navigate(`/kb/${prevNote.id}`)}
+                  className="flex items-center gap-2 h-9 px-4 border border-border rounded-md text-text-dim hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                  <span>上一个:</span>
+                  <span className="text-text-muted max-w-[140px] truncate">{prevNote.content}</span>
+                  <Badge category={prevNote.category} />
+                </button>
+              )}
+            </div>
+            <div>
+              {nextNote && (
+                <button
+                  onClick={() => navigate(`/kb/${nextNote.id}`)}
+                  className="flex items-center gap-2 h-9 px-4 border border-border rounded-md text-text-dim hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors"
+                >
+                  <span>下一个:</span>
+                  <span className="text-text-muted max-w-[140px] truncate">{nextNote.content}</span>
+                  <Badge category={nextNote.category} />
+                  <ChevronRight size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   )

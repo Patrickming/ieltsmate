@@ -229,79 +229,84 @@ export default function ReviewCards() {
       </div>
 
       {/* Card area */}
-      <div className="flex flex-col items-center justify-between h-[calc(100vh-112px)] px-12 py-6">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={card.id + String(exiting)}
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -50, opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="w-full max-w-[920px] flex-1"
-          >
-            {/* Flip container */}
-            <div
-              className="perspective w-full h-full cursor-pointer"
-              onClick={() => !exiting && setFlipped((f) => !f)}
-            >
-              <motion.div
-                className="preserve-3d relative w-full h-full"
-                animate={{ rotateY: flipped ? 180 : 0 }}
-                transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
-                style={{ minHeight: '360px' }}
-              >
-                {/* Front */}
-                <div
-                  className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden"
-                  style={{ borderTopColor: barColor, borderTopWidth: 3 }}
-                >
-                  <CardFront note={card} cardType={cardType} />
-                </div>
-
-                {/* Back */}
-                <div
-                  className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden rotate-y-180"
-                  style={{ borderTopColor: barColor, borderTopWidth: 3 }}
-                >
-                  <CardBack
-                    note={card}
-                    savedSyn={savedSyn}
-                    savedAnt={savedAnt}
-                    onSaveSyn={(s) => setSavedSyn((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
-                    onSaveAnt={(s) => setSavedAnt((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
-                  />
-                </div>
-              </motion.div>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Rating buttons */}
-        <AnimatePresence>
-          {flipped && (
+      <div className="flex flex-col items-center gap-6 px-12 py-8 h-[calc(100vh-112px)]">
+        {/* Card wrapper — fixed height, no flex-1 stretch */}
+        <div className="w-full max-w-[920px] flex-1 flex flex-col">
+          <AnimatePresence mode="wait">
             <motion.div
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="flex items-center gap-6 pt-4 pb-2"
+              key={card.id + String(exiting)}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              transition={{ duration: 0.18 }}
+              className="w-full h-full"
             >
-              <motion.button
-                whileTap={{ scale: 0.93 }}
-                onClick={() => handleRate('again')}
-                className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#2e1520] border border-[#fb7185]/40 text-[#fb7185] text-base font-semibold hover:bg-[#450a0a] transition-colors"
+              {/* Flip container */}
+              <div
+                className="perspective w-full h-full cursor-pointer"
+                onClick={() => !exiting && setFlipped((f) => !f)}
               >
-                😞 不记得
-              </motion.button>
-              <motion.button
-                whileTap={{ scale: 0.93 }}
-                onClick={() => handleRate('easy')}
-                className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#1a2e22] border border-[#34d399]/40 text-[#34d399] text-base font-semibold hover:bg-[#064e3b] transition-colors"
-              >
-                😊 记得
-              </motion.button>
+                <motion.div
+                  className="preserve-3d relative w-full h-full"
+                  animate={{ rotateY: flipped ? 180 : 0 }}
+                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                  style={{ minHeight: '360px' }}
+                >
+                  {/* Front */}
+                  <div
+                    className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden"
+                    style={{ borderTopColor: barColor, borderTopWidth: 3 }}
+                  >
+                    <CardFront note={card} cardType={cardType} />
+                  </div>
+
+                  {/* Back */}
+                  <div
+                    className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden rotate-y-180"
+                    style={{ borderTopColor: barColor, borderTopWidth: 3 }}
+                  >
+                    <CardBack
+                      note={card}
+                      savedSyn={savedSyn}
+                      savedAnt={savedAnt}
+                      onSaveSyn={(s) => setSavedSyn((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
+                      onSaveAnt={(s) => setSavedAnt((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
+                    />
+                  </div>
+                </motion.div>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
+
+        {/* Rating buttons — shrink-0 so they don't compress card */}
+        <div className="shrink-0 pb-4">
+          <AnimatePresence>
+            {flipped && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                className="flex items-center gap-6"
+              >
+                <motion.button
+                  whileTap={{ scale: 0.93 }}
+                  onClick={() => handleRate('again')}
+                  className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#2e1520] border border-[#fb7185]/40 text-[#fb7185] text-base font-semibold hover:bg-[#450a0a] transition-colors"
+                >
+                  😞 不记得
+                </motion.button>
+                <motion.button
+                  whileTap={{ scale: 0.93 }}
+                  onClick={() => handleRate('easy')}
+                  className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#1a2e22] border border-[#34d399]/40 text-[#34d399] text-base font-semibold hover:bg-[#064e3b] transition-colors"
+                >
+                  😊 记得
+                </motion.button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </Layout>
   )

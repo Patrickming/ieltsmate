@@ -78,15 +78,16 @@ export function QuickNoteModal() {
           />
           {/* Modal */}
           <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: -8 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: -8 }}
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            style={{ position: 'fixed', left: '50%', top: '50%', translateX: '-50%', translateY: '-50%', zIndex: 50, width: 520 }}
             ref={modalRef}
             role="dialog"
             aria-modal="true"
             aria-label="快速记录"
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[520px] bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal"
+            className="bg-[#1c1c20] border border-[#2a2a35] rounded-xl shadow-modal"
           >
             <div className="p-6 flex flex-col gap-4">
               {/* Header */}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Pencil, ChevronDown, Database, Download, Upload } from 'lucide-react'
+import { Plus, ChevronDown, Database, Download, Upload } from 'lucide-react'
 import { Layout } from '../components/layout/Layout'
 import { useAppStore } from '../store/useAppStore'
 import { mockProviders } from '../data/mockData'
@@ -11,11 +11,10 @@ function SectionTitle({ children }: { children: string }) {
 export default function Settings() {
   const { openAIConfig } = useAppStore()
   const [providers] = useState(mockProviders)
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
-  const [dailyNew, setDailyNew] = useState(20)
-  const [dailyReview, setDailyReview] = useState(100)
 
   const MODELS = ['分类识别', '复习联想', 'AI 助手']
+
+  const maskKey = (key?: string) => key ? `${key.slice(0, 4)}****` : 'sk-****'
 
   return (
     <Layout title="设置">
@@ -34,7 +33,7 @@ export default function Settings() {
             </button>
           </div>
 
-          {/* Model list */}
+          {/* Provider list — config summary only, no edit/delete buttons */}
           <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
             {providers.map((p, i) => (
               <div
@@ -44,22 +43,18 @@ export default function Settings() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-text-primary">{p.name}</div>
                   <div className="text-xs text-text-dim mt-0.5">
-                    openai-compatible · {p.apiKey ? `${p.apiKey.slice(0, 4)}****${p.apiKey.slice(-4)}` : 'sk-****'}
+                    openai-compatible · {maskKey(p.apiKey)}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="px-2 py-0.5 rounded-full text-[10px] font-medium"
-                    style={{ background: p.connected ? '#064e3b' : '#27272a', color: p.connected ? '#34d399' : '#71717a' }}
-                  >
-                    {p.connected ? '已连接' : '未连接'}
-                  </div>
-                  <button className="h-7 px-2.5 border border-border rounded-sm text-xs text-text-muted hover:bg-[#27272a] transition-colors flex items-center gap-1">
-                    <Pencil size={11} />编辑
-                  </button>
-                  <button className="h-7 px-2.5 bg-[#2e1520] border border-[#fb7185]/30 rounded-sm text-xs text-[#fb7185] hover:bg-[#450a0a] transition-colors flex items-center gap-1">
-                    <Trash2 size={11} />删除
-                  </button>
+                <div
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium"
+                  style={{
+                    background: p.connected ? '#064e3b' : '#27272a',
+                    color: p.connected ? '#34d399' : '#71717a',
+                    border: `1px solid ${p.connected ? '#34d399' : '#3f3f46'}`,
+                  }}
+                >
+                  {p.connected ? '已连接' : '未连接'}
                 </div>
               </div>
             ))}
@@ -84,64 +79,7 @@ export default function Settings() {
 
         <div className="h-px bg-border" />
 
-        {/* Section 2: 学习偏好 */}
-        <section className="flex flex-col gap-5">
-          <SectionTitle>学习偏好</SectionTitle>
-          <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
-            {/* Daily new */}
-            <div className="flex items-center px-5 py-4 border-b border-border">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-text-secondary">每日新卡片上限</div>
-                <div className="text-xs text-text-dim mt-0.5">每天最多学习的新卡片数量</div>
-              </div>
-              <input
-                type="number"
-                value={dailyNew}
-                onChange={(e) => setDailyNew(Number(e.target.value))}
-                className="w-20 h-8 bg-[#232328] border border-border rounded-md text-sm text-text-primary text-center outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            {/* Daily review */}
-            <div className="flex items-center px-5 py-4 border-b border-border">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-text-secondary">每日复习上限</div>
-                <div className="text-xs text-text-dim mt-0.5">每天最多复习的卡片数量</div>
-              </div>
-              <input
-                type="number"
-                value={dailyReview}
-                onChange={(e) => setDailyReview(Number(e.target.value))}
-                className="w-20 h-8 bg-[#232328] border border-border rounded-md text-sm text-text-primary text-center outline-none focus:border-primary transition-colors"
-              />
-            </div>
-            {/* Theme */}
-            <div className="flex items-center px-5 py-4">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-text-secondary">界面主题</div>
-                <div className="text-xs text-text-dim mt-0.5">选择浅色或深色主题</div>
-              </div>
-              <div className="flex items-center bg-[#232328] rounded-lg p-0.5">
-                {(['dark', 'light'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTheme(t)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                      theme === t
-                        ? 'bg-primary-btn text-white'
-                        : 'text-text-dim hover:text-text-muted'
-                    }`}
-                  >
-                    {t === 'dark' ? '暗色' : '亮色'}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <div className="h-px bg-border" />
-
-        {/* Section 3: 数据管理 */}
+        {/* Section 2: 数据管理 */}
         <section className="flex flex-col gap-5">
           <div className="flex items-center gap-2">
             <Database size={18} className="text-text-dim" />
