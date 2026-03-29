@@ -1,4 +1,4 @@
-import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen, Heart } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
@@ -53,8 +53,10 @@ type KnowledgeBaseMainProps = {
 }
 
 function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMainProps) {
-  const { notes, openQuickNote, favorites } = useAppStore()
+  const { notes, openQuickNote, favorites, lastAddedNoteId, clearLastAddedNoteId } = useAppStore()
   const navigate = useNavigate()
+  const noteRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null)
 
   useEffect(() => {
     const main = document.querySelector('main')
@@ -110,6 +112,21 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
   const showFavorites = groupFilter === '收藏夹'
 
   const allItems = showNotes ? filteredNotes : []
+
+  useEffect(() => {
+    if (!lastAddedNoteId) return
+    const hit = showNotes && allItems.some((n) => n.id === lastAddedNoteId)
+    if (!hit) return
+    const target = noteRefs.current[lastAddedNoteId]
+    if (!target) return
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setHighlightedNoteId(lastAddedNoteId)
+    clearLastAddedNoteId()
+
+    const timer = window.setTimeout(() => setHighlightedNoteId(null), 1200)
+    return () => window.clearTimeout(timer)
+  }, [allItems, clearLastAddedNoteId, lastAddedNoteId, showNotes])
 
   return (
       <div className="p-8 flex flex-col gap-5">
@@ -302,11 +319,13 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
                 {allItems.map((note, i) => (
                   <motion.div
                     key={note.id}
+                    ref={(el) => { noteRefs.current[note.id] = el }}
                     layout
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, delay: i * 0.03 }}
+                    className={highlightedNoteId === note.id ? 'note-added-highlight' : ''}
                   >
                     <NoteCard note={note} />
                   </motion.div>

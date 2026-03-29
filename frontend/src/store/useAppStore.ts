@@ -1,12 +1,37 @@
 import { create } from 'zustand'
 import type { Note, Category } from '../data/mockData'
 import { mockNotes } from '../data/mockData'
+import { apiUrl } from '../lib/apiBase'
+
+function safeReadFavorites(): string[] {
+  try {
+    const raw = localStorage.getItem('ielts-favorites')
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((v): v is string => typeof v === 'string')
+  } catch {
+    return []
+  }
+}
 
 interface ReviewSession {
   cards: Note[]
   current: number
   results: { id: string; rating: 'easy' | 'hard' | 'again' }[]
 }
+
+type AddNoteInput = {
+  content: string
+  translation: string
+  category: Category
+}
+
+type AddQuickNoteResult = {
+  source: 'remote' | 'local'
+}
+
+const QUICK_NOTE_REQUEST_TIMEOUT_MS = 4000
 
 export interface ProviderConfig {
   id: string
@@ -23,7 +48,7 @@ export interface ProviderConfig {
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
     id: 'p1', name: 'SiliconFlow', displayName: 'SiliconFlow',
-    apiKey: 'sk-jhyeofdhmibwjesijkipkwihboldvghwcmnjlzjuuemivmdm',
+    apiKey: '',
     baseUrl: 'https://api.siliconflow.cn/v1',
     models: [{ id: 'Pro/zai-org/GLM-5', verified: true }, { id: 'Pro/moonshotai/Kimi-K2.5', verified: false }],
     presetId: 'siliconflow', color: '#818cf8', selectedModel: 'Pro/zai-org/GLM-5',
@@ -64,10 +89,14 @@ interface AppState {
   notes: Note[]
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void
+  addQuickNote: (input: AddNoteInput) => Promise<AddQuickNoteResult>
+  lastAddedNoteId: string | null
+  clearLastAddedNoteId: () => void
 
   // Favorites
   favorites: string[]
-  toggleFavorite: (id: string) => void
+  toggleFavorite: (id: string) => Promise<void>
+  syncFavorites: () => Promise<void>
 
   // Modals
   showQuickNote: boolean
@@ -116,15 +145,153 @@ export const useAppStore = create<AppState>((set) => ({
   notes: mockNotes,
   selectedNote: null,
   setSelectedNote: (note) => set({ selectedNote: note }),
+  lastAddedNoteId: null,
+  clearLastAddedNoteId: () => set({ lastAddedNoteId: null }),
+  addQuickNote: async (input) => {
+    const applyLocal = () => {
+      const localNote: Note = {
+        id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        content: input.content,
+        translation: input.translation,
+        category: input.category,
+        subcategory: '杂笔记',
+        createdAt: '刚刚',
+        reviewStatus: 'new',
+        reviewCount: 0,
+        correctCount: 0,
+        wrongCount: 0,
+      }
+      set((s) => {
+        return { notes: [localNote, ...s.notes], lastAddedNoteId: localNote.id }
+      })
+      return { source: 'local' as const }
+    }
 
-  favorites: JSON.parse(localStorage.getItem('ielts-favorites') || '[]') as string[],
-  toggleFavorite: (id) => set((s) => {
-    const next = s.favorites.includes(id)
-      ? s.favorites.filter((f) => f !== id)
-      : [...s.favorites, id]
-    localStorage.setItem('ielts-favorites', JSON.stringify(next))
-    return { favorites: next }
-  }),
+    try {
+      const controller = new AbortController()
+      const timeout = window.setTimeout(() => controller.abort(), QUICK_NOTE_REQUEST_TIMEOUT_MS)
+      let res: Response
+      try {
+        res = await fetch(apiUrl('/notes'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+          signal: controller.signal,
+        })
+      } finally {
+        window.clearTimeout(timeout)
+      }
+      if (!res.ok) {
+        return applyLocal()
+      }
+      const json = (await res.json()) as {
+        data?: {
+          id: string
+          content: string
+          translation: string
+          category: string
+          phonetic?: string | null
+          synonyms?: string[]
+          antonyms?: string[]
+          example?: string | null
+          memoryTip?: string | null
+          reviewStatus?: 'new' | 'learning' | 'mastered'
+          reviewCount?: number
+          correctCount?: number
+          wrongCount?: number
+        }
+      }
+      const n = json.data
+      if (!n?.id) {
+        return applyLocal()
+      }
+      const created: Note = {
+        id: n.id,
+        content: n.content,
+        translation: n.translation,
+        category: (n.category as Category) ?? input.category,
+        subcategory: '杂笔记',
+        phonetic: n.phonetic ?? undefined,
+        synonyms: n.synonyms ?? [],
+        antonyms: n.antonyms ?? [],
+        example: n.example ?? undefined,
+        memoryTip: n.memoryTip ?? undefined,
+        createdAt: '刚刚',
+        reviewStatus: n.reviewStatus ?? 'new',
+        reviewCount: n.reviewCount ?? 0,
+        correctCount: n.correctCount ?? 0,
+        wrongCount: n.wrongCount ?? 0,
+      }
+      set((s) => ({ notes: [created, ...s.notes], lastAddedNoteId: created.id }))
+      return { source: 'remote' as const }
+    } catch {
+      return applyLocal()
+    }
+  },
+
+  favorites: safeReadFavorites(),
+
+  syncFavorites: async () => {
+    try {
+      const res = await fetch(apiUrl('/favorites'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: { items?: { id: string }[] } }
+      const items = json.data?.items
+      if (!Array.isArray(items)) return
+      const ids = items.map((i) => i.id).filter(Boolean)
+      localStorage.setItem('ielts-favorites', JSON.stringify(ids))
+      set({ favorites: ids })
+    } catch {
+      /* 静默失败，保留本地 favorites */
+    }
+  },
+
+  toggleFavorite: async (id) => {
+    const applyLocalToggle = () => {
+      set((s) => {
+        const next = s.favorites.includes(id)
+          ? s.favorites.filter((f) => f !== id)
+          : [...s.favorites, id]
+        localStorage.setItem('ielts-favorites', JSON.stringify(next))
+        return { favorites: next }
+      })
+    }
+
+    try {
+      const res = await fetch(apiUrl('/favorites/toggle'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId: id }),
+      })
+      if (!res.ok) {
+        applyLocalToggle()
+        return
+      }
+      let json: { data?: { noteId: string; isFavorite: boolean } }
+      try {
+        json = (await res.json()) as { data?: { noteId: string; isFavorite: boolean } }
+      } catch {
+        applyLocalToggle()
+        return
+      }
+      const data = json.data
+      if (!data || data.noteId !== id) {
+        applyLocalToggle()
+        return
+      }
+      set((s) => {
+        const next = data.isFavorite
+          ? s.favorites.includes(id)
+            ? s.favorites
+            : [...s.favorites, id]
+          : s.favorites.filter((f) => f !== id)
+        localStorage.setItem('ielts-favorites', JSON.stringify(next))
+        return { favorites: next }
+      })
+    } catch {
+      applyLocalToggle()
+    }
+  },
 
   showQuickNote: false,
   showSearch: false,

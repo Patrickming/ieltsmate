@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReviewStatus {
+  new
+  learning
+  mastered
+}
+
+model Note {
+  id             String       @id @default(uuid())
+  content        String
+  translation    String
+  category       String
+  phonetic       String?
+  synonyms       String[]     @default([])
+  antonyms       String[]     @default([])
+  example        String?
+  memoryTip      String?
+  reviewStatus   ReviewStatus @default(new)
+  reviewCount    Int          @default(0)
+  correctCount   Int          @default(0)
+  wrongCount     Int          @default(0)
+  lastReviewedAt DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  deletedAt      DateTime?
+
+  favorites   Favorite[]
+  userNotes   NoteUserNote[]
+  reviewCards ReviewSessionCard[]
+  reviewLogs  ReviewLog[]
+
+  @@index([category, createdAt(sort: Desc)])
+  @@index([reviewStatus])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  noteId    String   @unique
+  createdAt DateTime @default(now())
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+model NoteUserNote {
+  id        String    @id @default(uuid())
+  noteId    String
+  content   String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+model ReviewSession {
+  id         String              @id @default(uuid())
+  sourceType String
+  rangeType  String
+  modeType   String
+  totalCards Int
+  currentIdx Int                 @default(0)
+  status     String              @default("active")
+  startedAt  DateTime            @default(now())
+  endedAt    DateTime?
+  cards      ReviewSessionCard[]
+  logs       ReviewLog[]
+}
+
+model ReviewSessionCard {
+  id             String        @id @default(uuid())
+  sessionId      String
+  noteId         String
+  orderIndex     Int
+  cardType       String
+  isDone         Boolean       @default(false)
+  rating         String?
+  spellingAnswer String?
+  answeredAt     DateTime?
+  session        ReviewSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  note           Note          @relation(fields: [noteId], references: [id], onDelete: Cascade)
+}
+
+model ReviewLog {
+  id                String         @id @default(uuid())
+  noteId            String
+  sessionId         String?
+  rating            String
+  spellingAnswer    String?
+  isSpellingCorrect Boolean?
+  createdAt         DateTime       @default(now())
+  note              Note           @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  session           ReviewSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([noteId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+model Todo {
+  id        String   @id @default(uuid())
+  taskDate  DateTime
+  text      String
+  done      Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskDate, sortOrder])
+  @@index([taskDate])
+}
+
+model DailyActivity {
+  id           String   @id @default(uuid())
+  activityDate DateTime @unique
+  studyCount   Int      @default(0)
+  allTodosDone Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+}

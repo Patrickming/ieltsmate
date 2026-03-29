@@ -14,10 +14,13 @@ function detectCategory(text: string): Category {
 }
 
 function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
+  const { addQuickNote } = useAppStore()
   const [text, setText] = useState('')
   const [mode, setMode] = useState<'ai' | 'manual'>('ai')
   const [manualCat, setManualCat] = useState<Category>('短语')
   const [saved, setSaved] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveHint, setSaveHint] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -51,12 +54,31 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
   const aiCategory = detectCategory(text)
   const finalCategory = mode === 'ai' ? aiCategory : manualCat
 
-  const handleSave = () => {
-    if (!text.trim()) return
+  const handleSave = async () => {
+    if (!text.trim() || saving) return
+    const raw = text.trim()
+    const delimiter = raw.includes('—') ? '—' : raw.includes(' - ') ? ' - ' : null
+    const [left, right] = delimiter ? raw.split(delimiter, 2) : [raw, '']
+    const content = left.trim() || raw
+    const translation = right.trim() || '（待补充）'
+
+    setSaving(true)
+    const result = await addQuickNote({
+      content,
+      translation,
+      category: finalCategory,
+    })
+    setSaving(false)
+    setSaveHint(
+      result.source === 'remote'
+        ? '已保存到后端，并更新到当前列表'
+        : '后端不可用，已本地保存（联调兜底）'
+    )
     setSaved(true)
     setTimeout(() => {
       onClose()
       setSaved(false)
+      setSaveHint('')
     }, 800)
   }
 
@@ -175,6 +197,9 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
 
               {/* Footer */}
               <div className="flex items-center justify-end gap-2.5">
+                {saveHint && (
+                  <span className="mr-auto text-[12px] text-text-dim">{saveHint}</span>
+                )}
                 <button
                   onClick={onClose}
                   className="h-9 px-5 border border-border rounded-md text-[13px] text-text-dim hover:bg-[#27272a] transition-colors"
@@ -184,14 +209,14 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={handleSave}
-                  disabled={!text.trim()}
+                  disabled={!text.trim() || saving}
                   className={`h-9 px-5 rounded-md text-[13px] font-medium transition-all ${
                     saved
                       ? 'bg-[#064e3b] text-[#34d399]'
                       : 'bg-primary-btn hover:bg-[#4338ca] text-white disabled:opacity-50'
                   }`}
                 >
-                  {saved ? '✓ 已保存' : '保存笔记'}
+                  {saved ? '✓ 已保存' : saving ? '保存中...' : '保存笔记'}
                 </motion.button>
               </div>
             </div>
