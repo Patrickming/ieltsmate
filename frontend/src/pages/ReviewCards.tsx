@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut } from 'lucide-react'
+import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut, BookOpen, Keyboard } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
@@ -58,48 +58,134 @@ function CardFront({ note, cardType, answer, onAnswerChange }: {
   answer?: string
   onAnswerChange?: (v: string) => void
 }) {
-  // Generate placeholder like "c___" for a word starting with 'c'
-  const spellingHint = note.content
-    ? `${note.content[0].toLowerCase()}${'_'.repeat(Math.max(0, note.content.length - 1))}`
-    : ''
+  const inputRef = useRef<HTMLInputElement>(null)
+  const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
 
-  // Parse translation into structured lines for dictionary display
   const translationLines = note.translation
     ? note.translation.split(/[；;]/).map(s => s.trim()).filter(Boolean)
     : []
 
+  const wordLen = note.content.length
+  const firstLetter = note.content[0] ?? ''
+
+  // Auto-focus input when spelling card mounts
+  useEffect(() => {
+    if (cardType === 'spelling') {
+      setTimeout(() => inputRef.current?.focus(), 80)
+    }
+  }, [cardType, note.id])
+
+  if (cardType === 'spelling') {
+    return (
+      <div className="flex flex-col h-full" onClick={e => e.stopPropagation()}>
+
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 shrink-0">
+          <Badge category={note.category} size="md" />
+          <div className="flex items-center gap-1.5" style={{ color: barColor + 'aa' }}>
+            <Keyboard size={12} />
+            <span className="text-[11px] font-medium tracking-wide">拼写挑战</span>
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex-1 flex flex-col justify-center items-center gap-5 px-8 pb-5 min-h-0">
+
+          {/* Definition card */}
+          <div className="w-full max-w-[560px] rounded-2xl overflow-hidden border"
+            style={{ background: '#0d0d12', borderColor: '#1f1f2e' }}>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b"
+              style={{ borderColor: '#1a1a26', background: '#111118' }}>
+              <BookOpen size={12} style={{ color: barColor }} />
+              <span className="text-[10px] font-bold uppercase tracking-[1.5px]" style={{ color: barColor }}>
+                词义参考
+              </span>
+              {note.phonetic && (
+                <>
+                  <div className="w-px h-3 bg-[#27272a] mx-1" />
+                  <Volume2 size={11} className="text-text-subtle" />
+                  <span className="text-[12px] font-mono" style={{ color: barColor + '99' }}>
+                    {note.phonetic}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="px-5 py-4 flex flex-col gap-2">
+              {translationLines.map((line, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="text-[11px] font-bold shrink-0 mt-1 tabular-nums"
+                    style={{ color: barColor + 'bb' }}>
+                    {String(i + 1).padStart(2, '0')}.
+                  </span>
+                  <p className="text-[16px] text-text-secondary leading-relaxed">{line}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Letter count row */}
+          <div className="flex flex-col items-center gap-2 w-full max-w-[560px]">
+            <div className="flex items-center gap-1.5">
+              {/* First letter box (revealed) */}
+              <div
+                className="w-7 h-7 rounded-md flex items-center justify-center text-[15px] font-bold font-mono"
+                style={{ background: barColor + '22', border: `1px solid ${barColor}66`, color: barColor }}
+              >
+                {firstLetter.toUpperCase()}
+              </div>
+              {/* Remaining letters as dashes */}
+              {Array.from({ length: Math.max(0, wordLen - 1) }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-5 h-7 flex items-end justify-center pb-1"
+                >
+                  <div className="w-4 h-px rounded-full" style={{ background: '#3f3f46' }} />
+                </div>
+              ))}
+              <span className="ml-2 text-[11px] text-text-subtle tabular-nums">
+                {wordLen} 个字母
+              </span>
+            </div>
+
+            {/* Input field */}
+            <input
+              ref={inputRef}
+              value={answer ?? ''}
+              onChange={e => onAnswerChange?.(e.target.value)}
+              placeholder={`${firstLetter.toLowerCase()}${'·'.repeat(Math.max(0, wordLen - 1))}`}
+              onClick={e => e.stopPropagation()}
+              onKeyDown={e => {
+                e.stopPropagation()
+                // allow Space in input without flipping card
+              }}
+              className="w-full h-14 rounded-2xl px-5 text-[20px] text-center font-mono outline-none transition-all duration-200 tracking-[6px]"
+              style={{
+                background: '#0d0d12',
+                border: `2px solid ${answer ? barColor + '66' : '#27272a'}`,
+                color: '#fafafa',
+                boxShadow: answer ? `0 0 16px ${barColor}22` : 'none',
+                caretColor: barColor,
+              }}
+              autoComplete="off"
+              spellCheck={false}
+            />
+
+            <p className="text-[11px] text-text-subtle">
+              输入后按 <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-text-dim font-mono">Space</kbd> 或点击卡片翻转查看
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col items-center justify-center h-full gap-5 px-8">
       <Badge category={note.category} size="md" />
-      {cardType === 'spelling' ? (
-        <div className="flex flex-col items-center gap-4 w-full max-w-[520px]">
-          <p className="text-xl font-semibold text-text-muted">请拼出这个单词</p>
-          {/* Dictionary-style definitions */}
-          <div className="w-full bg-[#141420] border border-[#27272a] rounded-xl px-5 py-4 text-left">
-            {translationLines.map((line, i) => (
-              <p key={i} className="text-[15px] text-text-secondary leading-relaxed">
-                {line}
-              </p>
-            ))}
-          </div>
-          {/* Answer input */}
-          <input
-            value={answer ?? ''}
-            onChange={e => onAnswerChange?.(e.target.value)}
-            placeholder={spellingHint}
-            onClick={e => e.stopPropagation()}
-            onKeyDown={e => e.stopPropagation()}
-            className="h-12 w-72 bg-[#18181b] border border-border rounded-xl px-4 text-[18px] text-center text-text-primary outline-none focus:border-primary/60 transition-colors font-mono placeholder-text-subtle tracking-widest"
-          />
-        </div>
-      ) : (
-        <h2 className="text-[2.8rem] font-bold text-text-primary text-center leading-tight">
-          {note.content}
-        </h2>
-      )}
-      <p className="text-base text-text-dim">
-        {cardType === 'spelling' ? '输入答案后点击卡片或按空格键翻转查看' : '点击卡片或按空格键翻转'}
-      </p>
+      <h2 className="text-[2.8rem] font-bold text-text-primary text-center leading-tight">
+        {note.content}
+      </h2>
+      <p className="text-base text-text-dim">点击卡片或按空格键翻转</p>
     </div>
   )
 }
