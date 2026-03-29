@@ -86,7 +86,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-[1fr_260px] gap-5 items-start">
           {/* 左列：热图 + 今日任务 */}
           <div className="flex flex-col gap-5">
-            <div className="bg-surface-card border border-border rounded-xl p-5 overflow-x-auto">
+            <div className="bg-surface-card border border-border rounded-xl p-5 min-w-0">
               <ActivityHeatmap todayAllDone={todayAllDone} />
             </div>
             <div className="bg-surface-card border border-border rounded-xl p-5">
