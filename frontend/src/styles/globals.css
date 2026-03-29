@@ -90,3 +90,18 @@ body {
 .rotate-y-180 {
   transform: rotateY(180deg);
 }
+
+/* NoteCard flip */
+.note-flip-card:hover .note-flip-inner {
+  transform: rotateY(180deg);
+}
+
+@keyframes beam-spin {
+  from { transform: rotateZ(0deg); }
+  to   { transform: rotateZ(360deg); }
+}
+
+@keyframes blob-float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(10px); }
+}
