@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
-import { FavoriteButton } from '../components/ui/FavoriteButton'
+import { StrokeButton } from '../components/ui/StrokeButton'
 import { useAppStore } from '../store/useAppStore'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
@@ -260,6 +260,27 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnsw
   )
 }
 
+/** Pill-style favorite toggle used inside review session */
+function ReviewFavButton({ noteId }: { noteId: string }) {
+  const { favorites, toggleFavorite } = useAppStore()
+  const isFav = favorites.includes(noteId)
+  const color = isFav ? '#ef4444' : '#f472b6'
+
+  return (
+    <button
+      type="button"
+      onClick={() => toggleFavorite(noteId)}
+      className="pill-btn"
+      style={{
+        ['--btn-color' as string]: color,
+        ['--btn-shadow' as string]: `${color}70`,
+      } as React.CSSProperties}
+    >
+      {isFav ? '♥ 已收藏' : '♡ 收藏'}
+    </button>
+  )
+}
+
 export default function ReviewCards() {
   const navigate = useNavigate()
   const { reviewSession, nextCard, rateCard, endReview } = useAppStore()
@@ -446,38 +467,28 @@ export default function ReviewCards() {
         </div>
 
         {/* Rating buttons + favorite */}
-        <div className="shrink-0 pb-4 flex items-center gap-4">
+        <div className="shrink-0 pb-6 flex items-center justify-center gap-10">
           <AnimatePresence>
             {flipped && (
               <motion.div
-                initial={{ opacity: 0, y: 12 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={{ duration: 0.15 }}
-                className="flex items-center gap-4"
+                exit={{ opacity: 0, y: 10 }}
+                transition={{ duration: 0.18 }}
+                className="flex items-center gap-10"
               >
-                <motion.button
-                  whileTap={{ scale: 0.93 }}
-                  onClick={() => handleRate('again')}
-                  className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#2e1520] border border-[#fb7185]/40 text-[#fb7185] text-base font-semibold hover:bg-[#450a0a] transition-colors"
-                >
+                <StrokeButton color="#fb7185" onClick={() => handleRate('again')}>
                   😞 不记得
-                </motion.button>
-                <motion.button
-                  whileTap={{ scale: 0.93 }}
-                  onClick={() => handleRate('easy')}
-                  className="flex items-center gap-2 h-12 px-8 rounded-xl bg-[#1a2e22] border border-[#34d399]/40 text-[#34d399] text-base font-semibold hover:bg-[#064e3b] transition-colors"
-                >
+                </StrokeButton>
+                <StrokeButton color="#34d399" onClick={() => handleRate('easy')}>
                   😊 记得
-                </motion.button>
+                </StrokeButton>
               </motion.div>
             )}
           </AnimatePresence>
 
-          {/* Favorite button — always visible */}
-          <div className="flex items-center">
-            <FavoriteButton noteId={card.id} variant="full" />
-          </div>
+          {/* Favorite stroke toggle — always visible */}
+          <ReviewFavButton noteId={card.id} />
         </div>
       </div>
     </Layout>

@@ -106,6 +106,60 @@ body {
   50%       { transform: translateY(10px); }
 }
 
+/* ── PillButton (fill-on-hover) ───────────────────── */
+.pill-btn {
+  cursor: pointer;
+  position: relative;
+  padding: 11px 30px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Inter', Arial, sans-serif;
+  color: var(--btn-color, #818cf8);
+  border: 2px solid var(--btn-color, #818cf8);
+  border-radius: 34px;
+  background-color: transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+              scale 0.3s cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Fill circle — stays BEHIND text via z-index: -1 */
+.pill-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 50px;
+  height: 50px;
+  border-radius: inherit;
+  scale: 0;
+  z-index: -1;
+  background-color: var(--btn-color, #818cf8);
+  transition: scale 0.55s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.pill-btn:hover::before {
+  scale: 3;
+}
+
+.pill-btn:hover {
+  color: #111;
+  scale: 1.08;
+  box-shadow: 0 0 28px var(--btn-shadow, rgba(129, 140, 248, 0.45));
+}
+
+.pill-btn:active {
+  scale: 1;
+}
+
+.pill-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 /* FavoriteButton */
 .fav-input {
   display: none;
