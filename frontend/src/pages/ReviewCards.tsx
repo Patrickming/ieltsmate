@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Volume2, Plus, Check, Sparkles, HelpCircle } from 'lucide-react'
+import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
+import { FavoriteButton } from '../components/ui/FavoriteButton'
 import { useAppStore } from '../store/useAppStore'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
@@ -261,7 +262,8 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnsw
 
 export default function ReviewCards() {
   const navigate = useNavigate()
-  const { reviewSession, nextCard, rateCard } = useAppStore()
+  const { reviewSession, nextCard, rateCard, endReview } = useAppStore()
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
   const [savedAnt, setSavedAnt] = useState<string[]>([])
@@ -314,20 +316,77 @@ export default function ReviewCards() {
   return (
     <Layout title="复习">
       {/* Progress topbar */}
-      <div className="h-14 border-b border-border flex items-center justify-between px-6 bg-surface-bg shrink-0">
+      <div className="h-14 border-b border-border flex items-center justify-between px-6 bg-surface-bg shrink-0 gap-4">
+        {/* Left: exit + progress */}
         <div className="flex items-center gap-4">
-          <span className="text-sm font-semibold text-text-primary">{current + 1} / {total}</span>
-          <div className="w-48 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
-            <motion.div
-              className="h-full rounded-full bg-primary"
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 0.3 }}
-            />
+          <button
+            type="button"
+            onClick={() => setShowExitConfirm(true)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-text-dim hover:text-text-muted hover:border-border-strong hover:bg-[#27272a]/60 transition-all text-[12px] font-medium"
+          >
+            <LogOut size={12} />
+            退出
+          </button>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-text-primary tabular-nums">{current + 1} / {total}</span>
+            <div className="w-40 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
+              <motion.div
+                className="h-full rounded-full bg-primary"
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.3 }}
+              />
+            </div>
           </div>
         </div>
         <span className="text-xs text-text-dim">空格键翻转卡片</span>
       </div>
+
+      {/* Exit confirm dialog */}
+      <AnimatePresence>
+        {showExitConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}
+            onClick={() => setShowExitConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.92, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.92, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-80 rounded-2xl border p-6 flex flex-col gap-4"
+              style={{ background: '#1c1c20', borderColor: '#3f3f46', boxShadow: '0 24px 48px rgba(0,0,0,0.6)' }}
+            >
+              <div>
+                <div className="text-base font-bold text-text-primary mb-1">退出复习？</div>
+                <div className="text-sm text-text-dim">当前进度将不会保存，已评分的记录仍然有效。</div>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowExitConfirm(false)}
+                  className="h-9 px-4 rounded-lg border border-border text-sm text-text-muted hover:border-border-strong hover:bg-[#27272a]/60 transition-all"
+                >
+                  继续复习
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { endReview(); navigate('/review') }}
+                  className="h-9 px-4 rounded-lg text-sm font-semibold text-white transition-all"
+                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)' }}
+                >
+                  确认退出
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Card area */}
       <div className="flex flex-col items-center gap-6 px-12 py-8 h-[calc(100vh-112px)]">
@@ -386,8 +445,8 @@ export default function ReviewCards() {
           </AnimatePresence>
         </div>
 
-        {/* Rating buttons */}
-        <div className="shrink-0 pb-4">
+        {/* Rating buttons + favorite */}
+        <div className="shrink-0 pb-4 flex items-center gap-4">
           <AnimatePresence>
             {flipped && (
               <motion.div
@@ -395,7 +454,7 @@ export default function ReviewCards() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={{ duration: 0.15 }}
-                className="flex items-center gap-6"
+                className="flex items-center gap-4"
               >
                 <motion.button
                   whileTap={{ scale: 0.93 }}
@@ -414,6 +473,11 @@ export default function ReviewCards() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Favorite button — always visible */}
+          <div className="flex items-center">
+            <FavoriteButton noteId={card.id} variant="full" />
+          </div>
         </div>
       </div>
     </Layout>
