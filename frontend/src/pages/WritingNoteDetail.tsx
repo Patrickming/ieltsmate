@@ -216,7 +216,7 @@ export default function WritingNoteDetail() {
 
   return (
     <Layout title="写作笔记">
-      <div className="max-w-3xl mx-auto px-8 py-8">
+      <div className="px-8 py-8">
         {/* Back */}
         <button
           onClick={() => navigate('/kb')}

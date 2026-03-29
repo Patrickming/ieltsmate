@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { X, Send, Plus, AlignJustify, ChevronDown, Sparkles, Paperclip, HelpCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
@@ -48,8 +48,14 @@ export function AIPanel() {
   const dragStartX = useRef(0)
   const dragStartWidth = useRef(DEFAULT_HISTORY_WIDTH)
 
-  const currentConv = conversations.find((c) => c.id === currentConvId)!
-  const messages = currentConv?.messages ?? [WELCOME]
+  const currentConv = useMemo(
+    () => conversations.find((c) => c.id === currentConvId),
+    [conversations, currentConvId]
+  )
+  const messages = useMemo(
+    () => currentConv?.messages ?? [WELCOME],
+    [currentConv]
+  )
 
   // Panel total width
   const panelWidth = showHistory ? historyWidth + 360 : 360

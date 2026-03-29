@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import Dashboard from './pages/Dashboard'
@@ -9,12 +9,23 @@ import ReviewSelection from './pages/ReviewSelection'
 import ReviewCards from './pages/ReviewCards'
 import ReviewSummary from './pages/ReviewSummary'
 import Settings from './pages/Settings'
-import { QuickNoteModal } from './components/modals/QuickNoteModal'
-import { SearchModal } from './components/modals/SearchModal'
-import { AIPanel } from './components/modals/AIPanel'
-import { AIModelConfigModal } from './components/modals/AIModelConfigModal'
-import { ImportModal } from './components/modals/ImportModal'
 import { useAppStore } from './store/useAppStore'
+
+const QuickNoteModal = lazy(() =>
+  import('./components/modals/QuickNoteModal').then((m) => ({ default: m.QuickNoteModal }))
+)
+const SearchModal = lazy(() =>
+  import('./components/modals/SearchModal').then((m) => ({ default: m.SearchModal }))
+)
+const AIPanel = lazy(() =>
+  import('./components/modals/AIPanel').then((m) => ({ default: m.AIPanel }))
+)
+const AIModelConfigModal = lazy(() =>
+  import('./components/modals/AIModelConfigModal').then((m) => ({ default: m.AIModelConfigModal }))
+)
+const ImportModal = lazy(() =>
+  import('./components/modals/ImportModal').then((m) => ({ default: m.ImportModal }))
+)
 
 function GlobalShortcuts() {
   const location = useLocation()
@@ -45,7 +56,7 @@ function GlobalShortcuts() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [location, showSearch, showAIPanel, showQuickNote, showAIConfig, openSearch, openAIPanel, closeAll])
+  }, [location, showSearch, showAIPanel, showQuickNote, showAIConfig, showImport, openSearch, openAIPanel, closeAll])
 
   return null
 }
@@ -69,15 +80,19 @@ function AnimatedRoutes() {
 }
 
 function AppInner() {
+  const { showSearch, showQuickNote, showAIPanel, showAIConfig, showImport } = useAppStore()
+
   return (
     <>
       <GlobalShortcuts />
       <AnimatedRoutes />
-      <QuickNoteModal />
-      <SearchModal />
-      <AIPanel />
-      <AIModelConfigModal />
-      <ImportModal />
+      <Suspense fallback={null}>
+        {showQuickNote && <QuickNoteModal />}
+        {showSearch && <SearchModal />}
+        {showAIPanel && <AIPanel />}
+        {showAIConfig && <AIModelConfigModal />}
+        {showImport && <ImportModal />}
+      </Suspense>
     </>
   )
 }

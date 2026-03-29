@@ -282,41 +282,33 @@ export default function KnowledgeDetail() {
           </div>
         </div>
 
-        {/* Prev / Next — bottom of page */}
+        {/* Prev / Next */}
         {(prevNote || nextNote) && (
-          <div className="flex items-center justify-between mt-2 pt-4 border-t border-border">
-            <div>
-              {prevNote && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="h-10 min-h-10 rounded-md gap-2 max-w-full justify-start px-3"
-                  onClick={() => navigate(`/kb/${prevNote.id}`)}
-                >
-                  <ChevronLeft size={14} className="shrink-0" />
-                  <span className="text-text-dim shrink-0">上一个:</span>
-                  <span className="text-text-muted max-w-[140px] truncate">{prevNote.content}</span>
-                  <Badge category={prevNote.category} />
-                </Button>
-              )}
-            </div>
-            <div>
-              {nextNote && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="h-10 min-h-10 rounded-md gap-2 max-w-full justify-start px-3"
-                  onClick={() => navigate(`/kb/${nextNote.id}`)}
-                >
-                  <span className="text-text-dim shrink-0">下一个:</span>
-                  <span className="text-text-muted max-w-[140px] truncate">{nextNote.content}</span>
-                  <Badge category={nextNote.category} />
-                  <ChevronRight size={14} className="shrink-0" />
-                </Button>
-              )}
-            </div>
+          <div className="mt-2 flex items-center justify-between border-t border-border pt-4">
+            {prevNote ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/kb/${prevNote.id}`)}
+                className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:border-border-strong hover:bg-[#27272a]/40"
+              >
+                <ChevronLeft size={14} className="shrink-0 text-text-dim" />
+                <span className="text-text-dim">上一个</span>
+                <span className="max-w-[180px] truncate text-text-muted">{prevNote.content}</span>
+                <Badge category={prevNote.category} />
+              </button>
+            ) : <span />}
+            {nextNote ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/kb/${nextNote.id}`)}
+                className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm transition-colors hover:border-border-strong hover:bg-[#27272a]/40"
+              >
+                <span className="text-text-dim">下一个</span>
+                <span className="max-w-[180px] truncate text-text-muted">{nextNote.content}</span>
+                <Badge category={nextNote.category} />
+                <ChevronRight size={14} className="shrink-0 text-text-dim" />
+              </button>
+            ) : <span />}
           </div>
         )}
       </div>
