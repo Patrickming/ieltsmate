@@ -105,3 +105,120 @@ body {
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(10px); }
 }
+
+/* FavoriteButton */
+.fav-input {
+  display: none;
+}
+
+.fav-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 10px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 10px;
+  background: #27272a;
+  border: 1px solid #3f3f46;
+  color: #a1a1aa;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.fav-label:hover {
+  background: #2e2e32;
+  border-color: #52525b;
+}
+
+.fav-input:checked + .fav-label {
+  background: #2e1a1a;
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+
+.fav-input:checked + .fav-label .fav-heart {
+  fill: hsl(0deg 100% 50%);
+  stroke: hsl(0deg 100% 50%);
+  animation: heartPulse 0.6s ease-in-out;
+}
+
+.fav-heart {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  transition: fill 0.2s, stroke 0.2s;
+}
+
+@keyframes heartPulse {
+  0%   { transform: scale(1); }
+  25%  { transform: scale(1.4); }
+  50%  { transform: scale(1); }
+  75%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.fav-action {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  height: 1.2em;
+}
+
+.fav-action span {
+  grid-column: 1;
+  grid-row: 1;
+  transition: transform 0.35s, opacity 0.35s;
+  white-space: nowrap;
+}
+
+.fav-opt1 {
+  transform: translateY(0%);
+  opacity: 1;
+}
+.fav-input:checked + .fav-label .fav-opt1 {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+.fav-opt2 {
+  transform: translateY(100%);
+  opacity: 0;
+}
+.fav-input:checked + .fav-label .fav-opt2 {
+  transform: translateY(0%);
+  opacity: 1;
+}
+
+/* Compact heart-only variant (NoteCard) */
+.fav-label-compact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  color: #52525b;
+  transition: color 0.2s;
+}
+
+.fav-label-compact:hover {
+  color: #ef4444;
+}
+
+.fav-input:checked + .fav-label-compact {
+  color: #ef4444;
+}
+
+.fav-input:checked + .fav-label-compact .fav-heart {
+  fill: #ef4444;
+  stroke: #ef4444;
+  animation: heartPulse 0.6s ease-in-out;
+}

@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil } from 'lucide-react'
+import { FavoriteButton } from '../components/ui/FavoriteButton'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { Layout } from '../components/layout/Layout'
@@ -258,7 +259,7 @@ export default function KnowledgeDetail() {
             {/* Actions */}
             <div className="bg-surface-card border border-border rounded-xl p-4">
               <div className="text-sm font-semibold text-text-secondary mb-3">操作</div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mb-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -278,6 +279,7 @@ export default function KnowledgeDetail() {
                   删除
                 </Button>
               </div>
+              <FavoriteButton noteId={note.id} variant="full" />
             </div>
           </div>
         </div>

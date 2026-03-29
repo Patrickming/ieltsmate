@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { NotebookPen, FileText, Play, Shuffle, RotateCcw, AlertCircle } from 'lucide-react'
+import { NotebookPen, Heart, Play, Shuffle, RotateCcw, AlertCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
@@ -13,8 +13,8 @@ type Mode = 'random' | 'continue'
 
 export default function ReviewSelection() {
   const navigate = useNavigate()
-  const { notes, startReview } = useAppStore()
-  const [bigCat, setBigCat] = useState<'杂笔记' | '写作'>('杂笔记')
+  const { notes, favorites, startReview } = useAppStore()
+  const [bigCat, setBigCat] = useState<'杂笔记' | '收藏夹'>('杂笔记')
   const [subCats, setSubCats] = useState<Set<Category | '全部'>>(new Set(['全部']))
   const [range, setRange] = useState<Range>('all')
   const [mode, setMode] = useState<Mode>('random')
@@ -35,10 +35,13 @@ export default function ReviewSelection() {
   // Count by category
   const countCat = (cat: Category) => notes.filter((n) => n.category === cat).length
   const countAll = notes.filter((n) => n.subcategory === '杂笔记').length
+  const countFav = favorites.length
 
   const getFilteredNotes = () => {
-    let pool = notes.filter((n) => n.subcategory === '杂笔记')
-    if (!subCats.has('全部')) {
+    let pool = bigCat === '收藏夹'
+      ? notes.filter((n) => favorites.includes(n.id))
+      : notes.filter((n) => n.subcategory === '杂笔记')
+    if (bigCat === '杂笔记' && !subCats.has('全部')) {
       pool = pool.filter((n) => subCats.has(n.category as Category))
     }
     if (range === 'wrong') {
@@ -72,22 +75,28 @@ export default function ReviewSelection() {
           <div className="grid grid-cols-2 gap-4">
             {([
               { key: '杂笔记', icon: NotebookPen, count: countAll, desc: '口语、短语、单词等' },
-              { key: '写作', icon: FileText, count: 0, desc: '写作笔记文件' },
+              { key: '收藏夹', icon: Heart, count: countFav, desc: '已收藏的笔记' },
             ] as const).map(({ key, icon: Icon, count, desc }) => (
               <motion.button
                 key={key}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setBigCat(key)}
-                className={`flex items-center gap-4 p-5 rounded-xl border transition-all text-left ${
+              className={`flex items-center gap-4 p-5 rounded-xl border transition-all text-left ${
                   bigCat === key
-                    ? 'bg-[#1e1e2e] border-primary'
+                    ? key === '收藏夹'
+                      ? 'bg-[#2e1a1a] border-[#ef4444]'
+                      : 'bg-[#1e1e2e] border-primary'
                     : 'bg-surface-card border-border hover:border-border-strong'
                 }`}
-              >
-                <Icon size={24} className={bigCat === key ? 'text-primary' : 'text-text-dim'} />
+            >
+              <Icon
+                size={24}
+                className={bigCat === key ? (key === '收藏夹' ? 'text-[#ef4444]' : 'text-primary') : 'text-text-dim'}
+                fill={bigCat === key && key === '收藏夹' ? '#ef4444' : 'none'}
+              />
                 <div>
                   <div className={`text-base font-semibold ${bigCat === key ? 'text-text-primary' : 'text-text-muted'}`}>{key}</div>
-                  <div className={`text-xs mt-0.5 ${bigCat === key ? 'text-primary' : 'text-text-dim'}`}>
+                  <div className={`text-xs mt-0.5 ${bigCat === key ? (key === '收藏夹' ? 'text-[#ef4444]' : 'text-primary') : 'text-text-dim'}`}>
                     {count > 0 ? `${count} 张待复习` : desc}
                   </div>
                 </div>
@@ -96,7 +105,7 @@ export default function ReviewSelection() {
           </div>
         </div>
 
-        {/* Step 2: Sub-category pills (only for 杂笔记) */}
+        {/* Step 2: Sub-category pills (only for 杂笔记; 收藏夹 has no sub-cats) */}
         {bigCat === '杂笔记' && (
           <div className="flex flex-col gap-3">
             <div className="text-xs font-semibold text-text-subtle uppercase tracking-wide">选择子分类</div>

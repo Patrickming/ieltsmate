@@ -1,6 +1,7 @@
 import { CATEGORY_BAR } from '../../data/mockData'
 import type { Note } from '../../data/mockData'
 import { Badge } from './Badge'
+import { FavoriteButton } from './FavoriteButton'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/useAppStore'
 
@@ -182,12 +183,18 @@ export function NoteCard({ note }: NoteCardProps) {
             <div style={{
               fontSize: 11, color: '#3f3f46', flexShrink: 0,
               paddingTop: 8, borderTop: '1px solid #27272a',
-              display: 'flex', justifyContent: 'space-between',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             }}>
               <span>{note.createdAt}</span>
-              <span style={{ color: barColor, opacity: 0.8 }}>
-                {note.reviewStatus === 'mastered' ? '已掌握' : note.reviewStatus === 'learning' ? '学习中' : '新词'}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ color: barColor, opacity: 0.8 }}>
+                  {note.reviewStatus === 'mastered' ? '已掌握' : note.reviewStatus === 'learning' ? '学习中' : '新词'}
+                </span>
+                {/* stop propagation so clicking heart doesn't navigate */}
+                <div onClick={(e) => e.stopPropagation()}>
+                  <FavoriteButton noteId={note.id} variant="compact" />
+                </div>
+              </div>
             </div>
           </div>
         </div>

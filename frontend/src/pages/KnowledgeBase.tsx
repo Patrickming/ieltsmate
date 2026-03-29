@@ -1,5 +1,5 @@
 import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
-import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen } from 'lucide-react'
+import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen, Heart } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
@@ -28,12 +28,13 @@ const WRITING_NOTES: { id: string; name: string; path: string; updatedAt: string
 ]
 
 function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
-  groupFilter: '全部' | '杂笔记' | '写作'
+  groupFilter: '全部' | '杂笔记' | '写作' | '收藏夹'
   subFilter: Category | '全部'
 } {
   const group = searchParams.get('group')
   const cat = searchParams.get('cat')
   if (group === '写作') return { groupFilter: '写作', subFilter: '全部' }
+  if (group === '收藏夹') return { groupFilter: '收藏夹', subFilter: '全部' }
   if (group === '杂笔记') {
     const sub: Category | '全部' = cat ? (cat as Category) : '全部'
     return { groupFilter: '杂笔记', subFilter: sub }
@@ -52,7 +53,7 @@ type KnowledgeBaseMainProps = {
 }
 
 function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMainProps) {
-  const { notes, openQuickNote } = useAppStore()
+  const { notes, openQuickNote, favorites } = useAppStore()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -80,10 +81,18 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
   const [writingSubFilter, setWritingSubFilter] = useState<'全部' | WritingType>('全部')
 
   const filteredNotes = notes.filter((n) => {
-    if (groupFilter === '写作') return false
+    if (groupFilter === '写作' || groupFilter === '收藏夹') return false
     if (groupFilter === '杂笔记') {
       if (subFilter !== '全部' && n.category !== subFilter) return false
     }
+    const matchSearch = !search ||
+      n.content.toLowerCase().includes(search.toLowerCase()) ||
+      n.translation.includes(search)
+    return matchSearch
+  })
+
+  const favNotes = notes.filter((n) => {
+    if (!favorites.includes(n.id)) return false
     const matchSearch = !search ||
       n.content.toLowerCase().includes(search.toLowerCase()) ||
       n.translation.includes(search)
@@ -98,6 +107,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
 
   const showWriting = groupFilter === '全部' || groupFilter === '写作'
   const showNotes = groupFilter === '全部' || groupFilter === '杂笔记'
+  const showFavorites = groupFilter === '收藏夹'
 
   const allItems = showNotes ? filteredNotes : []
 
@@ -122,12 +132,13 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
         </div>
 
         {/* Group Tabs — with icons and note counts */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {([
-            { g: '全部' as const, icon: LayoutGrid, count: notes.length + WRITING_NOTES.length },
-            { g: '杂笔记' as const, icon: NotebookPen, count: notes.length },
-            { g: '写作' as const, icon: FileText, count: WRITING_NOTES.length },
-          ]).map(({ g, icon: Icon, count }) => (
+            { g: '全部' as const, icon: LayoutGrid, count: notes.length + WRITING_NOTES.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
+            { g: '杂笔记' as const, icon: NotebookPen, count: notes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
+            { g: '写作' as const, icon: FileText, count: WRITING_NOTES.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
+            { g: '收藏夹' as const, icon: Heart, count: favorites.length, activeClass: 'bg-[#2e1a1a] border-[#ef4444] text-[#fca5a5]', activeIcon: 'text-[#ef4444]', activeBadge: 'bg-[#ef4444]/20 text-[#ef4444]' },
+          ]).map(({ g, icon: Icon, count, activeClass, activeIcon, activeBadge }) => (
             <motion.button
               key={g}
               type="button"
@@ -135,14 +146,14 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
               onClick={() => { setGroupFilter(g); setSubFilter('全部'); setWritingSubFilter('全部') }}
               className={`flex items-center gap-1.5 h-9 px-4 rounded-md text-[13px] font-medium border transition-all ${
                 groupFilter === g
-                  ? 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]'
+                  ? activeClass
                   : 'border-border text-text-dim hover:border-border-strong hover:text-text-muted hover:bg-[#27272a]/40'
               }`}
             >
-              <Icon size={13} className={groupFilter === g ? 'text-primary' : 'text-text-subtle'} />
+              <Icon size={13} className={groupFilter === g ? activeIcon : 'text-text-subtle'} />
               {g}
               <span className={`text-[10px] font-normal px-1.5 py-0.5 rounded-full ml-0.5 ${
-                groupFilter === g ? 'bg-primary/20 text-primary' : 'bg-border text-text-subtle'
+                groupFilter === g ? activeBadge : 'bg-border text-text-subtle'
               }`}>
                 {count}
               </span>
@@ -326,6 +337,44 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
                         添加笔记
                       </Button>
                     </>
+                  }
+                />
+              </motion.div>
+            )}
+          </div>
+        )}
+
+        {showFavorites && (
+          <div className="flex flex-col gap-3">
+            {favNotes.length > 0 ? (
+              <div className="grid grid-cols-3 gap-4">
+                <AnimatePresence mode="popLayout">
+                {favNotes.map((note, i) => (
+                  <motion.div
+                    key={note.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2, delay: i * 0.03 }}
+                  >
+                    <NoteCard note={note} />
+                  </motion.div>
+                ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <EmptyState
+                  title={search ? '未找到收藏的笔记' : '收藏夹为空'}
+                  description="在卡片或笔记详情页点击心形按钮将笔记加入收藏"
+                  action={
+                    <div className="w-16 h-16 rounded-2xl bg-[#2e1a1a] border border-[#ef4444]/30 flex items-center justify-center">
+                      <Heart size={28} className="text-[#ef4444]/60" />
+                    </div>
                   }
                 />
               </motion.div>

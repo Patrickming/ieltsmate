@@ -65,6 +65,10 @@ interface AppState {
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void
 
+  // Favorites
+  favorites: string[]
+  toggleFavorite: (id: string) => void
+
   // Modals
   showQuickNote: boolean
   showSearch: boolean
@@ -112,6 +116,15 @@ export const useAppStore = create<AppState>((set) => ({
   notes: mockNotes,
   selectedNote: null,
   setSelectedNote: (note) => set({ selectedNote: note }),
+
+  favorites: JSON.parse(localStorage.getItem('ielts-favorites') || '[]') as string[],
+  toggleFavorite: (id) => set((s) => {
+    const next = s.favorites.includes(id)
+      ? s.favorites.filter((f) => f !== id)
+      : [...s.favorites, id]
+    localStorage.setItem('ielts-favorites', JSON.stringify(next))
+    return { favorites: next }
+  }),
 
   showQuickNote: false,
   showSearch: false,
