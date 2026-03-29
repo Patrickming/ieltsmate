@@ -1,33 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { CirclePlay, Plus } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
 import { StatCard } from '../components/ui/StatCard'
-import { NoteCard } from '../components/ui/NoteCard'
+import { ActivityHeatmap } from '../components/ui/ActivityHeatmap'
+import { MasteryRing } from '../components/ui/MasteryRing'
+import { TodoList } from '../components/ui/TodoList'
 import { Button } from '../components/ui/Button'
-import { EmptyState } from '../components/ui/EmptyState'
 import { LoadingState } from '../components/ui/LoadingState'
 import { useAppStore } from '../store/useAppStore'
-import { mockStats, type Category } from '../data/mockData'
-
-const FILTERS: (Category | '全部')[] = ['全部', '口语', '短语', '句子', '同义替换', '拼写', '单词', '写作']
+import { mockStats } from '../data/mockData'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { notes, activeFilter, setFilter, openQuickNote, startReview } = useAppStore()
+  const { notes, openQuickNote } = useAppStore()
   const [pageLoading] = useState(false)
+  const [todayAllDone, setTodayAllDone] = useState(false)
+  const handleAllDone = useCallback((done: boolean) => setTodayAllDone(done), [])
 
-  const filtered = activeFilter === '全部'
-    ? notes
-    : notes.filter((n) => n.category === activeFilter)
+  useEffect(() => {
+    const main = document.querySelector('main')
+    const savedScroll = sessionStorage.getItem('scroll-y:/')
+    if (savedScroll && main) {
+      requestAnimationFrame(() => {
+        main.scrollTop = parseInt(savedScroll)
+        sessionStorage.removeItem('scroll-y:/')
+      })
+    }
+  }, [])
 
   const handleStartReview = () => {
-    const dueCards = notes.filter((n) => n.dueToday)
-    if (dueCards.length > 0) {
-      startReview(dueCards)
-      navigate('/review/cards')
-    }
+    navigate('/review')
   }
 
   if (pageLoading) {
@@ -60,10 +63,10 @@ export default function Dashboard() {
             </Button>
             <Button
               type="button"
-              variant="outline"
+              variant="primary"
               size="lg"
               icon={<Plus size={14} />}
-              className="h-9 min-h-9 rounded-sm text-[13px] px-4 text-text-muted hover:text-text-secondary"
+              className="h-9 min-h-9 rounded-sm text-[13px] px-4"
               onClick={openQuickNote}
             >
               添加新笔记
@@ -79,55 +82,22 @@ export default function Dashboard() {
           <StatCard value={mockStats.total} label="总笔记" sublabel="知识库条数" accentColor="#fb7185" />
         </div>
 
-        {/* Recent section */}
-        <div className="flex flex-col gap-4">
-          <h2 className="text-base font-semibold text-text-secondary">最近添加</h2>
-
-          {/* Filter pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {FILTERS.map((f) => (
-              <motion.button
-                key={f}
-                type="button"
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                  activeFilter === f
-                    ? 'bg-primary-btn text-white'
-                    : 'border border-border text-text-dim hover:text-text-muted hover:border-border-strong'
-                }`}
-              >
-                {f}
-              </motion.button>
-            ))}
+        {/* 学习概览 */}
+        <div className="grid grid-cols-[1fr_260px] gap-5 items-start">
+          {/* 左列：热图 + 今日任务 */}
+          <div className="flex flex-col gap-5">
+            <div className="bg-surface-card border border-border rounded-xl p-5 overflow-x-auto">
+              <ActivityHeatmap todayAllDone={todayAllDone} />
+            </div>
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <TodoList onAllDone={handleAllDone} />
+            </div>
           </div>
 
-          {/* Cards grid - 3 columns */}
-          <div className="columns-3 gap-4 space-y-4">
-            {filtered.map((note, i) => (
-              <motion.div
-                key={note.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04 }}
-                className="break-inside-avoid mb-4"
-              >
-                <NoteCard note={note} />
-              </motion.div>
-            ))}
+          {/* 右列：掌握进度 */}
+          <div className="bg-surface-card border border-border rounded-xl p-5">
+            <MasteryRing notes={notes} />
           </div>
-
-          {filtered.length === 0 && (
-            <EmptyState
-              title="该分类暂无笔记"
-              description="切换分类筛选，或添加一条新笔记。"
-              action={
-                <Button type="button" variant="primary" size="md" icon={<Plus size={14} />} onClick={openQuickNote}>
-                  添加新笔记
-                </Button>
-              }
-            />
-          )}
         </div>
       </div>
     </Layout>

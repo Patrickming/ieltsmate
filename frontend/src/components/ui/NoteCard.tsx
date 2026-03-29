@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { CATEGORY_COLORS, CATEGORY_BAR } from '../../data/mockData'
+import { CATEGORY_BAR } from '../../data/mockData'
 import type { Note } from '../../data/mockData'
 import { Badge } from './Badge'
 import { useNavigate } from 'react-router-dom'
@@ -15,6 +15,8 @@ export function NoteCard({ note }: NoteCardProps) {
   const barColor = CATEGORY_BAR[note.category] ?? '#71717a'
 
   const handleClick = () => {
+    const main = document.querySelector('main')
+    if (main) sessionStorage.setItem(`scroll-y:${window.location.pathname}`, String(main.scrollTop))
     setSelectedNote(note)
     navigate(`/kb/${note.id}`)
   }
@@ -24,33 +26,16 @@ export function NoteCard({ note }: NoteCardProps) {
       onClick={handleClick}
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.99 }}
-      className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer group"
+      className="relative bg-surface-card border border-border rounded-xl overflow-hidden cursor-pointer group"
     >
-      {/* Left color bar — extends on hover */}
-      <motion.div
-        className="absolute left-0 top-0 w-[3px] rounded-r-full"
-        style={{ background: barColor }}
-        initial={{ height: '70%', top: '15%' }}
-        whileHover={{ height: '100%', top: '0%' }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
-      />
-      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2 items-start">
+      {/* Top color accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: barColor }} />
+      <div className="px-5 py-8 flex flex-col gap-2 items-center text-center">
         <Badge category={note.category} />
-        <div className="text-[15px] font-semibold text-text-primary group-hover:text-white transition-colors">
+        <div className="text-[22px] font-bold text-text-primary group-hover:text-white transition-colors w-full truncate leading-tight">
           {note.content}
         </div>
-        <div className="text-[13px] text-text-muted leading-snug">{note.translation}</div>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-[11px] text-text-subtle flex-1">{note.createdAt}</span>
-          {note.dueToday && (
-            <span className="text-[11px]" style={{ color: CATEGORY_COLORS[note.category]?.color ?? '#818cf8' }}>
-              待复习
-            </span>
-          )}
-          {note.reviewStatus === 'mastered' && (
-            <span className="text-[11px] text-cat-phrase">已掌握</span>
-          )}
-        </div>
+        <div className="text-[15px] text-text-muted w-full truncate">{note.translation}</div>
       </div>
     </motion.div>
   )

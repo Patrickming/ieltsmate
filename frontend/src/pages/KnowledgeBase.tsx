@@ -1,9 +1,9 @@
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import { useState, useEffect, type Dispatch, type SetStateAction } from 'react'
 import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
-import { Badge } from '../components/ui/Badge'
+import { NoteCard } from '../components/ui/NoteCard'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { EmptyState } from '../components/ui/EmptyState'
@@ -13,10 +13,18 @@ import { useAppStore } from '../store/useAppStore'
 
 const SUB_CATS: (Category | '全部')[] = ['全部', '口语', '短语', '句子', '同义替换', '拼写', '单词']
 
+type WritingType = '大作文' | '小作文'
+const WRITING_SUB_CATS: ('全部' | WritingType)[] = ['全部', '大作文', '小作文']
+const WRITING_TYPE_COLORS: Record<WritingType, { color: string; bg: string; border: string; dot: string }> = {
+  '大作文': { color: '#818cf8', bg: '#1e1b4b', border: '#3730a3', dot: '#818cf8' },
+  '小作文': { color: '#34d399', bg: '#022c22', border: '#065f46', dot: '#34d399' },
+}
+
 // Mock writing notes
-const WRITING_NOTES = [
-  { id: 'w1', name: '雅思写作Task 2模板.md', path: '/notes/writing/task2-template.md', updatedAt: '2天前' },
-  { id: 'w2', name: '大作文高分句型整理.md', path: '/notes/writing/high-score-phrases.md', updatedAt: '5天前' },
+const WRITING_NOTES: { id: string; name: string; path: string; updatedAt: string; writingType: WritingType }[] = [
+  { id: 'w1', name: '雅思写作Task 2模板.md', path: '/notes/writing/task2-template.md', updatedAt: '2天前', writingType: '大作文' },
+  { id: 'w2', name: '大作文高分句型整理.md', path: '/notes/writing/high-score-phrases.md', updatedAt: '5天前', writingType: '大作文' },
+  { id: 'w3', name: '小作文图表描述模板.md', path: '/notes/writing/task1-template.md', updatedAt: '1周前', writingType: '小作文' },
 ]
 
 function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
@@ -46,12 +54,30 @@ type KnowledgeBaseMainProps = {
 function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMainProps) {
   const { notes, openQuickNote } = useAppStore()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const main = document.querySelector('main')
+    const savedScroll = sessionStorage.getItem('scroll-y:/kb')
+    if (savedScroll && main) {
+      requestAnimationFrame(() => {
+        main.scrollTop = parseInt(savedScroll)
+        sessionStorage.removeItem('scroll-y:/kb')
+      })
+    }
+  }, [])
+
+  function saveScrollAndNavigate(path: string) {
+    const main = document.querySelector('main')
+    if (main) sessionStorage.setItem('scroll-y:/kb', String(main.scrollTop))
+    navigate(path)
+  }
   const [groupFilter, setGroupFilter] = useState(
     () => kbFiltersFromSearchParams(searchParams).groupFilter
   )
   const [subFilter, setSubFilter] = useState(
     () => kbFiltersFromSearchParams(searchParams).subFilter
   )
+  const [writingSubFilter, setWritingSubFilter] = useState<'全部' | WritingType>('全部')
 
   const filteredNotes = notes.filter((n) => {
     if (groupFilter === '写作') return false
@@ -64,12 +90,16 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
     return matchSearch
   })
 
-  const showWriting = groupFilter === '全部' || (groupFilter as string) === '写作'
-  const showNotes = groupFilter === '全部' || (groupFilter as string) === '杂笔记'
+  const filteredWritingNotes = WRITING_NOTES.filter((w) => {
+    if (writingSubFilter !== '全部' && w.writingType !== writingSubFilter) return false
+    const matchSearch = !search || w.name.toLowerCase().includes(search.toLowerCase())
+    return matchSearch
+  })
 
-  const allItems = [
-    ...(showNotes ? filteredNotes : []),
-  ]
+  const showWriting = groupFilter === '全部' || groupFilter === '写作'
+  const showNotes = groupFilter === '全部' || groupFilter === '杂笔记'
+
+  const allItems = showNotes ? filteredNotes : []
 
   return (
       <div className="p-8 flex flex-col gap-5">
@@ -102,7 +132,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
               key={g}
               type="button"
               whileTap={{ scale: 0.97 }}
-              onClick={() => { setGroupFilter(g); setSubFilter('全部') }}
+              onClick={() => { setGroupFilter(g); setSubFilter('全部'); setWritingSubFilter('全部') }}
               className={`flex items-center gap-1.5 h-9 px-4 rounded-md text-[13px] font-medium border transition-all ${
                 groupFilter === g
                   ? 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]'
@@ -120,8 +150,43 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
           ))}
         </div>
 
-        {/* Sub-type pills — with color dots and note counts */}
-        {(groupFilter === '杂笔记' || groupFilter === '全部') && (
+        {/* 写作子分类 pills */}
+        {groupFilter === '写作' && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {WRITING_SUB_CATS.map((cat) => {
+              const colors = cat !== '全部' ? WRITING_TYPE_COLORS[cat] : undefined
+              const count = cat === '全部'
+                ? WRITING_NOTES.length
+                : WRITING_NOTES.filter((w) => w.writingType === cat).length
+              const isActive = writingSubFilter === cat
+              return (
+                <motion.button
+                  key={cat}
+                  type="button"
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setWritingSubFilter(cat)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    isActive && cat !== '全部'
+                      ? ''
+                      : isActive
+                        ? 'bg-primary-btn text-white'
+                        : 'border border-border text-text-dim hover:text-text-muted hover:border-border-strong'
+                  }`}
+                  style={isActive && cat !== '全部' ? { color: colors?.color, background: colors?.bg, border: `1px solid ${colors?.border}` } : {}}
+                >
+                  {colors && (
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: colors.dot }} />
+                  )}
+                  {cat}
+                  <span className="text-[10px] opacity-50 ml-0.5">{count}</span>
+                </motion.button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 杂笔记子分类 pills */}
+        {groupFilter === '杂笔记' && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {SUB_CATS.map((cat) => {
               const color = cat !== '全部' ? CATEGORY_COLORS[cat]?.color : undefined
@@ -168,7 +233,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={`搜索${subFilter !== '全部' ? subFilter : ''}笔记...`}
+              placeholder={`搜索${groupFilter === '写作' ? (writingSubFilter !== '全部' ? writingSubFilter : '写作') : subFilter !== '全部' ? subFilter : ''}笔记...`}
               size="md"
               className="flex-1 border-0 bg-transparent shadow-none ring-0 focus-visible:ring-0 h-9 min-h-9 px-0 rounded-none placeholder:text-text-subtle"
               aria-label="搜索笔记"
@@ -184,7 +249,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
             )}
             <div className="grid grid-cols-3 gap-4">
               <AnimatePresence mode="popLayout">
-              {WRITING_NOTES.map((w, i) => (
+              {filteredWritingNotes.map((w, i) => (
                 <motion.div
                   key={w.id}
                   layout
@@ -192,28 +257,21 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.2, delay: i * 0.04 }}
-                  onClick={() => navigate(`/kb/w/${w.id.replace(/^w/, '')}`)}
-                  className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
+                  onClick={() => saveScrollAndNavigate(`/kb/w/${w.id.replace(/^w/, '')}`)}
+                  className="relative bg-surface-card border border-border rounded-xl overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
                 >
-                  <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: '#94a3b8' }} />
-                  <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2 items-start">
+                  <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: '#94a3b8' }} />
+                  <div className="px-5 py-8 flex flex-col gap-2 items-center text-center">
                     <span
-                      className="self-start w-fit inline-flex items-center gap-1 px-1.5 py-0 text-[10px] leading-4 font-medium rounded whitespace-nowrap"
+                      className="w-fit inline-flex items-center gap-1 px-1.5 py-0 text-[10px] leading-4 font-medium rounded whitespace-nowrap"
                       style={{ color: '#94a3b8', background: '#1e293b', border: '1px solid #334155' }}
                     >
                       <FileText size={9} />写作
                     </span>
-                    <div className="flex items-start gap-2">
-                      <FileText size={14} className="text-[#94a3b8] mt-0.5 shrink-0" />
-                      <div className="text-[13px] font-medium text-text-primary group-hover:text-white transition-colors leading-snug">
-                        {w.name}
-                      </div>
+                    <div className="text-[22px] font-bold text-text-primary group-hover:text-white transition-colors w-full truncate leading-tight">
+                      {w.name}
                     </div>
-                    <div className="text-[11px] text-text-subtle truncate">{w.path}</div>
-                    <div className="flex items-center">
-                      <span className="text-[11px] text-text-subtle flex-1">{w.updatedAt}</span>
-                      <span className="text-[11px] text-[#94a3b8]">文件</span>
-                    </div>
+                    <div className="text-[15px] text-text-muted w-full truncate">{w.path}</div>
                   </div>
                 </motion.div>
               ))}
@@ -230,43 +288,18 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
             {allItems.length > 0 ? (
               <div className="grid grid-cols-3 gap-4">
                 <AnimatePresence mode="popLayout">
-                {allItems.map((note, i) => {
-                  const barColor = CATEGORY_BAR[note.category] ?? '#71717a'
-                  const catColors = CATEGORY_COLORS[note.category]
-                  return (
-                    <motion.div
-                      key={note.id}
-                      layout
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ duration: 0.2, delay: i * 0.03 }}
-                      onClick={() => navigate(`/kb/${note.id}`)}
-                      className="relative bg-surface-card border border-border rounded-lg overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
-                    >
-                      <div className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: barColor }} />
-                      <div className="pl-5 pr-4 py-3.5 flex flex-col gap-2 items-start">
-                        <Badge category={note.category} />
-                        <div className="text-[14px] font-semibold text-text-primary group-hover:text-white transition-colors">
-                          {note.content}
-                        </div>
-                        <div className="text-[12px] text-text-muted leading-snug">{note.translation}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[11px] text-text-subtle flex-1">{note.createdAt}</span>
-                          {note.dueToday && (
-                            <span className="text-[11px]" style={{ color: catColors?.color ?? '#818cf8' }}>待复习</span>
-                          )}
-                          {note.reviewStatus === 'mastered' && (
-                            <span className="text-[11px] text-cat-phrase">已掌握</span>
-                          )}
-                          {note.reviewStatus === 'learning' && (
-                            <span className="text-[11px] text-primary">学习中</span>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )
-                })}
+                {allItems.map((note, i) => (
+                  <motion.div
+                    key={note.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    transition={{ duration: 0.2, delay: i * 0.03 }}
+                  >
+                    <NoteCard note={note} />
+                  </motion.div>
+                ))}
                 </AnimatePresence>
               </div>
             ) : (
