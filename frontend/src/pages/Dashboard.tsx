@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { CirclePlay, Plus } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
 import { StatCard } from '../components/ui/StatCard'
 import { NoteCard } from '../components/ui/NoteCard'
+import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
+import { LoadingState } from '../components/ui/LoadingState'
 import { useAppStore } from '../store/useAppStore'
 import { mockStats, type Category } from '../data/mockData'
 
@@ -12,6 +16,7 @@ const FILTERS: (Category | '全部')[] = ['全部', '口语', '短语', '句子'
 export default function Dashboard() {
   const navigate = useNavigate()
   const { notes, activeFilter, setFilter, openQuickNote, startReview } = useAppStore()
+  const [pageLoading] = useState(false)
 
   const filtered = activeFilter === '全部'
     ? notes
@@ -25,6 +30,14 @@ export default function Dashboard() {
     }
   }
 
+  if (pageLoading) {
+    return (
+      <Layout title="首页">
+        <LoadingState />
+      </Layout>
+    )
+  }
+
   return (
     <Layout title="首页">
       <div className="p-8 flex flex-col gap-6">
@@ -35,22 +48,26 @@ export default function Dashboard() {
             <p className="text-sm text-text-dim mt-1">今日学习与知识库概览</p>
           </div>
           <div className="flex items-center gap-2">
-            <motion.button
-              whileTap={{ scale: 0.97 }}
+            <Button
+              type="button"
+              variant="primary"
+              size="lg"
+              icon={<CirclePlay size={14} />}
+              className="h-9 min-h-9 rounded-sm text-[13px] px-4"
               onClick={handleStartReview}
-              className="flex items-center gap-1.5 h-9 px-4 bg-primary-btn hover:bg-[#4338ca] rounded-sm text-white text-[13px] font-medium transition-colors"
             >
-              <CirclePlay size={14} />
               开始今日复习
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.97 }}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              icon={<Plus size={14} />}
+              className="h-9 min-h-9 rounded-sm text-[13px] px-4 text-text-muted hover:text-text-secondary"
               onClick={openQuickNote}
-              className="flex items-center gap-1.5 h-9 px-4 border border-border rounded-sm text-text-muted hover:text-text-secondary hover:bg-[#27272a] text-[13px] transition-colors"
             >
-              <Plus size={14} />
               添加新笔记
-            </motion.button>
+            </Button>
           </div>
         </div>
 
@@ -71,6 +88,7 @@ export default function Dashboard() {
             {FILTERS.map((f) => (
               <motion.button
                 key={f}
+                type="button"
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
@@ -100,9 +118,15 @@ export default function Dashboard() {
           </div>
 
           {filtered.length === 0 && (
-            <div className="text-center py-16 text-text-dim text-sm">
-              该分类暂无笔记
-            </div>
+            <EmptyState
+              title="该分类暂无笔记"
+              description="切换分类筛选，或添加一条新笔记。"
+              action={
+                <Button type="button" variant="primary" size="md" icon={<Plus size={14} />} onClick={openQuickNote}>
+                  添加新笔记
+                </Button>
+              }
+            />
           )}
         </div>
       </div>

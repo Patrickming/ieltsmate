@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   X, Cpu, Check, ChevronDown, ChevronRight, Eye, EyeOff,
   Plus, Trash2, Lock, Zap, GitBranch, Sparkles, Brain, Globe,
@@ -30,6 +30,7 @@ function ProviderIcon({ presetId, size = 14 }: { presetId: string; size?: number
 
 export function AIModelConfigModal() {
   const { showAIConfig, closeAIConfig, providers, setProviders } = useAppStore()
+  const newProviderSeqRef = useRef(100)
   const [selectedId, setSelectedId] = useState(providers[0]?.id ?? '')
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [showUnverified, setShowUnverified] = useState(true)
@@ -76,7 +77,7 @@ export function AIModelConfigModal() {
   const handleAddProvider = (presetId: string) => {
     const preset = PRESET_PROVIDERS.find((p) => p.id === presetId)
     if (!preset) return
-    const newId = `p${Date.now()}`
+    const newId = `p${++newProviderSeqRef.current}`
     const newP: ProviderConfig = {
       id: newId,
       name: preset.name,

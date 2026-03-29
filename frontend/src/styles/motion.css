@@ -1,0 +1,23 @@
+/**
+ * Shared motion utilities. Pair with tokens.css for durations.
+ */
+
+.motion-press {
+  transition:
+    transform var(--motion-duration-fast) ease-out,
+    opacity var(--motion-duration-fast) ease-out;
+}
+
+.motion-press:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-press {
+    transition: none;
+  }
+
+  .motion-press:active {
+    transform: none;
+  }
+}

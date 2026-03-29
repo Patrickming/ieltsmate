@@ -4,6 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { EmptyState } from '../components/ui/EmptyState'
+import { LoadingState } from '../components/ui/LoadingState'
 import { useAppStore } from '../store/useAppStore'
 
 export default function KnowledgeDetail() {
@@ -13,16 +16,35 @@ export default function KnowledgeDetail() {
   const [newNote, setNewNote] = useState('')
   const [userNotes, setUserNotes] = useState<string[]>([])
   const [addingNote, setAddingNote] = useState(false)
+  const [pageLoading] = useState(false)
 
   const noteIdx = notes.findIndex((n) => n.id === id)
   const note = notes[noteIdx]
   const prevNote = noteIdx > 0 ? notes[noteIdx - 1] : null
   const nextNote = noteIdx < notes.length - 1 ? notes[noteIdx + 1] : null
 
+  if (pageLoading) {
+    return (
+      <Layout title="笔记详情">
+        <LoadingState />
+      </Layout>
+    )
+  }
+
   if (!note) {
     return (
       <Layout title="笔记详情">
-        <div className="p-8 text-text-dim">笔记未找到</div>
+        <div className="p-8">
+          <EmptyState
+            title="笔记未找到"
+            description="该内容可能已被删除，或链接无效。"
+            action={
+              <Button type="button" variant="primary" size="md" onClick={() => navigate('/kb')}>
+                返回知识库
+              </Button>
+            }
+          />
+        </div>
       </Layout>
     )
   }
@@ -44,13 +66,16 @@ export default function KnowledgeDetail() {
     <Layout title="笔记详情">
       <div className="p-8 flex flex-col gap-5">
         {/* Back */}
-        <button
+        <Button
+          type="button"
+          variant="ghost"
+          size="md"
+          icon={<ArrowLeft size={14} />}
+          className="h-auto min-h-0 w-fit px-0 py-1 text-sm text-text-dim hover:text-text-muted justify-start"
           onClick={() => navigate('/kb')}
-          className="flex items-center gap-1.5 text-text-dim hover:text-text-muted text-sm transition-colors w-fit"
         >
-          <ArrowLeft size={14} />
           返回知识库
-        </button>
+        </Button>
 
         {/* Main knowledge card */}
         <motion.div
@@ -173,20 +198,27 @@ export default function KnowledgeDetail() {
                       }}
                     />
                     <div className="flex gap-2">
-                      <button onClick={handleSaveNote} className="text-sm px-3 py-1 bg-primary-btn text-white rounded-sm">保存</button>
-                      <button onClick={() => setAddingNote(false)} className="text-sm px-3 py-1 border border-border text-text-dim rounded-sm">取消</button>
+                      <Button type="button" variant="primary" size="sm" onClick={handleSaveNote}>
+                        保存
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setAddingNote(false)}>
+                        取消
+                      </Button>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
               {!addingNote && (
-                <button
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  icon={<Plus size={11} />}
+                  className="mt-2 w-full border-primary/40 text-primary hover:bg-[#1e1b4b] rounded-sm justify-center"
                   onClick={() => setAddingNote(true)}
-                  className="flex items-center gap-1.5 mt-2 text-sm border border-primary/40 rounded-sm px-3 py-1.5 text-primary hover:bg-[#1e1b4b] transition-colors w-full justify-center"
                 >
-                  <Plus size={11} />
                   添加备注
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -227,14 +259,24 @@ export default function KnowledgeDetail() {
             <div className="bg-surface-card border border-border rounded-xl p-4">
               <div className="text-sm font-semibold text-text-secondary mb-3">操作</div>
               <div className="flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-1.5 h-9 border border-border rounded-sm text-text-muted hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors">
-                  <Pencil size={13} />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  icon={<Pencil size={13} />}
+                  className="flex-1 h-9 min-h-9 rounded-sm text-text-muted hover:text-text-secondary"
+                >
                   编辑
-                </button>
-                <button className="flex-1 flex items-center justify-center gap-1.5 h-9 bg-[#2e1520] border border-[#fb7185]/40 rounded-sm text-[#fb7185] hover:bg-[#450a0a] text-sm transition-colors">
-                  <Trash2 size={13} />
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="md"
+                  icon={<Trash2 size={13} />}
+                  className="flex-1 h-9 min-h-9 rounded-sm"
+                >
                   删除
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -245,28 +287,34 @@ export default function KnowledgeDetail() {
           <div className="flex items-center justify-between mt-2 pt-4 border-t border-border">
             <div>
               {prevNote && (
-                <button
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-10 min-h-10 rounded-md gap-2 max-w-full justify-start px-3"
                   onClick={() => navigate(`/kb/${prevNote.id}`)}
-                  className="flex items-center gap-2 h-9 px-4 border border-border rounded-md text-text-dim hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors"
                 >
-                  <ChevronLeft size={14} />
-                  <span>上一个:</span>
+                  <ChevronLeft size={14} className="shrink-0" />
+                  <span className="text-text-dim shrink-0">上一个:</span>
                   <span className="text-text-muted max-w-[140px] truncate">{prevNote.content}</span>
                   <Badge category={prevNote.category} />
-                </button>
+                </Button>
               )}
             </div>
             <div>
               {nextNote && (
-                <button
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-10 min-h-10 rounded-md gap-2 max-w-full justify-start px-3"
                   onClick={() => navigate(`/kb/${nextNote.id}`)}
-                  className="flex items-center gap-2 h-9 px-4 border border-border rounded-md text-text-dim hover:text-text-secondary hover:bg-[#27272a] text-sm transition-colors"
                 >
-                  <span>下一个:</span>
+                  <span className="text-text-dim shrink-0">下一个:</span>
                   <span className="text-text-muted max-w-[140px] truncate">{nextNote.content}</span>
                   <Badge category={nextNote.category} />
-                  <ChevronRight size={14} />
-                </button>
+                  <ChevronRight size={14} className="shrink-0" />
+                </Button>
               )}
             </div>
           </div>

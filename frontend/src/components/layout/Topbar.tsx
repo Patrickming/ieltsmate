@@ -1,40 +1,45 @@
 import { Search, Sparkles, Plus } from 'lucide-react'
 import { useAppStore } from '../../store/useAppStore'
+import { Tooltip } from '../ui/Tooltip'
 
 interface TopbarProps {
   title: string
 }
 
+/** 次要控件：极简底 + 细边框与克制光晕，与 Sidebar 200ms 节奏对齐 */
+const chromeBtn =
+  'rounded-sm border border-border-strong bg-[#27272a]/75 text-text-muted shadow-sm backdrop-blur-[2px] transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-out hover:border-primary/30 hover:bg-[#27272a] hover:text-text-secondary hover:shadow-[0_0_0_1px_rgba(129,140,248,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-bg active:scale-[0.985] active:brightness-[0.97]'
+
+const primaryBtn =
+  'rounded-sm border border-primary-btn/90 bg-primary-btn text-white text-[13px] font-medium shadow-sm transition-[background-color,border-color,box-shadow,transform] duration-200 ease-out hover:border-primary-btn-hover hover:bg-primary-btn-hover hover:shadow-[0_0_20px_-6px_rgba(129,140,248,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/45 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-bg active:scale-[0.985] active:brightness-95'
+
 export function Topbar({ title }: TopbarProps) {
   const { openSearch, openAIPanel, openQuickNote } = useAppStore()
 
   return (
-    <header className="h-14 bg-surface-bg border-b border-border flex items-center gap-4 px-6 shrink-0">
-      <span className="text-[15px] font-semibold text-text-secondary shrink-0">{title}</span>
+    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-border bg-surface-bg px-6">
+      <span className="shrink-0 text-[15px] font-semibold text-text-secondary">{title}</span>
 
       {/* Search bar */}
-      <button
-        onClick={openSearch}
-        className="flex-1 h-8 bg-[#27272a] border border-border-strong rounded-sm flex items-center gap-2 px-3 text-text-subtle hover:border-[#52525b] transition-colors text-left"
-      >
-        <Search size={14} />
-        <span className="text-[13px]">⌘K 搜索笔记...</span>
-      </button>
+      <Tooltip content="全局搜索笔记，快捷键 ⌘K" className="flex-1">
+        <button
+          type="button"
+          onClick={openSearch}
+          className={`flex h-8 w-full items-center gap-2 px-3 text-left text-text-subtle ${chromeBtn}`}
+        >
+          <Search size={14} className="shrink-0 opacity-80" />
+          <span className="text-[13px]">⌘K 搜索笔记...</span>
+        </button>
+      </Tooltip>
 
       {/* Right actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        <button
-          onClick={openAIPanel}
-          className="h-8 flex items-center gap-1.5 px-3 border border-border-strong rounded-sm text-text-muted hover:text-text-secondary hover:bg-[#27272a] transition-colors text-[13px]"
-        >
-          <Sparkles size={14} />
+      <div className="flex shrink-0 items-center gap-2">
+        <button type="button" onClick={openAIPanel} className={`flex h-8 items-center gap-1.5 px-3 text-[13px] ${chromeBtn}`}>
+          <Sparkles size={14} className="shrink-0" />
           <span>AI 助手&nbsp; Ctrl+/</span>
         </button>
-        <button
-          onClick={openQuickNote}
-          className="h-8 flex items-center gap-1.5 px-3.5 bg-primary-btn hover:bg-[#4338ca] rounded-sm text-white text-[13px] font-medium transition-colors"
-        >
-          <Plus size={14} />
+        <button type="button" onClick={openQuickNote} className={`flex h-8 items-center gap-1.5 px-3.5 ${primaryBtn}`}>
+          <Plus size={14} className="shrink-0" />
           <span>添加笔记</span>
         </button>
       </div>

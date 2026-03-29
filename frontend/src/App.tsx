@@ -57,7 +57,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/kb" element={<KnowledgeBase />} />
-        <Route path="/kb/w:id" element={<WritingNoteDetail />} />
+        <Route path="/kb/w/:id" element={<WritingNoteDetail />} />
         <Route path="/kb/:id" element={<KnowledgeDetail />} />
         <Route path="/review" element={<ReviewSelection />} />
         <Route path="/review/cards" element={<ReviewCards />} />

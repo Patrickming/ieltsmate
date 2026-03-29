@@ -13,8 +13,7 @@ function detectCategory(text: string): Category {
   return '口语'
 }
 
-export function QuickNoteModal() {
-  const { showQuickNote, closeQuickNote } = useAppStore()
+function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
   const [text, setText] = useState('')
   const [mode, setMode] = useState<'ai' | 'manual'>('ai')
   const [manualCat, setManualCat] = useState<Category>('短语')
@@ -22,9 +21,14 @@ export function QuickNoteModal() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => {
+    const t = window.setTimeout(() => textareaRef.current?.focus(), 100)
+    return () => window.clearTimeout(t)
+  }, [])
+
   // Focus trap
   const handleTabKey = useCallback((e: KeyboardEvent) => {
-    if (!showQuickNote || !modalRef.current) return
+    if (!modalRef.current) return
     const focusable = modalRef.current.querySelectorAll<HTMLElement>(
       'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
     )
@@ -37,7 +41,7 @@ export function QuickNoteModal() {
         if (document.activeElement === last) { e.preventDefault(); first?.focus() }
       }
     }
-  }, [showQuickNote])
+  }, [])
 
   useEffect(() => {
     window.addEventListener('keydown', handleTabKey)
@@ -47,37 +51,27 @@ export function QuickNoteModal() {
   const aiCategory = detectCategory(text)
   const finalCategory = mode === 'ai' ? aiCategory : manualCat
 
-  useEffect(() => {
-    if (showQuickNote) {
-      setText('')
-      setSaved(false)
-      setTimeout(() => textareaRef.current?.focus(), 100)
-    }
-  }, [showQuickNote])
-
   const handleSave = () => {
     if (!text.trim()) return
     setSaved(true)
     setTimeout(() => {
-      closeQuickNote()
+      onClose()
       setSaved(false)
     }, 800)
   }
 
   return (
-    <AnimatePresence>
-      {showQuickNote && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-            onClick={closeQuickNote}
-          />
-          {/* Modal */}
-          <motion.div
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+        onClick={onClose}
+      />
+      {/* Modal */}
+      <motion.div
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
@@ -93,7 +87,7 @@ export function QuickNoteModal() {
               {/* Header */}
               <div className="flex items-center justify-between">
                 <span className="text-base font-semibold text-text-primary">📝 快速记录</span>
-                <button onClick={closeQuickNote} className="text-text-dim hover:text-text-muted transition-colors">
+                <button onClick={onClose} className="text-text-dim hover:text-text-muted transition-colors">
                   <X size={18} />
                 </button>
               </div>
@@ -108,7 +102,7 @@ export function QuickNoteModal() {
                 className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3.5 py-2.5 text-[15px] text-text-primary placeholder-text-subtle outline-none resize-none focus:border-primary/60 transition-colors"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSave()
-                  if (e.key === 'Escape') closeQuickNote()
+                  if (e.key === 'Escape') onClose()
                 }}
               />
 
@@ -182,7 +176,7 @@ export function QuickNoteModal() {
               {/* Footer */}
               <div className="flex items-center justify-end gap-2.5">
                 <button
-                  onClick={closeQuickNote}
+                  onClick={onClose}
                   className="h-9 px-5 border border-border rounded-md text-[13px] text-text-dim hover:bg-[#27272a] transition-colors"
                 >
                   取消
@@ -201,8 +195,17 @@ export function QuickNoteModal() {
                 </motion.button>
               </div>
             </div>
-          </motion.div>
-        </>
+      </motion.div>
+    </>
+  )
+}
+
+export function QuickNoteModal() {
+  const { showQuickNote, closeQuickNote } = useAppStore()
+  return (
+    <AnimatePresence>
+      {showQuickNote && (
+        <QuickNoteModalSurface key="quick-note-open" onClose={closeQuickNote} />
       )}
     </AnimatePresence>
   )

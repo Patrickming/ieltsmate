@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* Theme colors only. Motion and radius tokens (--motion-*, --radius-*) live in tokens.css, loaded before this file in main.tsx. */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

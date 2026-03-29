@@ -3,7 +3,7 @@ import {
   LayoutDashboard, BookOpen, RefreshCw, Upload, Settings,
   ChevronDown, ChevronRight,
 } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
 import { CATEGORY_BAR, CATEGORIES } from '../../data/mockData'
 
@@ -13,17 +13,30 @@ const NAV_ITEMS = [
   { path: '/review', icon: RefreshCw, label: '复习' },
 ]
 
-const GROUPS = ['杂笔记', '写作']
+const GROUPS = ['杂笔记', '写作'] as const
 
+const GROUP_SLUG: Record<string, string> = {
+  杂笔记: 'misc',
+  写作: 'writing',
+}
 
 const GROUP_EMOJI: Record<string, string> = {
   '杂笔记': '📒',
   '写作': '✍',
 }
 
+const navMotionTransition = { duration: 0.2, ease: 'easeOut' as const }
+
+const itemTransition =
+  'transition-[color,transform] duration-200 ease-out active:scale-[0.985] motion-reduce:transition-colors motion-reduce:active:scale-100'
+
+const surfaceHoverTransition =
+  'transition-[color,background-color,border-color] duration-200 ease-out active:scale-[0.985] motion-reduce:transition-colors motion-reduce:active:scale-100'
+
 export function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const reduceMotion = useReducedMotion()
   const { expandedGroups, toggleGroup, openImport } = useAppStore()
 
   const isActive = (path: string) => {
@@ -68,29 +81,36 @@ export function Sidebar() {
           return (
             <NavLink key={path} to={path} end={path === '/'}>
               <div
-                className={`relative flex items-center gap-2.5 h-9 mx-2 px-3 rounded-md transition-colors ${
+                className={`group relative flex h-9 mx-2 items-center gap-2.5 rounded-md px-3 ${itemTransition} ${
                   active
-                    ? 'text-[#c7d2fe]'
+                    ? 'text-[#e0e7ff]'
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
               >
-                {/* Animated background using layoutId */}
+                {/* Animated background using layoutId (instant swap when reduced motion) */}
+                {active &&
+                  (reduceMotion ? (
+                    <div className="absolute inset-0 rounded-md border border-primary/40 bg-gradient-to-br from-[#2a2652] via-[#1e1b4b] to-[#18122e] shadow-glow shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]" />
+                  ) : (
+                    <motion.div
+                      layoutId="nav-active-bg"
+                      className="absolute inset-0 rounded-md border border-primary/40 bg-gradient-to-br from-[#2a2652] via-[#1e1b4b] to-[#18122e] shadow-glow shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                      transition={navMotionTransition}
+                    />
+                  ))}
+                {!active &&
+                  (reduceMotion ? (
+                    <div className="pointer-events-none absolute inset-0 rounded-md bg-[#27272a]/65 opacity-0 transition-opacity duration-200 ease-out group-hover:opacity-100 motion-reduce:transition-none" />
+                  ) : (
+                    <motion.div
+                      whileHover={{ opacity: 1 }}
+                      initial={{ opacity: 0 }}
+                      transition={navMotionTransition}
+                      className="pointer-events-none absolute inset-0 rounded-md bg-[#27272a]/65"
+                    />
+                  ))}
                 {active && (
-                  <motion.div
-                    layoutId="nav-active-bg"
-                    className="absolute inset-0 bg-[#1e1b4b] rounded-md"
-                    transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                  />
-                )}
-                {!active && (
-                  <motion.div
-                    whileHover={{ opacity: 1 }}
-                    initial={{ opacity: 0 }}
-                    className="absolute inset-0 bg-[#27272a]/60 rounded-md"
-                  />
-                )}
-                {active && (
-                  <div className="absolute left-0 top-1 bottom-1 w-[3px] bg-primary rounded-full z-10" />
+                  <div className="absolute left-0 top-1 bottom-1 z-10 w-[3px] rounded-full bg-primary shadow-[0_0_14px_rgba(129,140,248,0.55)]" />
                 )}
                 <Icon
                   size={15}
@@ -112,49 +132,83 @@ export function Sidebar() {
         {GROUPS.map((group) => {
           const isOpen = expandedGroups.includes(group)
           const cats = CATEGORIES.filter((c) => c.group === group)
+          const slug = GROUP_SLUG[group]
+          const panelId = `sidebar-group-panel-${slug}`
+          const triggerId = `sidebar-group-trigger-${slug}`
+
+          const categoryButtons = cats.map(({ name }) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => handleCategoryClick(name, group)}
+              className={`flex h-7 w-full items-center gap-2 rounded-sm border border-transparent text-text-dim hover:border-border/80 hover:bg-[#27272a]/45 hover:text-text-muted ${surfaceHoverTransition}`}
+              style={{ paddingLeft: '2.75rem', paddingRight: '1rem' }}
+            >
+              <div
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: CATEGORY_BAR[name] ?? '#71717a' }}
+              />
+              <span className="text-xs">{name}</span>
+            </button>
+          ))
 
           return (
             <div key={group}>
               <button
+                type="button"
+                id={triggerId}
+                aria-expanded={isOpen}
+                aria-controls={panelId}
                 onClick={() => toggleGroup(group)}
-                className="flex items-center gap-2 w-full h-8 mx-2 px-3 rounded-md text-text-dim hover:text-text-muted hover:bg-[#27272a]/50 transition-colors"
+                className={`mx-2 flex h-8 w-full items-center gap-2 rounded-md border border-transparent px-3 text-text-dim hover:border-border hover:bg-[#27272a]/50 hover:text-text-muted ${surfaceHoverTransition}`}
                 style={{ width: 'calc(100% - 16px)' }}
               >
                 <span className="text-sm">{GROUP_EMOJI[group]}</span>
-                <span className="text-[13px] font-medium flex-1 text-left">{group}</span>
-                <motion.span
-                  animate={{ rotate: isOpen ? 0 : -90 }}
-                  transition={{ duration: 0.15 }}
-                >
-                  {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                </motion.span>
-              </button>
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ overflow: 'hidden' }}
+                <span className="flex-1 text-left text-[13px] font-medium">{group}</span>
+                {reduceMotion ? (
+                  <span
+                    className={`inline-flex transition-transform duration-200 ease-out motion-reduce:transition-none ${isOpen ? 'rotate-0' : '-rotate-90'}`}
                   >
-                    {cats.map(({ name }) => (
-                      <button
-                        key={name}
-                        onClick={() => handleCategoryClick(name, group)}
-                        className="flex items-center gap-2 h-7 w-full text-text-dim hover:text-text-muted hover:bg-[#27272a]/40 transition-colors"
-                        style={{ paddingLeft: '2.75rem', paddingRight: '1rem' }}
-                      >
-                        <div
-                          className="w-1.5 h-1.5 rounded-full shrink-0"
-                          style={{ background: CATEGORY_BAR[name] ?? '#71717a' }}
-                        />
-                        <span className="text-xs">{name}</span>
-                      </button>
-                    ))}
-                  </motion.div>
+                    {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  </span>
+                ) : (
+                  <motion.span
+                    animate={{ rotate: isOpen ? 0 : -90 }}
+                    transition={navMotionTransition}
+                    className="inline-flex"
+                  >
+                    {isOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                  </motion.span>
                 )}
-              </AnimatePresence>
+              </button>
+              {reduceMotion ? (
+                isOpen ? (
+                  <div
+                    id={panelId}
+                    role="region"
+                    aria-labelledby={triggerId}
+                  >
+                    {categoryButtons}
+                  </div>
+                ) : null
+              ) : (
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      id={panelId}
+                      role="region"
+                      aria-labelledby={triggerId}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={navMotionTransition}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      {categoryButtons}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              )}
             </div>
           )
         })}
@@ -163,11 +217,12 @@ export function Sidebar() {
       {/* Bottom actions */}
       <div className="border-t border-border pt-1 pb-2">
         <button
+          type="button"
           onClick={openImport}
-          className="flex items-center gap-2.5 w-full h-9 mx-2 px-3 rounded-md text-text-muted hover:text-text-secondary hover:bg-[#27272a]/60 transition-all group"
+          className={`group mx-2 flex h-9 w-full items-center gap-2.5 rounded-md border border-transparent px-3 text-text-muted hover:border-border hover:bg-[#27272a]/60 hover:text-text-secondary ${surfaceHoverTransition}`}
           style={{ width: 'calc(100% - 16px)' }}
         >
-          <Upload size={14} className="text-text-dim group-hover:text-text-muted transition-colors" />
+          <Upload size={14} className="text-text-dim transition-colors duration-200 ease-out group-hover:text-text-muted" />
           <span className="text-[13px] font-medium">导入数据</span>
         </button>
         <NavLink to="/settings">
@@ -175,12 +230,21 @@ export function Sidebar() {
             const active = isActive('/settings')
             return (
               <div
-                className={`flex items-center gap-2.5 w-full h-9 mx-2 px-3 rounded-md transition-all group cursor-pointer ${
-                  active ? 'bg-[#1e1b4b] text-[#c7d2fe]' : 'text-text-muted hover:text-text-secondary hover:bg-[#27272a]/60'
+                className={`group flex h-9 w-full cursor-pointer items-center gap-2.5 rounded-md border px-3 mx-2 ${itemTransition} ${
+                  active
+                    ? 'border-primary/40 bg-gradient-to-br from-[#2a2652] via-[#1e1b4b] to-[#18122e] text-[#e0e7ff] shadow-glow shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                    : 'border-transparent text-text-muted hover:border-border hover:bg-[#27272a]/60 hover:text-text-secondary'
                 }`}
                 style={{ width: 'calc(100% - 16px)' }}
               >
-                <Settings size={14} className={active ? 'text-primary' : 'text-text-dim group-hover:text-text-muted transition-colors'} />
+                <Settings
+                  size={14}
+                  className={
+                    active
+                      ? 'text-primary'
+                      : 'text-text-dim transition-colors duration-200 ease-out group-hover:text-text-muted'
+                  }
+                />
                 <span className={`text-[13px] ${active ? 'font-semibold' : 'font-medium'}`}>设置</span>
               </div>
             )

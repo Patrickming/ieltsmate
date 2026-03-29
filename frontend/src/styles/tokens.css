@@ -1,0 +1,13 @@
+/**
+ * Design tokens — motion timing, radii, and other shared primitives.
+ * Loaded before globals so components and utilities can reference these variables.
+ */
+:root {
+  --motion-duration-fast: 150ms;
+  --motion-duration-base: 250ms;
+  --motion-duration-slow: 400ms;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
