@@ -1,72 +1,130 @@
-# IELTSmate 后端实施任务总表（按大功能拆分）
+# IELTSmate 功能实施清单
 
-> 目标：严格对齐 `frontend` 现有逻辑与 `FUNCTIONAL_SPEC.md`，采用“渐进替换 mock”策略。
-> 栈：NestJS + Prisma + PostgreSQL（单用户，无登录）。
-> 设计基线：`docs/superpowers/specs/2026-03-29-frontend-aligned-backend-design.md`
+> 栈：NestJS + Prisma + PostgreSQL（后端）/ React + Zustand + Vite（前端）  
+> 策略：前端已完整实现 UI，逐步替换 mock 数据为真实后端接口
 
-## 大功能 1：后端工程基础与规范
-- [x] Task 1.1 初始化 NestJS 工程结构（模块目录、环境变量、配置加载）
-- [x] Task 1.2 接入 Prisma + PostgreSQL：core schema（Note / Favorite / NoteUserNote / Review* / Todo / DailyActivity）、`init_core_models` 迁移、`PrismaModule`+`PrismaService`（`onModuleInit`/`onModuleDestroy`）、e2e `prisma-schema.e2e-spec.ts`（PrismaClient 与 Nest 生命周期）；本地需 PostgreSQL 后执行 `pnpm prisma migrate dev` 与 e2e
-- [x] Task 1.3 搭建统一响应体、全局异常过滤器、参数校验管道
-- [ ] Task 1.4 建立 OpenAPI/Swagger 与基础健康检查接口
-- [x] Task 1.5【修复】WSL 跨域问题：Vite 加 `server.proxy`（/notes /favorites /review /health → 127.0.0.1:3000），`apiBase.ts` 改为相对路径，后端 `package.json` 加 `dev/start` 脚本并安装 `ts-node`，`start.sh` 改用 `pnpm dev` 启动后端
+---
 
-## 大功能 2：笔记系统（KnowledgeBase / Detail 核心）
-- [x] Task 2.1 实现 notes 表与 CRUD（创建、列表、详情、更新、软删除）：`NotesModule` + `POST/GET/PATCH/DELETE /notes`、`GET /notes/:id`；删除为 `deletedAt` 软删；e2e 见 `backend/test/notes.e2e-spec.ts`（需本地 PostgreSQL）
-- [x] Task 2.2 实现分类筛选 + 搜索（content/translation）：`GET /notes?category=&search=`，列表仅 `deletedAt IS NULL`，搜索为 content/translation 不区分大小写 `contains`
-- [x] Task 2.3 实现 note_user_notes（备注新增、列表、删除）：`GET/POST /notes/:id/user-notes`、`DELETE /notes/:id/user-notes/:userNoteId`（`NoteUserNote.deletedAt` 软删）；列表仅未删；父笔记不存在或已软删返回 404；DTO 校验 content；e2e 见 `backend/test/notes.e2e-spec.ts`
-- [x] Task 2.4 明确并实现详情页编辑/删除真实接口（对应前端占位按钮）：复用 `PATCH /notes/:id` 与 `DELETE /notes/:id`，并在 e2e 覆盖详情更新与软删后 404；前端 `KnowledgeDetail` 接入 `deleteNote`/`updateNote`，主卡片内联编辑（分类/内容/释义），操作区加删除二次确认
-- [x] Task 2.5 前端联调（部分）：App 启动时调用 `loadNotes` 从 `GET /notes` 加载真实数据替换 mockNotes；新增 `BackendNote` 类型、`mapBackendNote`、`formatNoteDate` 工具函数；`notesLoaded` 标志位；写作列表与详情页仍用 mock
+## 大功能 1：基础设施
 
-## 大功能 3：收藏系统（Favorites）
-- [x] Task 3.1 实现 favorites toggle 接口（返回最新 isFavorite）：`POST /favorites/toggle` 入参 `{ noteId }`，未收藏则创建并返回 `isFavorite: true`，已收藏则删除并返回 `isFavorite: false`；笔记不存在或已软删 404；`deleteMany` + 捕获 `P2002` 保证幂等；e2e 见 `backend/test/favorites.e2e-spec.ts`
-- [x] Task 3.2 实现收藏列表与收藏搜索接口：`GET /favorites` 可选 `search`，仅返回未软删笔记、在 content/translation 上不区分大小写 contains；响应 `{ items: Note[] }`；e2e 见 `backend/test/favorites.e2e-spec.ts`
-- [x] Task 3.3 前端联调：知识库收藏夹、详情收藏按钮、复习收藏按钮（后端优先 + 本地兜底：`useAppStore` 中 `toggleFavorite` 先 `POST /favorites/toggle`，失败则沿用本地切换；`syncFavorites` 在 `App` 挂载时 `GET /favorites` 同步 id 列表，失败静默；待 Task 2.5 笔记 id 与后端一致后可切纯后端、弱化兜底）
+- [x] NestJS 项目初始化（模块目录、环境变量、配置加载）
+- [x] Prisma + PostgreSQL 接入：Note / Favorite / NoteUserNote / ReviewSession / ReviewSessionCard / ReviewLog / Todo / DailyActivity 表，迁移脚本，PrismaService 生命周期
+- [x] 全局统一响应体 `{ data, message }` + 全局异常过滤器 + ValidationPipe
+- [x] Vite proxy 解决 WSL 跨域：/notes /favorites /review /settings /ai /health 全部代理到后端，bypass HTML 请求
+- [x] 后端 `package.json` 加 `dev/start` 脚本，安装 `ts-node`，`start.sh` 改用 `pnpm dev`
+- [x] OpenAPI/Swagger 文档生成（`@nestjs/swagger@8` + `swagger-ui-express`，访问 `http://127.0.0.1:3000/api-docs`）
 
-## 大功能 4：复习系统（Selection / Cards / Summary）
-- [x] Task 4.1 实现开始复习接口（按筛选生成会话与卡片快照）：新增 `POST /review/sessions/start`，支持 `source(notes/favorites)`、`categories[]`、`range(all/wrong)`、`mode(random/continue)`；创建 `review_sessions` 与 `review_session_cards` 快照（顺序与筛选结果一致），并在 e2e 覆盖 favorites 来源与软删过滤
-- [ ] Task 4.2 实现评分接口（首期仅 again/easy，hard 仅保留扩展位）与事务更新统计
-- [ ] Task 4.3 实现会话进度查询与结束接口
-- [ ] Task 4.4 实现复习总结聚合接口（总数、正确率、分类统计）
-- [ ] Task 4.5 前端联调：复习三页面全链路替换 store 临时逻辑
-- [ ] Task 4.6 统一评分口径：首期只开放 easy/again；hard 仅保留扩展位
-- [ ] Task 4.7 明确中途退出语义：aborted 会话保留已评分记录
+---
+
+## 大功能 2：笔记系统（杂笔记）
+
+- [x] `POST /notes` 创建笔记（content / translation / category + 可选 phonetic/synonyms/antonyms/example/memoryTip）
+- [x] `GET /notes` 列表，支持按 `category` 过滤、按 `search` 关键词搜索（content + translation 不区分大小写）
+- [x] `GET /notes/:id` 详情
+- [x] `PATCH /notes/:id` 更新笔记（支持修改 content / translation / category 等字段）
+- [x] `DELETE /notes/:id` 软删除（`deletedAt` 字段，列表自动过滤）
+- [x] `GET/POST /notes/:id/user-notes` 用户个人备注的列表与新增
+- [x] `DELETE /notes/:id/user-notes/:userNoteId` 删除个人备注（软删）
+- [x] 前端 App 启动时从 `GET /notes` 加载真实数据，替换 mockNotes
+- [x] 前端知识库详情页：内联编辑（分类/内容/释义）连接 PATCH 接口，删除按钮连接 DELETE 接口（含二次确认）
+- [x] 前端详情页「我的备注」区域连接后端：进入详情页时加载 `GET /notes/:id/user-notes`，新增调 POST，删除（hover 出现 ✕ 按钮）调 DELETE，刷新不丢失
+- [x] `POST /notes` 新增笔记时 AI 自动识别分类（QuickNoteModal 调 `/ai/chat` classify slot，800ms debounce，失败降级到关键词规则）
+
+---
+
+## 大功能 3：收藏系统
+
+- [x] `POST /favorites/toggle` 切换收藏状态，返回最新 `isFavorite`；幂等保障
+- [x] `GET /favorites` 收藏列表，支持 `search` 过滤，仅返回未软删笔记
+- [x] 前端：知识库收藏夹 Tab、笔记详情收藏按钮、复习卡片收藏按钮全部连接后端；失败时本地兜底切换
+
+---
+
+## 大功能 4：复习系统
+
+- [x] `POST /review/sessions/start` 开始复习：按 source（notes/favorites）、categories、range（all/wrong）、mode（random/continue）过滤笔记，创建会话快照（review_sessions + review_session_cards）
+- [ ] `PATCH /review/sessions/:sessionId/notes/:noteId/rate` 评分接口：入参 `{ rating: 'easy'|'again', spellingAnswer? }`，事务写入 ReviewSessionCard（isDone/rating/answeredAt）+ ReviewLog + Note 统计（reviewCount/correctCount/wrongCount/reviewStatus/lastReviewedAt）；easy 且 correctCount≥3 升为 mastered，again 降回 learning
+- [ ] `POST /review/sessions/:sessionId/end` 完成会话（翻完最后一张时调用，status=completed）
+- [ ] `POST /review/sessions/:sessionId/abort` 中止会话（用户退出时调用，status=aborted，已评分记录保留）
+- [ ] 前端 store 联调：ReviewSession 类型加 sessionId + 筛选参数字段；`startReviewSession(params)` 替换同步 `startReview(cards)` 改为异步调后端；`rateCard` 改为异步（本地先更新保 UI 流畅，fire-and-forget 调评分接口）；加 `endReviewSession` / `abortReviewSession`
+- [ ] 前端 ReviewSelection 页：handleStart 改为 async，startReviewSession 成功后再 navigate
+- [ ] 前端 ReviewCards 页：最后一张评完调 end，退出确认按钮调 abort
+- [ ] 前端 ReviewSummary 页：「再来一轮」复用 session 的筛选参数重新调 startReviewSession（有错题则 range=wrong，否则 range=all）
+
+---
 
 ## 大功能 5：Todo 与学习热力图
-- [ ] Task 5.1 实现 todos 按日 CRUD（新增、勾选、删除、排序）
-- [ ] Task 5.2 实现 all-done 状态与 daily_activity 聚合写入
-- [ ] Task 5.3 实现热力图数据查询接口（日期范围）
-- [ ] Task 5.4 前端联调：TodoList + ActivityHeatmap 数据替换
-- [ ] Task 5.5 统一日期口径为 Asia/Shanghai 日历日，避免 UTC 跨日误差
 
-## 大功能 6：仪表盘统计聚合
-- [ ] Task 6.1 实现顶部统计接口（待复习、已掌握、连续学习、总笔记）
-- [ ] Task 6.2 实现掌握度环形图统计接口（new/learning/mastered）
-- [ ] Task 6.3 前端联调：Dashboard 统计卡与 MasteryRing
-- [ ] Task 6.4 固化统计口径（总笔记仅 notes、热力图 studyCount=当日评分次数、颜色四档 0/1-3/4-7/8+）
+> 前端现状：TodoList 数据存 localStorage（按日期 key），完全没有后端；ActivityHeatmap 数据是 `generateMockActivity` 随机生成，完全 mock。
+
+- [ ] `GET/POST /todos` 按日期查询与新增 todo（text / taskDate / done / sortOrder）
+- [ ] `PATCH /todos/:id` 勾选/取消勾选 todo
+- [ ] `DELETE /todos/:id` 删除 todo
+- [ ] 当日所有 todo 全部完成时，更新 DailyActivity.allTodosDone = true
+- [ ] `GET /activity?start=&end=` 热力图数据查询：返回日期范围内每日的 studyCount（当日评分次数）
+- [ ] 每次评分时同步写入当日 DailyActivity.studyCount++（与评分接口同事务）
+- [ ] 前端 TodoList 组件：从后端加载当日 todos，增删勾选全部调接口
+- [ ] 前端 ActivityHeatmap 组件：从后端加载近一年数据，替换随机 mock；颜色四档（0 / 1-3 / 4-7 / 8+）
+- [ ] 日期口径统一为 Asia/Shanghai 日历日，避免 UTC 跨日误差
+
+---
+
+## 大功能 6：仪表盘统计
+
+> 前端现状：4 个 StatCard 全部使用 mockStats（dueToday/mastered/streak/total 均为硬编码数字）；MasteryRing 直接用 notes 数组计算 new/learning/mastered 分布（已接真实数据）。
+
+- [ ] `GET /dashboard/stats` 返回：总笔记数、今日待复习数（reviewStatus=new 或 lastReviewedAt 超过 N 天）、已掌握数（reviewStatus=mastered）、连续学习天数（DailyActivity 连续有 studyCount>0 的天数）
+- [ ] 前端 Dashboard 页：4 个 StatCard 从接口读取，替换 mockStats
+- [ ] MasteryRing 保持现有逻辑（直接用 notes 数组计算），无需额外接口
+
+---
 
 ## 大功能 7：写作文件模块
-- [ ] Task 7.1 实现 writing_notes 列表、筛选（大作文/小作文）
-- [ ] Task 7.2 实现写作详情接口（markdown 内容）
-- [ ] Task 7.3 前端联调：写作列表与详情页数据替换
 
-## 大功能 8：设置与模型配置
-- [x] Task 8.0 Prisma Schema：`AiProvider` / `AiModel` / `AppSettings` 表与 `add_ai_settings` 迁移
-- [x] Task 8.1 实现 settings 持久化：`SettingsModule`，`GET /settings`、`PATCH /settings`（`AppSettings` key-value upsert），响应经全局拦截器 `{ data, message }`
-- [x] Task 8.2 实现 AiModule：Provider CRUD（`GET/POST/PATCH/DELETE /ai/providers`）、模型管理（`POST/DELETE /ai/providers/:id/models`）、连通性测试（`POST /ai/providers/:id/models/:modelId/test`）、`/ai/chat` 代理端点（slot 路由 + fetch 转发）；SettingsService slot 解析（classifyModel/reviewModel/chatModel）
-- [x] Task 8.3 前端联调：Settings 与 AIModelConfigModal — Store 扩展（loadProviders/loadSettings/syncProviderToBackend/testModelInBackend 等 8 个 action）；AIModelConfigModal 接入真实 API 测试 + handleAddProvider async；footer 改为"保存配置"按钮替换原来的提示文字；Settings 页模型分配从 store 读取并调 setModelSlot 持久化；setTheme 同时 PATCH /settings；Vite proxy 加 /settings /ai bypass；App 启动加载 providers + settings
-- [x] Task 8.4 AI 助手联调：AIPanel `handleSend` 改为真实调用 `/ai/chat`（系统提示 + 历史消息 + 当前输入），模型选择器改用 store 的 providers/chatModel slot，未配置时显示引导提示，错误消息内联展示不弹框
-- [x] Task 8.5 Function Calling + Thinking 开关：后端定义 5 个工具（search_notes/get_stats/get_weak_notes/get_recent_notes/get_favorites），chat() 实现工具调用循环（max 6 次），AI 自主决定查什么；ChatDto 加 enableThinking；前端 AIPanel 检测模型名关键词（thinking/o1/o3/r1/reasoning/deep），含时显示⚡思考按钮，开启后传 enableThinking:true + reasoning_effort:medium；模型切换时自动重置思考状态
+> 前端现状：写作笔记列表是 3 条硬编码 mock；写作详情页内容全部 hardcoded 在代码里（WRITING_NOTES_CONTENT 对象），「重新导入」按钮无逻辑。
 
-## 大功能 9：导入/导出/清理数据
-- [ ] Task 9.1 实现 JSON/CSV 导出接口（notes/writing/review/todos）
-- [ ] Task 9.2 实现导入接口（杂笔记、写作）
-- [ ] Task 9.3 实现清空数据接口（安全确认参数）
-- [ ] Task 9.4 前端联调：ImportModal + Settings 数据管理按钮
+- [ ] Prisma 新增 WritingNote 表（name / path / writingType(大作文/小作文) / content(markdown) / updatedAt）
+- [ ] `GET /writing-notes` 列表，支持 writingType 过滤
+- [ ] `GET /writing-notes/:id` 详情（含 markdown 内容）
+- [ ] `POST /writing-notes/import` 导入写作文件（解析上传的 .md 文件，提取元数据写库）
+- [ ] 前端知识库写作 Tab：从接口加载真实写作文件列表，替换 mock
+- [ ] 前端写作详情页：从接口加载真实内容，「重新导入」按钮触发重新解析
+
+---
+
+## 大功能 8：AI 模型配置与 AI 助手（已完成）
+
+- [x] Prisma：AiProvider / AiModel（含 isThinking / isVision 字段）/ AppSettings 表
+- [x] `GET/POST/PATCH/DELETE /ai/providers` Provider CRUD
+- [x] `POST/PATCH/DELETE /ai/providers/:id/models` 模型管理（含 `test` 接口真实调 API 验证连通性）
+- [x] `POST /ai/chat` 代理端点：按 slot（classify/review/chat）路由到对应模型，支持 Function Calling（5 个工具：search_notes/get_stats/get_weak_notes/get_recent_notes/get_favorites），工具调用循环最多 6 次；enableThinking 时加 reasoning_effort=medium
+- [x] `GET/PATCH /settings` 持久化应用设置（theme / classifyModel / reviewModel / chatModel）
+- [x] 前端 AIModelConfigModal：每个模型行可手动标记 isVision（📷）和 isThinking（⚡），保存到后端；保存配置按钮替代 debounce；逐一测试调真实 API
+- [x] 前端 AIPanel（AI 助手）：真实调 `/ai/chat`，支持 Markdown 渲染、图片和文本文件附件（图片 base64，文本注入上下文）、⚡深度思考开关（当前模型标记了 isThinking 时显示）、对话历史存 localStorage（关闭后保留）
+- [x] 前端 QuickNoteModal：AI 自动识别分类调 classify slot，800ms debounce，失败降级关键词规则
+- [x] 前端 Settings 页：主题切换 + 默认模型分配从后端读写
+
+---
+
+## 大功能 9：导入 / 导出 / 清理数据
+
+> 前端现状：Settings 页导出 JSON/CSV 按钮、导入按钮均无 onClick；ImportModal 有完整 UI 但 handleImport 只模拟 1.8s 延迟，不真正解析文件；清空数据按钮无 onClick。
+
+- [ ] `GET /export/notes?format=json|csv` 导出杂笔记
+- [ ] `GET /export/writing?format=json|csv` 导出写作笔记
+- [ ] `POST /import/notes` 导入杂笔记（解析 JSON 或 CSV，批量写库）
+- [ ] `POST /import/writing` 导入写作文件（上传 .md，调 AI 辅助解析标题/类型）
+- [ ] `DELETE /data/all` 清空全部数据（需传安全确认参数 `confirm=true`）
+- [ ] 前端 Settings 页：导出 JSON/CSV 按钮调接口并触发浏览器下载
+- [ ] 前端 ImportModal：真实解析上传文件并调导入接口，展示成功/失败条数
+
+---
 
 ## 大功能 10：质量保障与上线准备
-- [ ] Task 10.1 为核心 service 编写单元测试（notes/review/todos）
-- [ ] Task 10.2 为关键接口编写集成测试
-- [ ] Task 10.3 构建联调回归清单并逐项通过
-- [ ] Task 10.4 部署配置与环境变量文档整理
 
+- [ ] 核心 service 单元测试（notes / review / todos）
+- [ ] 关键接口 e2e 集成测试
+- [ ] 联调回归清单（笔记增删改查、收藏、复习全流程、仪表盘数据）
+- [ ] 部署配置：Dockerfile、环境变量文档、`start.sh` 生产模式适配
+
+---

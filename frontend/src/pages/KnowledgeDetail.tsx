@@ -2,22 +2,29 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Check, X } from 'lucide-react'
 import { FavoriteButton } from '../components/ui/FavoriteButton'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { LoadingState } from '../components/ui/LoadingState'
 import { useAppStore } from '../store/useAppStore'
+import { apiUrl } from '../lib/apiBase'
 import { CATEGORIES, type Category } from '../data/mockData'
+
+interface UserNote {
+  id: string
+  content: string
+}
 
 export default function KnowledgeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { notes, deleteNote, updateNote } = useAppStore()
   const [newNote, setNewNote] = useState('')
-  const [userNotes, setUserNotes] = useState<string[]>([])
+  const [userNotes, setUserNotes] = useState<UserNote[]>([])
   const [addingNote, setAddingNote] = useState(false)
+  const [savingNote, setSavingNote] = useState(false)
   const [pageLoading] = useState(false)
 
   // Edit state
@@ -35,6 +42,17 @@ export default function KnowledgeDetail() {
   const note = notes[noteIdx]
   const prevNote = noteIdx > 0 ? notes[noteIdx - 1] : null
   const nextNote = noteIdx < notes.length - 1 ? notes[noteIdx + 1] : null
+
+  // Load user notes from backend when note id changes
+  useEffect(() => {
+    if (!id) return
+    fetch(apiUrl(`/notes/${id}/user-notes`))
+      .then((r) => r.ok ? r.json() : null)
+      .then((json: { data?: { items?: UserNote[] } } | null) => {
+        if (json?.data?.items) setUserNotes(json.data.items)
+      })
+      .catch(() => { /* 静默失败 */ })
+  }, [id])
 
   if (pageLoading) {
     return (
@@ -66,13 +84,33 @@ export default function KnowledgeDetail() {
     ? Math.round(((note.correctCount ?? 0) / note.reviewCount) * 100)
     : 0
 
-  const allNotes = [...(note.userNotes ?? []), ...userNotes]
+  const handleSaveNote = async () => {
+    if (!newNote.trim() || !id || savingNote) return
+    setSavingNote(true)
+    try {
+      const res = await fetch(apiUrl(`/notes/${id}/user-notes`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newNote.trim() }),
+      })
+      if (res.ok) {
+        const json = (await res.json()) as { data?: UserNote }
+        if (json.data?.id) {
+          setUserNotes((prev) => [...prev, json.data!])
+        }
+        setNewNote('')
+        setAddingNote(false)
+      }
+    } catch { /* 静默失败 */ }
+    setSavingNote(false)
+  }
 
-  const handleSaveNote = () => {
-    if (!newNote.trim()) return
-    setUserNotes((prev) => [...prev, newNote.trim()])
-    setNewNote('')
-    setAddingNote(false)
+  const handleDeleteUserNote = async (userNoteId: string) => {
+    if (!id) return
+    setUserNotes((prev) => prev.filter((n) => n.id !== userNoteId))
+    try {
+      await fetch(apiUrl(`/notes/${id}/user-notes/${userNoteId}`), { method: 'DELETE' })
+    } catch { /* 静默失败 */ }
   }
 
   const handleStartEdit = () => {
@@ -261,12 +299,20 @@ export default function KnowledgeDetail() {
             {/* 我的备注 — below AI extensions */}
             <div className="bg-surface-card border border-border rounded-xl p-4">
               <div className="text-sm font-semibold text-text-secondary mb-3">我的备注</div>
-              {allNotes.map((n, i) => (
+              {userNotes.map((n) => (
                 <div
-                  key={i}
-                  className="flex items-start gap-2 mb-2 pl-3 border-l-2 border-primary/40"
+                  key={n.id}
+                  className="flex items-start gap-2 mb-2 pl-3 border-l-2 border-primary/40 group"
                 >
-                  <p className="text-[13px] text-text-muted flex-1 leading-relaxed">{n}</p>
+                  <p className="text-[13px] text-text-muted flex-1 leading-relaxed">{n.content}</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteUserNote(n.id)}
+                    className="opacity-0 group-hover:opacity-100 shrink-0 text-text-subtle hover:text-[#fb7185] transition-all"
+                    title="删除备注"
+                  >
+                    <X size={13} />
+                  </button>
                 </div>
               ))}
               <AnimatePresence>
@@ -285,13 +331,13 @@ export default function KnowledgeDetail() {
                       rows={2}
                       className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-2 text-sm text-text-primary placeholder-text-subtle outline-none resize-none mb-2 mt-2"
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveNote() }
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSaveNote() }
                         if (e.key === 'Escape') setAddingNote(false)
                       }}
                     />
                     <div className="flex gap-2">
-                      <Button type="button" variant="primary" size="sm" onClick={handleSaveNote}>
-                        保存
+                      <Button type="button" variant="primary" size="sm" onClick={() => void handleSaveNote()} disabled={savingNote}>
+                        {savingNote ? '保存中...' : '保存'}
                       </Button>
                       <Button type="button" variant="outline" size="sm" onClick={() => setAddingNote(false)}>
                         取消
