@@ -53,7 +53,7 @@
 ## 大功能 8：设置与模型配置
 - [x] Task 8.0 Prisma Schema：`AiProvider` / `AiModel` / `AppSettings` 表与 `add_ai_settings` 迁移
 - [x] Task 8.1 实现 settings 持久化：`SettingsModule`，`GET /settings`、`PATCH /settings`（`AppSettings` key-value upsert），响应经全局拦截器 `{ data, message }`
-- [ ] Task 8.2 实现 ai_providers / ai_models CRUD 与验证状态字段
+- [x] Task 8.2 实现 AiModule：Provider CRUD（`GET/POST/PATCH/DELETE /ai/providers`）、模型管理（`POST/DELETE /ai/providers/:id/models`）、连通性测试（`POST /ai/providers/:id/models/:modelId/test`）、`/ai/chat` 代理端点（slot 路由 + fetch 转发）；SettingsService slot 解析（classifyModel/reviewModel/chatModel）
 - [ ] Task 8.3 前端联调：Settings 与 AIModelConfigModal
 
 ## 大功能 9：导入/导出/清理数据
