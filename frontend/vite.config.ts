@@ -12,10 +12,36 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/notes': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/favorites': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/review': { target: 'http://127.0.0.1:3000', changeOrigin: true },
-      '/health': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/notes': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/favorites': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/review': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/settings': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/ai': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/health': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
     },
   },
   test: {
