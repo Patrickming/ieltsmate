@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import {
   X, Cpu, Check, ChevronDown, ChevronRight, Eye, EyeOff,
   Plus, Trash2, Lock, Zap, GitBranch, Sparkles, Brain, Globe,
-  Bot, Server, Star,
+  Bot, Server, Star, Camera,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
@@ -32,7 +32,7 @@ export function AIModelConfigModal() {
   const {
     showAIConfig, closeAIConfig, providers, setProviders,
     syncProviderToBackend, createProviderInBackend, deleteProviderFromBackend,
-    addModelToBackend, removeModelFromBackend, testModelInBackend,
+    addModelToBackend, removeModelFromBackend, testModelInBackend, updateModelFlags,
   } = useAppStore()
   const newProviderSeqRef = useRef(100)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -126,7 +126,7 @@ export function AIModelConfigModal() {
     if (!modelId.trim() || !current) return
     const already = current.models.some((m) => m.id === modelId)
     if (!already) {
-      updateCurrent({ models: [...current.models, { id: modelId, verified: false }] })
+      updateCurrent({ models: [...current.models, { id: modelId, verified: false, isThinking: false, isVision: false }] })
       void addModelToBackend(current.id, modelId)
     }
     setNewModelId('')
@@ -473,16 +473,38 @@ export function AIModelConfigModal() {
                                 )}
                               </AnimatePresence>
                               <span className="flex-1 text-sm text-text-primary font-mono truncate">{m.id}</span>
-                              {/* Test timing hint */}
-                              {mResult === 'ok' && (
-                                <span className="text-[10px] text-[#34d399] shrink-0">通过</span>
-                              )}
-                              {mResult === 'fail' && (
-                                <span className="text-[10px] text-[#fb7185] shrink-0">失败</span>
-                              )}
+                              {mResult === 'ok' && <span className="text-[10px] text-[#34d399] shrink-0">通过</span>}
+                              {mResult === 'fail' && <span className="text-[10px] text-[#fb7185] shrink-0">失败</span>}
+                              {/* Capability toggles */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {/* Vision toggle */}
+                                <button
+                                  title={m.isVision ? '已标记为视觉模型（点击取消）' : '标记为视觉模型（支持图片输入）'}
+                                  onClick={() => void updateModelFlags(current!.id, m.id, { isVision: !m.isVision })}
+                                  className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+                                    m.isVision
+                                      ? 'bg-[#0ea5e922] border border-[#0ea5e9] text-[#0ea5e9]'
+                                      : 'text-text-subtle hover:text-[#0ea5e9] border border-transparent hover:border-[#0ea5e940]'
+                                  }`}
+                                >
+                                  <Camera size={10} />
+                                </button>
+                                {/* Thinking toggle */}
+                                <button
+                                  title={m.isThinking ? '已标记为推理模型（点击取消）' : '标记为推理模型（开启⚡深度思考）'}
+                                  onClick={() => void updateModelFlags(current!.id, m.id, { isThinking: !m.isThinking })}
+                                  className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+                                    m.isThinking
+                                      ? 'bg-[#fbbf2422] border border-[#fbbf24] text-[#fbbf24]'
+                                      : 'text-text-subtle hover:text-[#fbbf24] border border-transparent hover:border-[#fbbf2440]'
+                                  }`}
+                                >
+                                  <Zap size={10} />
+                                </button>
+                              </div>
                               <button
                                 onClick={() => handleRemoveModel(m.id)}
-                                className="text-text-subtle hover:text-text-muted transition-colors shrink-0 ml-1"
+                                className="text-text-subtle hover:text-text-muted transition-colors shrink-0"
                               >
                                 <X size={14} />
                               </button>

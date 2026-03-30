@@ -144,6 +144,8 @@ model AiModel {
   providerId String
   modelId    String
   verified   Boolean    @default(false)
+  isThinking Boolean    @default(false)
+  isVision   Boolean    @default(false)
   sortOrder  Int        @default(0)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt

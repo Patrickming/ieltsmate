@@ -14,6 +14,7 @@ import { AiService } from './ai.service'
 import { AddModelDto } from './dto/add-model.dto'
 import { ChatDto } from './dto/chat.dto'
 import { CreateProviderDto } from './dto/create-provider.dto'
+import { UpdateModelDto } from './dto/update-model.dto'
 import { UpdateProviderDto } from './dto/update-provider.dto'
 
 @Controller('ai')
@@ -46,6 +47,14 @@ export class AiController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: AddModelDto,
   ) { return this.aiService.addModel(id, dto) }
+
+  @Patch('providers/:id/models/:modelId')
+  @HttpCode(HttpStatus.OK)
+  updateModel(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('modelId') modelId: string,
+    @Body() dto: UpdateModelDto,
+  ) { return this.aiService.updateModel(id, modelId, dto) }
 
   @Delete('providers/:id/models/:modelId')
   removeModel(
