@@ -3,6 +3,57 @@ import type { Note, Category } from '../data/mockData'
 import { mockNotes } from '../data/mockData'
 import { apiUrl } from '../lib/apiBase'
 
+interface BackendNote {
+  id: string
+  content: string
+  translation: string
+  category: string
+  phonetic: string | null
+  synonyms: string[]
+  antonyms: string[]
+  example: string | null
+  memoryTip: string | null
+  reviewStatus: 'new' | 'learning' | 'mastered'
+  reviewCount: number
+  correctCount: number
+  wrongCount: number
+  createdAt: string
+}
+
+function formatNoteDate(isoStr: string): string {
+  const now = new Date()
+  const d = new Date(isoStr)
+  const diffMs = now.getTime() - d.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (diffDays < 7) return `${diffDays}天前`
+  const diffWeeks = Math.floor(diffDays / 7)
+  if (diffWeeks < 5) return `${diffWeeks}周前`
+  const diffMonths = Math.floor(diffDays / 30)
+  return `${diffMonths}个月前`
+}
+
+function mapBackendNote(n: BackendNote): Note {
+  return {
+    id: n.id,
+    content: n.content,
+    translation: n.translation,
+    category: n.category as Category,
+    subcategory: '杂笔记',
+    phonetic: n.phonetic ?? undefined,
+    synonyms: n.synonyms ?? [],
+    antonyms: n.antonyms ?? [],
+    example: n.example ?? undefined,
+    memoryTip: n.memoryTip ?? undefined,
+    createdAt: formatNoteDate(n.createdAt),
+    reviewStatus: n.reviewStatus ?? 'new',
+    reviewCount: n.reviewCount ?? 0,
+    correctCount: n.correctCount ?? 0,
+    wrongCount: n.wrongCount ?? 0,
+  }
+}
+
 function safeReadFavorites(): string[] {
   try {
     const raw = localStorage.getItem('ielts-favorites')
@@ -87,6 +138,8 @@ interface AppState {
 
   // Notes
   notes: Note[]
+  notesLoaded: boolean
+  loadNotes: () => Promise<void>
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void
   addQuickNote: (input: AddNoteInput) => Promise<AddQuickNoteResult>
@@ -143,6 +196,19 @@ export const useAppStore = create<AppState>((set) => ({
   setProviders: (p) => set({ providers: p }),
 
   notes: mockNotes,
+  notesLoaded: false,
+  loadNotes: async () => {
+    try {
+      const res = await fetch(apiUrl('/notes'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: { items?: BackendNote[] } }
+      const items = json.data?.items
+      if (!Array.isArray(items)) return
+      set({ notes: items.map(mapBackendNote), notesLoaded: true })
+    } catch {
+      // 静默失败，保留 mock 数据
+    }
+  },
   selectedNote: null,
   setSelectedNote: (note) => set({ selectedNote: note }),
   lastAddedNoteId: null,

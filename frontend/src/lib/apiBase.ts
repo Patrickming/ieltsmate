@@ -1,8 +1,14 @@
-/** Backend REST base URL. Override with VITE_API_BASE_URL; dev defaults to localhost:3000. */
+/**
+ * Backend REST base URL.
+ * - Override at any time with VITE_API_BASE_URL env variable.
+ * - In dev mode the Vite server proxy (vite.config.ts server.proxy) forwards
+ *   /notes, /favorites, /review, /health → http://127.0.0.1:3000, so we use
+ *   a relative base (empty string) to stay same-origin and avoid CORS issues.
+ * - In production, set VITE_API_BASE_URL or ensure backend serves the frontend.
+ */
 export function getApiBaseUrl(): string {
   const v = import.meta.env.VITE_API_BASE_URL
   if (typeof v === 'string' && v.trim()) return v.trim().replace(/\/$/, '')
-  if (import.meta.env.DEV) return 'http://localhost:3000'
   return ''
 }
 

@@ -90,9 +90,9 @@ if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1; then
 else
   cd "$BACKEND_DIR" || exit 1
   echo "  启动后端进程..."
-  nohup npx ts-node src/main.ts >"$BACKEND_LOG" 2>&1 &
+  nohup pnpm dev >"$BACKEND_LOG" 2>&1 &
   sleep 1
-  if wait_for_port "$BACKEND_PORT" 10; then
+  if wait_for_port "$BACKEND_PORT" 15; then
     if curl -fsS "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1; then
       print_ok "后端启动成功 (http://127.0.0.1:${BACKEND_PORT})"
     else

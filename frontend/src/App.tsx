@@ -80,12 +80,13 @@ function AnimatedRoutes() {
 }
 
 function AppInner() {
-  const { showSearch, showQuickNote, showAIPanel, showAIConfig, showImport, syncFavorites } =
+  const { showSearch, showQuickNote, showAIPanel, showAIConfig, showImport, syncFavorites, loadNotes } =
     useAppStore()
 
   useEffect(() => {
+    void loadNotes()
     void syncFavorites()
-  }, [syncFavorites])
+  }, [loadNotes, syncFavorites])
 
   return (
     <>

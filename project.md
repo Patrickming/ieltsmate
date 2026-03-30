@@ -9,13 +9,14 @@
 - [x] Task 1.2 接入 Prisma + PostgreSQL：core schema（Note / Favorite / NoteUserNote / Review* / Todo / DailyActivity）、`init_core_models` 迁移、`PrismaModule`+`PrismaService`（`onModuleInit`/`onModuleDestroy`）、e2e `prisma-schema.e2e-spec.ts`（PrismaClient 与 Nest 生命周期）；本地需 PostgreSQL 后执行 `pnpm prisma migrate dev` 与 e2e
 - [x] Task 1.3 搭建统一响应体、全局异常过滤器、参数校验管道
 - [ ] Task 1.4 建立 OpenAPI/Swagger 与基础健康检查接口
+- [x] Task 1.5【修复】WSL 跨域问题：Vite 加 `server.proxy`（/notes /favorites /review /health → 127.0.0.1:3000），`apiBase.ts` 改为相对路径，后端 `package.json` 加 `dev/start` 脚本并安装 `ts-node`，`start.sh` 改用 `pnpm dev` 启动后端
 
 ## 大功能 2：笔记系统（KnowledgeBase / Detail 核心）
 - [x] Task 2.1 实现 notes 表与 CRUD（创建、列表、详情、更新、软删除）：`NotesModule` + `POST/GET/PATCH/DELETE /notes`、`GET /notes/:id`；删除为 `deletedAt` 软删；e2e 见 `backend/test/notes.e2e-spec.ts`（需本地 PostgreSQL）
 - [x] Task 2.2 实现分类筛选 + 搜索（content/translation）：`GET /notes?category=&search=`，列表仅 `deletedAt IS NULL`，搜索为 content/translation 不区分大小写 `contains`
 - [x] Task 2.3 实现 note_user_notes（备注新增、列表、删除）：`GET/POST /notes/:id/user-notes`、`DELETE /notes/:id/user-notes/:userNoteId`（`NoteUserNote.deletedAt` 软删）；列表仅未删；父笔记不存在或已软删返回 404；DTO 校验 content；e2e 见 `backend/test/notes.e2e-spec.ts`
 - [x] Task 2.4 明确并实现详情页编辑/删除真实接口（对应前端占位按钮）：复用 `PATCH /notes/:id` 与 `DELETE /notes/:id`，并在 e2e 覆盖详情更新与软删后 404
-- [ ] Task 2.5 前端联调：替换知识库列表与详情页 mock 数据
+- [x] Task 2.5 前端联调（部分）：App 启动时调用 `loadNotes` 从 `GET /notes` 加载真实数据替换 mockNotes；新增 `BackendNote` 类型、`mapBackendNote`、`formatNoteDate` 工具函数；`notesLoaded` 标志位；写作列表与详情页仍用 mock
 
 ## 大功能 3：收藏系统（Favorites）
 - [x] Task 3.1 实现 favorites toggle 接口（返回最新 isFavorite）：`POST /favorites/toggle` 入参 `{ noteId }`，未收藏则创建并返回 `isFavorite: true`，已收藏则删除并返回 `isFavorite: false`；笔记不存在或已软删 404；`deleteMany` + 捕获 `P2002` 保证幂等；e2e 见 `backend/test/favorites.e2e-spec.ts`

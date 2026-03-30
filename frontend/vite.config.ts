@@ -10,6 +10,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      '/notes': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/favorites': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/review': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+      '/health': { target: 'http://127.0.0.1:3000', changeOrigin: true },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './src/test/setup.ts',
