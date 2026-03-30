@@ -52,7 +52,7 @@
 
 ## 大功能 8：设置与模型配置
 - [x] Task 8.0 Prisma Schema：`AiProvider` / `AiModel` / `AppSettings` 表与 `add_ai_settings` 迁移
-- [ ] Task 8.1 实现 settings 持久化（主题、默认模型分配）
+- [x] Task 8.1 实现 settings 持久化：`SettingsModule`，`GET /settings`、`PATCH /settings`（`AppSettings` key-value upsert），响应经全局拦截器 `{ data, message }`
 - [ ] Task 8.2 实现 ai_providers / ai_models CRUD 与验证状态字段
 - [ ] Task 8.3 前端联调：Settings 与 AIModelConfigModal
 

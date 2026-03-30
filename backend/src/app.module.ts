@@ -3,6 +3,7 @@ import { FavoritesModule } from './favorites/favorites.module'
 import { NotesModule } from './notes/notes.module'
 import { PrismaModule } from './prisma/prisma.module'
 import { ReviewModule } from './review/review.module'
+import { SettingsModule } from './settings/settings.module'
 
 @Controller()
 class HealthController {
@@ -13,7 +14,7 @@ class HealthController {
 }
 
 @Module({
-  imports: [PrismaModule, NotesModule, FavoritesModule, ReviewModule],
+  imports: [PrismaModule, NotesModule, FavoritesModule, ReviewModule, SettingsModule],
   controllers: [HealthController],
 })
 export class AppModule {}
