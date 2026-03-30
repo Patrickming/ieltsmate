@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { X, Send, Plus, AlignJustify, ChevronDown, Sparkles, Paperclip, HelpCircle } from 'lucide-react'
+import { X, Send, Plus, AlignJustify, ChevronDown, Sparkles, Paperclip, HelpCircle, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
-import { mockProviders } from '../../data/mockData'
+import { apiUrl } from '../../lib/apiBase'
 
 interface Message {
   id: string
@@ -31,9 +31,16 @@ const MAX_HISTORY_WIDTH = 280
 const DEFAULT_HISTORY_WIDTH = 200
 
 export function AIPanel() {
-  const { showAIPanel, closeAIPanel } = useAppStore()
+  const { showAIPanel, closeAIPanel, providers, chatModel } = useAppStore()
+
+  // All available models from configured providers
+  const allModels = useMemo(
+    () => providers.flatMap((p) => p.models.map((m) => ({ id: m.id, providerName: p.displayName }))),
+    [providers],
+  )
+
   const [conversations, setConversations] = useState<Conversation[]>([
-    { id: '1', title: '关于 get out of 的用法', messages: [WELCOME], createdAt: '今天' }
+    { id: '1', title: '新对话', messages: [WELCOME], createdAt: '今天' }
   ])
   const [currentConvId, setCurrentConvId] = useState('1')
   const [input, setInput] = useState('')
@@ -42,7 +49,14 @@ export function AIPanel() {
   const [showHistory, setShowHistory] = useState(false)
   const [historyWidth, setHistoryWidth] = useState(DEFAULT_HISTORY_WIDTH)
   const [showTip, setShowTip] = useState(false)
-  const [model, setModel] = useState(mockProviders[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
+  // Use the chat slot model from settings, fallback to first available model
+  const [model, setModel] = useState(() => chatModel || allModels[0]?.id || '')
+
+  // Sync model when chatModel setting changes
+  useEffect(() => {
+    if (chatModel && chatModel !== model) setModel(chatModel)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatModel])
   const bottomRef = useRef<HTMLDivElement>(null)
   const isDragging = useRef(false)
   const dragStartX = useRef(0)
@@ -95,28 +109,75 @@ export function AIPanel() {
     setCurrentConvId(id)
   }
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim() || loading) return
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: input }
-    const userInput = input
+    const userInput = input.trim()
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: userInput }
     setInput('')
     setLoading(true)
+
+    // Append user message and update conversation title
     setConversations((prev) => prev.map((c) =>
       c.id === currentConvId
-        ? { ...c, title: userInput.slice(0, 20), messages: [...c.messages, userMsg] }
-        : c
+        ? {
+            ...c,
+            title: c.title === '新对话' ? userInput.slice(0, 22) : c.title,
+            messages: [...c.messages, userMsg],
+          }
+        : c,
     ))
-    setTimeout(() => {
-      const replies: Message[] = [
-        { id: (Date.now() + 1).toString(), role: 'assistant', content: `关于「${userInput.slice(0, 15)}」，这是常见的 IELTS 词汇。建议结合上下文记忆，效果更好。`, relatedNote: userInput.split(' ')[0] },
-        { id: (Date.now() + 1).toString(), role: 'assistant', content: `这个表达在写作中非常实用，可以替换简单词汇提升语言多样性。在雅思口语 Part 2 中也很常见。` },
-      ]
-      const reply = replies[Math.floor(Math.random() * replies.length)]
+
+    // Build message history for API (exclude the static welcome message)
+    const historyMsgs = messages
+      .filter((m) => m.id !== 'welcome')
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+
+    const apiMessages = [
+      {
+        role: 'system' as const,
+        content:
+          '你是一位专业的 IELTS 英语学习助手，用中文回答。结合学习者的雅思备考需求，解释词汇用法、分析语法、提供写作和口语建议，回答简洁实用。',
+      },
+      ...historyMsgs,
+      { role: 'user' as const, content: userInput },
+    ]
+
+    try {
+      const res = await fetch(apiUrl('/ai/chat'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: apiMessages,
+          ...(model ? { model } : {}),
+          slot: 'chat',
+        }),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`HTTP ${res.status}${errText ? ': ' + errText.slice(0, 200) : ''}`)
+      }
+
+      const json = (await res.json()) as { data?: { content: string } }
+      const content = json.data?.content ?? '（AI 未返回内容）'
+
       setConversations((prev) => prev.map((c) =>
-        c.id === currentConvId ? { ...c, messages: [...c.messages, reply] } : c
+        c.id === currentConvId
+          ? { ...c, messages: [...c.messages, { id: (Date.now() + 1).toString(), role: 'assistant', content }] }
+          : c,
       ))
+    } catch (err) {
+      const errContent = allModels.length === 0
+        ? '⚠️ 尚未配置任何 AI 模型。请先在「设置 → AI 模型配置」中添加提供商和模型。'
+        : `⚠️ 请求失败：${err instanceof Error ? err.message : String(err)}`
+      setConversations((prev) => prev.map((c) =>
+        c.id === currentConvId
+          ? { ...c, messages: [...c.messages, { id: (Date.now() + 1).toString(), role: 'assistant', content: errContent }] }
+          : c,
+      ))
+    } finally {
       setLoading(false)
-    }, 1200)
+    }
   }
 
   return (
@@ -197,10 +258,10 @@ export function AIPanel() {
                 <span className="text-xs text-text-dim">模型</span>
                 <button
                   onClick={() => setShowModelPicker(!showModelPicker)}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-[#232328] border border-border rounded-md text-xs text-text-muted hover:border-border-strong transition-colors"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-[#232328] border border-border rounded-md text-xs text-text-muted hover:border-border-strong transition-colors max-w-[200px]"
                 >
-                  {model}
-                  <ChevronDown size={11} className="text-text-subtle" />
+                  <span className="truncate">{model || '选择模型'}</span>
+                  <ChevronDown size={11} className="text-text-subtle shrink-0" />
                 </button>
                 <AnimatePresence>
                   {showModelPicker && (
@@ -210,19 +271,25 @@ export function AIPanel() {
                       exit={{ opacity: 0, y: -4 }}
                       className="absolute top-full right-4 mt-1 bg-[#1c1c20] border border-border rounded-md shadow-modal z-10 min-w-[200px]"
                     >
-                      {mockProviders.flatMap((p) => p.models).map((m) => {
-                        const shortName = m.split('/').pop() ?? m
-                        return (
+                      {allModels.length === 0 ? (
+                        <div className="flex items-center gap-2 px-3 py-3 text-xs text-text-dim">
+                          <AlertCircle size={12} className="text-[#fbbf24] shrink-0" />
+                          <span>尚未配置模型，请先到设置页配置 AI 提供商</span>
+                        </div>
+                      ) : (
+                        allModels.map(({ id, providerName }) => (
                           <button
-                            key={m}
-                            onClick={() => { setModel(shortName); setShowModelPicker(false) }}
-                            className={`flex items-center w-full px-3 py-2 text-xs text-left hover:bg-[#27272a] transition-colors ${shortName === model ? 'text-primary' : 'text-text-muted'}`}
+                            key={id}
+                            onClick={() => { setModel(id); setShowModelPicker(false) }}
+                            className={`flex flex-col w-full px-3 py-2 text-left hover:bg-[#27272a] transition-colors ${id === model ? 'bg-[#1e1b4b]' : ''}`}
                           >
-                            {shortName === model && <span className="mr-2 text-[#34d399]">✓</span>}
-                            <span className="truncate">{m}</span>
+                            <span className={`text-xs truncate ${id === model ? 'text-primary' : 'text-text-muted'}`}>
+                              {id === model && '✓ '}{id}
+                            </span>
+                            <span className="text-[10px] text-text-subtle mt-0.5">{providerName}</span>
                           </button>
-                        )
-                      })}
+                        ))
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -336,14 +403,14 @@ export function AIPanel() {
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSend() }
                       }}
                       placeholder="输入消息... (Enter 发送)"
                       rows={2}
                       className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-subtle outline-none resize-none"
                     />
                     <button
-                      onClick={handleSend}
+                      onClick={() => void handleSend()}
                       disabled={!input.trim() || loading}
                       className="w-8 h-8 rounded-lg bg-primary-btn hover:bg-[#4338ca] disabled:opacity-50 flex items-center justify-center transition-colors shrink-0"
                     >
