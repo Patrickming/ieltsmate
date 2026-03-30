@@ -154,16 +154,19 @@ export class AiService {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${provider.apiKey}`,
         },
+        // No max_tokens — let the provider use its default.
+        // Thinking/reasoning models often have a minimum token budget;
+        // setting an explicit low value (e.g. 5) causes them to reject the request.
         body: JSON.stringify({
           model: modelId,
           messages: [{ role: 'user', content: 'Hi' }],
-          max_tokens: 5,
           stream: false,
         }),
       })
 
       if (res.ok) {
-        await this.setModelVerified(providerId, modelId, true)
+        // Best-effort: mark verified if the model row exists in DB
+        await this.setModelVerified(providerId, modelId, true).catch(() => null)
         return { ok: true }
       }
 
