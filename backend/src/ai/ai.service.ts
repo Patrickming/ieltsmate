@@ -147,9 +147,14 @@ export class AiService {
     const baseUrl = provider.baseUrl.replace(/\/$/, '')
     const url = `${baseUrl}/chat/completions`
 
+    // 15-second timeout — avoid hanging on slow or unreachable models
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
+
     try {
       const res = await fetch(url, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${provider.apiKey}`,
@@ -163,6 +168,7 @@ export class AiService {
           stream: false,
         }),
       })
+      clearTimeout(timer)
 
       if (res.ok) {
         // Best-effort: mark verified if the model row exists in DB
@@ -173,7 +179,12 @@ export class AiService {
       const text = await res.text().catch(() => '')
       return { ok: false, error: `HTTP ${res.status}: ${text.slice(0, 200)}` }
     } catch (err) {
-      return { ok: false, error: String(err) }
+      clearTimeout(timer)
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('abort') || msg.includes('Abort')) {
+        return { ok: false, error: 'Request timeout (15s) — model may be slow or unreachable' }
+      }
+      return { ok: false, error: msg }
     }
   }
 

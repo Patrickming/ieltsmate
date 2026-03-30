@@ -303,7 +303,14 @@ export function AIModelConfigModal() {
                       </label>
                       <input
                         value={current.displayName}
-                        onChange={(e) => updateCurrent({ displayName: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateCurrent({ displayName: val })
+                          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+                          saveTimerRef.current = setTimeout(() => {
+                            if (current) void syncProviderToBackend({ ...current, displayName: val })
+                          }, 800)
+                        }}
                         placeholder={current.name}
                         className="h-9 bg-[#18181b] border border-border rounded-md px-3 text-sm text-text-primary placeholder-text-subtle outline-none focus:border-primary/60 transition-colors"
                       />
@@ -364,7 +371,14 @@ export function AIModelConfigModal() {
                       </label>
                       <input
                         value={current.baseUrl}
-                        onChange={(e) => updateCurrent({ baseUrl: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          updateCurrent({ baseUrl: val })
+                          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+                          saveTimerRef.current = setTimeout(() => {
+                            if (current) void syncProviderToBackend({ ...current, baseUrl: val })
+                          }, 800)
+                        }}
                         placeholder={preset?.baseUrl ?? 'https://api.example.com/v1'}
                         className="h-9 bg-[#18181b] border border-border rounded-md px-3 text-sm text-text-primary placeholder-text-subtle outline-none focus:border-primary/60 transition-colors font-mono"
                       />
