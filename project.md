@@ -15,7 +15,7 @@
 - [x] Task 2.1 实现 notes 表与 CRUD（创建、列表、详情、更新、软删除）：`NotesModule` + `POST/GET/PATCH/DELETE /notes`、`GET /notes/:id`；删除为 `deletedAt` 软删；e2e 见 `backend/test/notes.e2e-spec.ts`（需本地 PostgreSQL）
 - [x] Task 2.2 实现分类筛选 + 搜索（content/translation）：`GET /notes?category=&search=`，列表仅 `deletedAt IS NULL`，搜索为 content/translation 不区分大小写 `contains`
 - [x] Task 2.3 实现 note_user_notes（备注新增、列表、删除）：`GET/POST /notes/:id/user-notes`、`DELETE /notes/:id/user-notes/:userNoteId`（`NoteUserNote.deletedAt` 软删）；列表仅未删；父笔记不存在或已软删返回 404；DTO 校验 content；e2e 见 `backend/test/notes.e2e-spec.ts`
-- [x] Task 2.4 明确并实现详情页编辑/删除真实接口（对应前端占位按钮）：复用 `PATCH /notes/:id` 与 `DELETE /notes/:id`，并在 e2e 覆盖详情更新与软删后 404
+- [x] Task 2.4 明确并实现详情页编辑/删除真实接口（对应前端占位按钮）：复用 `PATCH /notes/:id` 与 `DELETE /notes/:id`，并在 e2e 覆盖详情更新与软删后 404；前端 `KnowledgeDetail` 接入 `deleteNote`/`updateNote`，主卡片内联编辑（分类/内容/释义），操作区加删除二次确认
 - [x] Task 2.5 前端联调（部分）：App 启动时调用 `loadNotes` 从 `GET /notes` 加载真实数据替换 mockNotes；新增 `BackendNote` 类型、`mapBackendNote`、`formatNoteDate` 工具函数；`notesLoaded` 标志位；写作列表与详情页仍用 mock
 
 ## 大功能 3：收藏系统（Favorites）

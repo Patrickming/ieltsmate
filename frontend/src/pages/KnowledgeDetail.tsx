@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil } from 'lucide-react'
+import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Check, X } from 'lucide-react'
 import { FavoriteButton } from '../components/ui/FavoriteButton'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
@@ -9,15 +9,27 @@ import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import { LoadingState } from '../components/ui/LoadingState'
 import { useAppStore } from '../store/useAppStore'
+import { CATEGORIES, type Category } from '../data/mockData'
 
 export default function KnowledgeDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { notes } = useAppStore()
+  const { notes, deleteNote, updateNote } = useAppStore()
   const [newNote, setNewNote] = useState('')
   const [userNotes, setUserNotes] = useState<string[]>([])
   const [addingNote, setAddingNote] = useState(false)
   const [pageLoading] = useState(false)
+
+  // Edit state
+  const [editing, setEditing] = useState(false)
+  const [editContent, setEditContent] = useState('')
+  const [editTranslation, setEditTranslation] = useState('')
+  const [editCategory, setEditCategory] = useState<Category>('短语')
+  const [saving, setSaving] = useState(false)
+
+  // Delete confirmation state
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const noteIdx = notes.findIndex((n) => n.id === id)
   const note = notes[noteIdx]
@@ -63,6 +75,38 @@ export default function KnowledgeDetail() {
     setAddingNote(false)
   }
 
+  const handleStartEdit = () => {
+    if (!note) return
+    setEditContent(note.content)
+    setEditTranslation(note.translation)
+    setEditCategory(note.category)
+    setEditing(true)
+  }
+
+  const handleCancelEdit = () => {
+    setEditing(false)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!note || saving) return
+    setSaving(true)
+    const ok = await updateNote(note.id, {
+      content: editContent.trim(),
+      translation: editTranslation.trim(),
+      category: editCategory,
+    })
+    setSaving(false)
+    if (ok) setEditing(false)
+  }
+
+  const handleDelete = async () => {
+    if (!note || deleting) return
+    setDeleting(true)
+    const ok = await deleteNote(note.id)
+    setDeleting(false)
+    if (ok) navigate('/kb')
+  }
+
   return (
     <Layout title="笔记详情">
       <div className="p-8 flex flex-col gap-5">
@@ -84,12 +128,59 @@ export default function KnowledgeDetail() {
           animate={{ opacity: 1, y: 0 }}
           className="bg-surface-card border border-border rounded-xl p-6"
         >
-          <div className="flex items-center justify-between mb-4">
-            <Badge category={note.category} size="md" />
-            <span className="text-xs text-text-subtle">创建于 {note.createdAt}</span>
-          </div>
-          <h1 className="text-[36px] font-bold text-text-primary leading-tight mb-2">{note.content}</h1>
-          <p className="text-lg text-text-muted">{note.translation}</p>
+          {editing ? (
+            <div className="flex flex-col gap-3">
+              {/* Category selector */}
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.filter((c) => c.name !== '写作').map(({ name }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setEditCategory(name)}
+                    className={`px-2.5 py-1 rounded-full text-xs transition-all ${
+                      editCategory === name
+                        ? 'bg-primary-btn text-white'
+                        : 'border border-border text-text-dim hover:text-text-muted'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+              <input
+                autoFocus
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                placeholder="英文内容"
+                className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3.5 py-2.5 text-2xl font-bold text-text-primary outline-none focus:border-primary/60 transition-colors"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit() }}
+              />
+              <input
+                value={editTranslation}
+                onChange={(e) => setEditTranslation(e.target.value)}
+                placeholder="中文释义"
+                className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3.5 py-2.5 text-lg text-text-muted outline-none focus:border-primary/60 transition-colors"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') handleCancelEdit() }}
+              />
+              <div className="flex gap-2 mt-1">
+                <Button type="button" variant="primary" size="sm" icon={<Check size={13} />} onClick={handleSaveEdit} disabled={saving || !editContent.trim()}>
+                  {saving ? '保存中...' : '保存'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" icon={<X size={13} />} onClick={handleCancelEdit}>
+                  取消
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <Badge category={note.category} size="md" />
+                <span className="text-xs text-text-subtle">创建于 {note.createdAt}</span>
+              </div>
+              <h1 className="text-[36px] font-bold text-text-primary leading-tight mb-2">{note.content}</h1>
+              <p className="text-lg text-text-muted">{note.translation}</p>
+            </>
+          )}
         </motion.div>
 
         {/* Two column layout */}
@@ -259,26 +350,55 @@ export default function KnowledgeDetail() {
             {/* Actions */}
             <div className="bg-surface-card border border-border rounded-xl p-4">
               <div className="text-sm font-semibold text-text-secondary mb-3">操作</div>
-              <div className="flex gap-2 mb-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  icon={<Pencil size={13} />}
-                  className="flex-1 h-9 min-h-9 rounded-sm text-text-muted hover:text-text-secondary"
-                >
-                  编辑
-                </Button>
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="md"
-                  icon={<Trash2 size={13} />}
-                  className="flex-1 h-9 min-h-9 rounded-sm"
-                >
-                  删除
-                </Button>
-              </div>
+              {confirmDelete ? (
+                <div className="mb-3">
+                  <p className="text-xs text-text-muted mb-2.5">确认删除这条笔记？此操作不可恢复。</p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="md"
+                      className="flex-1 h-9 min-h-9 rounded-sm"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                    >
+                      {deleting ? '删除中...' : '确认删除'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="md"
+                      className="flex-1 h-9 min-h-9 rounded-sm"
+                      onClick={() => setConfirmDelete(false)}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2 mb-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    icon={<Pencil size={13} />}
+                    className={`flex-1 h-9 min-h-9 rounded-sm ${editing ? 'border-primary text-primary' : 'text-text-muted hover:text-text-secondary'}`}
+                    onClick={editing ? handleCancelEdit : handleStartEdit}
+                  >
+                    {editing ? '取消编辑' : '编辑'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="md"
+                    icon={<Trash2 size={13} />}
+                    className="flex-1 h-9 min-h-9 rounded-sm"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              )}
               <FavoriteButton noteId={note.id} variant="full" />
             </div>
           </div>

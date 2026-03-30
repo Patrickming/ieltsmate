@@ -140,6 +140,8 @@ interface AppState {
   notes: Note[]
   notesLoaded: boolean
   loadNotes: () => Promise<void>
+  deleteNote: (id: string) => Promise<boolean>
+  updateNote: (id: string, patch: { content?: string; translation?: string; category?: Category }) => Promise<boolean>
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void
   addQuickNote: (input: AddNoteInput) => Promise<AddQuickNoteResult>
@@ -207,6 +209,35 @@ export const useAppStore = create<AppState>((set) => ({
       set({ notes: items.map(mapBackendNote), notesLoaded: true })
     } catch {
       // 静默失败，保留 mock 数据
+    }
+  },
+  deleteNote: async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/notes/${id}`), { method: 'DELETE' })
+      if (!res.ok) return false
+      set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }))
+      return true
+    } catch {
+      return false
+    }
+  },
+  updateNote: async (id, patch) => {
+    try {
+      const res = await fetch(apiUrl(`/notes/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      if (!res.ok) return false
+      const json = (await res.json()) as { data?: BackendNote }
+      const updated = json.data
+      if (!updated?.id) return false
+      set((s) => ({
+        notes: s.notes.map((n) => n.id === id ? mapBackendNote(updated) : n),
+      }))
+      return true
+    } catch {
+      return false
     }
   },
   selectedNote: null,
