@@ -37,6 +37,7 @@ export function AIModelConfigModal() {
   const newProviderSeqRef = useRef(100)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedId, setSelectedId] = useState(providers[0]?.id ?? '')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [showUnverified, setShowUnverified] = useState(true)
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle')
@@ -189,7 +190,7 @@ export function AIModelConfigModal() {
                     return (
                       <button
                         key={p.id}
-                        onClick={() => setSelectedId(p.id)}
+                        onClick={() => { setSelectedId(p.id); setSaveStatus('idle') }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2.5 transition-colors text-left ${
                           isSelected ? 'bg-[#1c1c20]' : 'hover:bg-[#18181b]'
                         }`}
@@ -304,12 +305,8 @@ export function AIModelConfigModal() {
                       <input
                         value={current.displayName}
                         onChange={(e) => {
-                          const val = e.target.value
-                          updateCurrent({ displayName: val })
-                          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-                          saveTimerRef.current = setTimeout(() => {
-                            if (current) void syncProviderToBackend({ ...current, displayName: val })
-                          }, 800)
+                          updateCurrent({ displayName: e.target.value })
+                          setSaveStatus('idle')
                         }}
                         placeholder={current.name}
                         className="h-9 bg-[#18181b] border border-border rounded-md px-3 text-sm text-text-primary placeholder-text-subtle outline-none focus:border-primary/60 transition-colors"
@@ -327,12 +324,8 @@ export function AIModelConfigModal() {
                             type={showKey ? 'text' : 'password'}
                             value={current.apiKey}
                             onChange={(e) => {
-                              const val = e.target.value
-                              updateCurrent({ apiKey: val })
-                              if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-                              saveTimerRef.current = setTimeout(() => {
-                                if (current) void syncProviderToBackend({ ...current, apiKey: val })
-                              }, 800)
+                              updateCurrent({ apiKey: e.target.value })
+                              setSaveStatus('idle')
                             }}
                             placeholder="sk-..."
                             className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-subtle outline-none font-mono"
@@ -372,12 +365,8 @@ export function AIModelConfigModal() {
                       <input
                         value={current.baseUrl}
                         onChange={(e) => {
-                          const val = e.target.value
-                          updateCurrent({ baseUrl: val })
-                          if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-                          saveTimerRef.current = setTimeout(() => {
-                            if (current) void syncProviderToBackend({ ...current, baseUrl: val })
-                          }, 800)
+                          updateCurrent({ baseUrl: e.target.value })
+                          setSaveStatus('idle')
                         }}
                         placeholder={preset?.baseUrl ?? 'https://api.example.com/v1'}
                         className="h-9 bg-[#18181b] border border-border rounded-md px-3 text-sm text-text-primary placeholder-text-subtle outline-none focus:border-primary/60 transition-colors font-mono"
@@ -527,10 +516,33 @@ export function AIModelConfigModal() {
                 </div>
                 <span className="text-xs text-text-dim">显示未验证的模型</span>
               </label>
-              <div className="flex items-center gap-1.5 text-xs text-text-subtle">
-                <Lock size={11} />
-                API 密钥存储在您的浏览器本地
-              </div>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                disabled={!current || saveStatus === 'saving'}
+                onClick={async () => {
+                  if (!current) return
+                  setSaveStatus('saving')
+                  if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+                  await syncProviderToBackend(current)
+                  setSaveStatus('saved')
+                  setTimeout(() => setSaveStatus('idle'), 2000)
+                }}
+                className={`flex items-center gap-1.5 h-7 px-3.5 rounded-md text-xs font-medium transition-all disabled:opacity-40 ${
+                  saveStatus === 'saved'
+                    ? 'bg-[#064e3b] text-[#34d399]'
+                    : saveStatus === 'saving'
+                    ? 'bg-[#27272a] text-text-muted'
+                    : 'bg-primary-btn hover:bg-[#4338ca] text-white'
+                }`}
+              >
+                {saveStatus === 'saved' ? (
+                  <><Check size={11} /> 已保存</>
+                ) : saveStatus === 'saving' ? (
+                  '保存中...'
+                ) : (
+                  '保存配置'
+                )}
+              </motion.button>
             </div>
           </motion.div>
         </>
