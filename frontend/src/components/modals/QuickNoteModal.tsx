@@ -1,16 +1,53 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Sparkles } from 'lucide-react'
+import { X, Sparkles, Loader2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
+import { apiUrl } from '../../lib/apiBase'
 import { Badge } from '../ui/Badge'
 import { CATEGORIES, type Category } from '../../data/mockData'
 
-// Simulated AI detection
-function detectCategory(text: string): Category {
+const VALID_CATEGORIES: Category[] = ['口语', '短语', '句子', '同义替换', '拼写', '单词', '写作']
+
+// Keyword-based fallback (used when AI is not configured or fails)
+function detectCategoryFallback(text: string): Category {
   if (/[A-Z][a-z]+/.test(text) && !text.includes('—') && !text.includes('=')) return '单词'
   if (text.includes('=') || text.includes('→')) return '同义替换'
   if (text.includes('—') || text.split(' ').length > 3) return '短语'
   return '口语'
+}
+
+const CLASSIFY_SYSTEM_PROMPT = `你是英语学习笔记的分类助手。用户输入一条雅思备考笔记（通常是"英文 — 中文"格式），请从以下分类中选择最合适的一个，只返回该分类的中文名称，不加任何解释：
+口语、短语、句子、同义替换、拼写、单词、写作
+
+分类说明：
+- 单词：单个词汇（如 abandon、ubiquitous）
+- 短语：词组或习语（如 get out of、fall in love with）
+- 句子：完整句子或句型模板（如 It is worth noting that...）
+- 同义替换：同义/近义替换关系（如 big = large）
+- 口语：口语表达、感叹语、日常惯用语
+- 拼写：容易拼错的单词（通常只含英文）
+- 写作：写作框架、段落模板、议论文结构`
+
+async function classifyWithAI(text: string): Promise<Category | null> {
+  try {
+    const res = await fetch(apiUrl('/ai/chat'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: CLASSIFY_SYSTEM_PROMPT },
+          { role: 'user', content: `请分类：${text.slice(0, 300)}` },
+        ],
+        slot: 'classify',
+      }),
+    })
+    if (!res.ok) return null
+    const json = (await res.json()) as { data?: { content?: string } }
+    const content = json.data?.content?.trim() ?? ''
+    return VALID_CATEGORIES.find((c) => content.includes(c)) ?? null
+  } catch {
+    return null
+  }
 }
 
 function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
@@ -21,6 +58,10 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveHint, setSaveHint] = useState('')
+  // AI classification state
+  const [aiCategory, setAiCategory] = useState<Category>('短语')
+  const [aiDetecting, setAiDetecting] = useState(false)
+  const classifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -51,7 +92,22 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', handleTabKey)
   }, [handleTabKey])
 
-  const aiCategory = detectCategory(text)
+  // Trigger AI classification when text changes (only in AI mode)
+  useEffect(() => {
+    if (mode !== 'ai' || !text.trim()) return
+    if (classifyTimerRef.current) clearTimeout(classifyTimerRef.current)
+    classifyTimerRef.current = setTimeout(async () => {
+      setAiDetecting(true)
+      const result = await classifyWithAI(text.trim())
+      // Use AI result, fall back to keyword heuristic
+      setAiCategory(result ?? detectCategoryFallback(text.trim()))
+      setAiDetecting(false)
+    }, 800)
+    return () => {
+      if (classifyTimerRef.current) clearTimeout(classifyTimerRef.current)
+    }
+  }, [text, mode])
+
   const finalCategory = mode === 'ai' ? aiCategory : manualCat
 
   const handleSave = async () => {
@@ -167,30 +223,41 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
                 )}
               </div>
 
-              {/* AI preview */}
-              {text.trim() && (
+              {/* AI preview — only shown in AI mode */}
+              {mode === 'ai' && text.trim() && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   className="bg-[#141428] border border-[#3a3a5a] rounded-md px-3.5 py-3"
                 >
                   <div className="flex items-center gap-1.5 mb-2">
-                    <Sparkles size={11} className="text-primary" />
-                    <span className="text-[11px] font-semibold text-primary">AI 识别预览</span>
+                    {aiDetecting
+                      ? <Loader2 size={11} className="text-primary animate-spin" />
+                      : <Sparkles size={11} className="text-primary" />
+                    }
+                    <span className="text-[11px] font-semibold text-primary">
+                      {aiDetecting ? 'AI 识别中...' : 'AI 识别预览'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Badge category={finalCategory} />
-                      <span className="text-[13px] text-text-secondary">{text.split('—')[0]?.trim() || text}</span>
+                      {aiDetecting ? (
+                        <div className="h-5 w-12 bg-[#27272a] rounded animate-pulse" />
+                      ) : (
+                        <Badge category={aiCategory} />
+                      )}
+                      <span className="text-[13px] text-text-secondary truncate max-w-[220px]">
+                        {text.split('—')[0]?.trim() || text}
+                      </span>
                     </div>
-                    <div className="flex gap-2">
-                      <button className="px-3 py-1 text-xs bg-[#1e1e2e] border border-primary rounded-sm text-[#a5b4fc] hover:bg-primary/20 transition-colors">
-                        确认
-                      </button>
-                      <button className="px-3 py-1 text-xs border border-border rounded-sm text-text-dim hover:bg-[#27272a] transition-colors">
+                    {!aiDetecting && (
+                      <button
+                        onClick={() => { setManualCat(aiCategory); setMode('manual') }}
+                        className="px-3 py-1 text-xs border border-border rounded-sm text-text-dim hover:bg-[#27272a] transition-colors shrink-0"
+                      >
                         修改
                       </button>
-                    </div>
+                    )}
                   </div>
                 </motion.div>
               )}
