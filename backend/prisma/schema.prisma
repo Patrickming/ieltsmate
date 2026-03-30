@@ -122,3 +122,39 @@ model DailyActivity {
   allTodosDone Boolean  @default(false)
   updatedAt    DateTime @updatedAt
 }
+
+model AiProvider {
+  id          String    @id @default(uuid())
+  name        String
+  displayName String
+  presetId    String
+  color       String
+  baseUrl     String
+  apiKey      String    @default("")
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  models      AiModel[]
+
+  @@index([sortOrder])
+}
+
+model AiModel {
+  id         String     @id @default(uuid())
+  providerId String
+  modelId    String
+  verified   Boolean    @default(false)
+  sortOrder  Int        @default(0)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  provider   AiProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, modelId])
+  @@index([providerId, sortOrder])
+}
+
+model AppSettings {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
