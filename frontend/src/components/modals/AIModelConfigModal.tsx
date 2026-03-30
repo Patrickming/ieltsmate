@@ -29,8 +29,13 @@ function ProviderIcon({ presetId, size = 14 }: { presetId: string; size?: number
 }
 
 export function AIModelConfigModal() {
-  const { showAIConfig, closeAIConfig, providers, setProviders } = useAppStore()
+  const {
+    showAIConfig, closeAIConfig, providers, setProviders,
+    syncProviderToBackend, createProviderInBackend, deleteProviderFromBackend,
+    addModelToBackend, removeModelFromBackend, testModelInBackend,
+  } = useAppStore()
   const newProviderSeqRef = useRef(100)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [selectedId, setSelectedId] = useState(providers[0]?.id ?? '')
   const [showAddDropdown, setShowAddDropdown] = useState(false)
   const [showUnverified, setShowUnverified] = useState(true)
@@ -46,40 +51,50 @@ export function AIModelConfigModal() {
   const preset = current ? PRESET_PROVIDERS.find((p) => p.id === current.presetId) : null
 
   const updateCurrent = (patch: Partial<ProviderConfig>) => {
-    setProviders(providers.map((p) => p.id === selectedId ? { ...p, ...patch } : p))
+    setProviders((prev) => prev.map((p) => p.id === selectedId ? { ...p, ...patch } : p))
   }
 
   const handleTest = async () => {
     if (!current || current.models.length === 0) return
     const models = current.models
     setTestProgress({ done: 0, total: models.length })
+    const results: Record<string, 'idle' | 'testing' | 'ok' | 'fail'> = {}
     setModelTestResults({})
     setTestStatus('testing')
 
     for (let i = 0; i < models.length; i++) {
       const m = models[i]
       setModelTestResults((prev) => ({ ...prev, [m.id]: 'testing' }))
-      await new Promise<void>((resolve) => setTimeout(resolve, 800 + Math.random() * 400))
-      const result = current.apiKey.length > 10 ? 'ok' : 'fail'
-      setModelTestResults((prev) => ({ ...prev, [m.id]: result }))
+      results[m.id] = 'testing'
+
+      const result = await testModelInBackend(current.id, m.id)
+      const status = result.ok ? 'ok' : 'fail'
+      results[m.id] = status
+      setModelTestResults((prev) => ({ ...prev, [m.id]: status }))
       setTestProgress({ done: i + 1, total: models.length })
+
+      if (result.ok) {
+        setProviders((prev) =>
+          prev.map((p) =>
+            p.id === current.id
+              ? { ...p, models: p.models.map((mo) => mo.id === m.id ? { ...mo, verified: true } : mo) }
+              : p,
+          ),
+        )
+      }
     }
 
-    // All done
-    const allOk = current.apiKey.length > 10
+    const allOk = Object.values(results).every((v) => v === 'ok')
     setTestStatus(allOk ? 'ok' : 'fail')
-    setTimeout(() => {
-      setTestStatus('idle')
-      setTestProgress(null)
-    }, 3000)
+    setTimeout(() => { setTestStatus('idle'); setTestProgress(null) }, 3000)
   }
 
-  const handleAddProvider = (presetId: string) => {
+  const handleAddProvider = async (presetId: string) => {
     const preset = PRESET_PROVIDERS.find((p) => p.id === presetId)
     if (!preset) return
-    const newId = `p${++newProviderSeqRef.current}`
+    const tempId = `temp-${++newProviderSeqRef.current}`
     const newP: ProviderConfig = {
-      id: newId,
+      id: tempId,
       name: preset.name,
       displayName: preset.name,
       apiKey: '',
@@ -88,14 +103,22 @@ export function AIModelConfigModal() {
       presetId: preset.id,
       color: preset.color,
     }
-    setProviders([...providers, newP])
-    setSelectedId(newId)
+    setProviders((prev) => [...prev, newP])
+    setSelectedId(tempId)
     setShowAddDropdown(false)
+
+    const realId = await createProviderInBackend(newP)
+    if (realId) {
+      setProviders((prev) => prev.map((p) => p.id === tempId ? { ...p, id: realId } : p))
+      setSelectedId(realId)
+    }
   }
 
   const handleDeleteProvider = (id: string) => {
-    setProviders(providers.filter((p) => p.id !== id))
-    setSelectedId(providers.find((p) => p.id !== id)?.id ?? '')
+    const next = providers.filter((p) => p.id !== id)
+    setProviders(next)
+    setSelectedId(next[0]?.id ?? '')
+    void deleteProviderFromBackend(id)
   }
 
   const handleAddModel = (modelId: string) => {
@@ -103,6 +126,7 @@ export function AIModelConfigModal() {
     const already = current.models.some((m) => m.id === modelId)
     if (!already) {
       updateCurrent({ models: [...current.models, { id: modelId, verified: false }] })
+      void addModelToBackend(current.id, modelId)
     }
     setNewModelId('')
     setShowRecommended(false)
@@ -111,6 +135,7 @@ export function AIModelConfigModal() {
   const handleRemoveModel = (modelId: string) => {
     if (!current) return
     updateCurrent({ models: current.models.filter((m) => m.id !== modelId) })
+    void removeModelFromBackend(current.id, modelId)
   }
 
   const displayedModels = current?.models.filter((m) => showUnverified || m.verified) ?? []
@@ -212,7 +237,7 @@ export function AIModelConfigModal() {
                             return (
                               <button
                                 key={p.id}
-                                onClick={() => handleAddProvider(p.id)}
+                                onClick={() => { void handleAddProvider(p.id) }}
                                 className="flex items-center gap-2.5 w-full px-3 py-2 hover:bg-[#27272a] transition-colors text-sm text-text-muted hover:text-text-secondary"
                               >
                                 <Icon size={13} style={{ color: p.color }} />
@@ -294,7 +319,14 @@ export function AIModelConfigModal() {
                           <input
                             type={showKey ? 'text' : 'password'}
                             value={current.apiKey}
-                            onChange={(e) => updateCurrent({ apiKey: e.target.value })}
+                            onChange={(e) => {
+                              const val = e.target.value
+                              updateCurrent({ apiKey: val })
+                              if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+                              saveTimerRef.current = setTimeout(() => {
+                                if (current) void syncProviderToBackend({ ...current, apiKey: val })
+                              }, 800)
+                            }}
                             placeholder="sk-..."
                             className="flex-1 bg-transparent text-sm text-text-primary placeholder-text-subtle outline-none font-mono"
                           />

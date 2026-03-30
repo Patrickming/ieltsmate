@@ -96,6 +96,32 @@ export interface ProviderConfig {
   selectedModel?: string
 }
 
+interface BackendAiProvider {
+  id: string
+  name: string
+  displayName: string
+  presetId: string
+  color: string
+  baseUrl: string
+  apiKey: string
+  sortOrder: number
+  models: { id: string; providerId: string; modelId: string; verified: boolean }[]
+}
+
+function mapBackendProvider(p: BackendAiProvider): ProviderConfig {
+  return {
+    id: p.id,
+    name: p.name,
+    displayName: p.displayName,
+    presetId: p.presetId,
+    color: p.color,
+    baseUrl: p.baseUrl,
+    apiKey: p.apiKey,
+    models: p.models.map((m) => ({ id: m.modelId, verified: m.verified })),
+    selectedModel: p.models.find((m) => m.verified)?.modelId ?? p.models[0]?.modelId,
+  }
+}
+
 export const DEFAULT_PROVIDERS: ProviderConfig[] = [
   {
     id: 'p1', name: 'SiliconFlow', displayName: 'SiliconFlow',
@@ -134,7 +160,24 @@ interface AppState {
 
   // Providers (shared between Settings and AIModelConfigModal)
   providers: ProviderConfig[]
-  setProviders: (p: ProviderConfig[]) => void
+  providersLoaded: boolean
+  setProviders: (p: ProviderConfig[] | ((prev: ProviderConfig[]) => ProviderConfig[])) => void
+  loadProviders: () => Promise<void>
+  syncProviderToBackend: (provider: ProviderConfig) => Promise<void>
+  createProviderInBackend: (provider: ProviderConfig) => Promise<string | null>
+  deleteProviderFromBackend: (id: string) => Promise<void>
+  addModelToBackend: (providerId: string, modelId: string) => Promise<void>
+  removeModelFromBackend: (providerId: string, modelId: string) => Promise<void>
+  testModelInBackend: (providerId: string, modelId: string) => Promise<{ ok: boolean; error?: string }>
+
+  // Settings
+  settingsLoaded: boolean
+  loadSettings: () => Promise<void>
+  saveSettings: (patch: Record<string, string>) => Promise<void>
+  classifyModel: string
+  reviewModel: string
+  chatModel: string
+  setModelSlot: (slot: 'classify' | 'review' | 'chat', model: string) => Promise<void>
 
   // Notes
   notes: Note[]
@@ -192,10 +235,149 @@ export const useAppStore = create<AppState>((set) => ({
   setTheme: (t) => {
     document.documentElement.classList.toggle('light', t === 'light')
     set({ theme: t })
+    void fetch(apiUrl('/settings'), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: { theme: t } }),
+    }).catch(() => { /* 静默 */ })
   },
 
   providers: DEFAULT_PROVIDERS,
-  setProviders: (p) => set({ providers: p }),
+  providersLoaded: false,
+
+  setProviders: (p) =>
+    set((s) => ({ providers: typeof p === 'function' ? p(s.providers) : p })),
+
+  loadProviders: async () => {
+    try {
+      const res = await fetch(apiUrl('/ai/providers'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: { items?: BackendAiProvider[] } }
+      const items = json.data?.items
+      if (!Array.isArray(items) || items.length === 0) return
+      set({ providers: items.map(mapBackendProvider), providersLoaded: true })
+    } catch { /* 静默失败，保留默认 providers */ }
+  },
+
+  syncProviderToBackend: async (provider) => {
+    try {
+      await fetch(apiUrl(`/ai/providers/${provider.id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          displayName: provider.displayName,
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+          color: provider.color,
+        }),
+      })
+    } catch { /* 静默 */ }
+  },
+
+  createProviderInBackend: async (provider) => {
+    try {
+      const res = await fetch(apiUrl('/ai/providers'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: provider.name,
+          displayName: provider.displayName,
+          presetId: provider.presetId,
+          color: provider.color,
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+        }),
+      })
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: { id: string } }
+      return json.data?.id ?? null
+    } catch { return null }
+  },
+
+  deleteProviderFromBackend: async (id) => {
+    try {
+      await fetch(apiUrl(`/ai/providers/${id}`), { method: 'DELETE' })
+    } catch { /* 静默 */ }
+  },
+
+  addModelToBackend: async (providerId, modelId) => {
+    try {
+      await fetch(apiUrl(`/ai/providers/${providerId}/models`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modelId }),
+      })
+    } catch { /* 静默 */ }
+  },
+
+  removeModelFromBackend: async (providerId, modelId) => {
+    try {
+      await fetch(
+        apiUrl(`/ai/providers/${providerId}/models/${encodeURIComponent(modelId)}`),
+        { method: 'DELETE' },
+      )
+    } catch { /* 静默 */ }
+  },
+
+  testModelInBackend: async (providerId, modelId) => {
+    try {
+      const res = await fetch(
+        apiUrl(`/ai/providers/${providerId}/models/${encodeURIComponent(modelId)}/test`),
+        { method: 'POST' },
+      )
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+      const json = (await res.json()) as { data?: { ok: boolean; error?: string } }
+      return json.data ?? { ok: false, error: 'No response' }
+    } catch (e) {
+      return { ok: false, error: String(e) }
+    }
+  },
+
+  settingsLoaded: false,
+  classifyModel: '',
+  reviewModel: '',
+  chatModel: '',
+
+  loadSettings: async () => {
+    try {
+      const res = await fetch(apiUrl('/settings'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: Record<string, string> }
+      const s = json.data ?? {}
+      set({
+        settingsLoaded: true,
+        ...(s['theme'] ? { theme: s['theme'] as 'dark' | 'light' } : {}),
+        classifyModel: s['classifyModel'] ?? '',
+        reviewModel: s['reviewModel'] ?? '',
+        chatModel: s['chatModel'] ?? '',
+      })
+      if (s['theme']) {
+        document.documentElement.classList.toggle('light', s['theme'] === 'light')
+      }
+    } catch { /* 静默 */ }
+  },
+
+  saveSettings: async (patch) => {
+    try {
+      await fetch(apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: patch }),
+      })
+    } catch { /* 静默 */ }
+  },
+
+  setModelSlot: async (slot, model) => {
+    const key = `${slot}Model` as 'classifyModel' | 'reviewModel' | 'chatModel'
+    set({ [key]: model })
+    try {
+      await fetch(apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { [`${slot}Model`]: model } }),
+      })
+    } catch { /* 静默 */ }
+  },
 
   notes: mockNotes,
   notesLoaded: false,

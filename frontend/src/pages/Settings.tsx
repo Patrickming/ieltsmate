@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Plus, Database, Download, Upload, Sun, Moon } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
@@ -15,13 +14,13 @@ const MODEL_SLOTS = [
 ]
 
 export default function Settings() {
-  const { openAIConfig, theme, setTheme, providers } = useAppStore()
-  const [classifyModel, setClassifyModel] = useState(providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
-  const [reviewModel, setReviewModel] = useState(providers[1]?.selectedModel?.split('/').pop() ?? 'MiniMax-M2.5')
-  const [chatModel, setChatModel] = useState(providers[0]?.selectedModel?.split('/').pop() ?? 'GLM-Z1-Flash')
+  const { openAIConfig, theme, setTheme, providers, classifyModel, reviewModel, chatModel, setModelSlot } = useAppStore()
 
-  const modelValues = { classify: classifyModel, review: reviewModel, chat: chatModel }
-  const modelSetters = { classify: setClassifyModel, review: setReviewModel, chat: setChatModel }
+  const modelValues = {
+    classify: classifyModel || providers[0]?.selectedModel?.split('/').pop() || '',
+    review: reviewModel || providers[1]?.selectedModel?.split('/').pop() || '',
+    chat: chatModel || providers[0]?.selectedModel?.split('/').pop() || '',
+  }
 
   const maskKey = (key?: string) => key ? `${key.slice(0, 4)}****` : 'sk-****'
 
@@ -97,13 +96,12 @@ export default function Settings() {
             <div className="grid grid-cols-3 gap-3">
               {MODEL_SLOTS.map((slot) => {
                 const currentVal = modelValues[slot.id as keyof typeof modelValues]
-                const setter = modelSetters[slot.id as keyof typeof modelSetters]
                 return (
                   <div key={slot.id} className="flex flex-col gap-1.5">
                     <span className="text-xs text-text-dim">{slot.label}</span>
                     <select
                       value={currentVal}
-                      onChange={(e) => setter(e.target.value)}
+                      onChange={(e) => { void setModelSlot(slot.id as 'classify' | 'review' | 'chat', e.target.value) }}
                       className="h-8 bg-[#232328] border border-border rounded-sm px-2 text-xs text-text-muted hover:border-border-strong transition-colors outline-none appearance-none cursor-pointer"
                     >
                       {allModels.map(({ model, providerName, fullId }) => (
