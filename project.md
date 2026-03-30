@@ -54,7 +54,7 @@
 - [x] Task 8.0 Prisma Schema：`AiProvider` / `AiModel` / `AppSettings` 表与 `add_ai_settings` 迁移
 - [x] Task 8.1 实现 settings 持久化：`SettingsModule`，`GET /settings`、`PATCH /settings`（`AppSettings` key-value upsert），响应经全局拦截器 `{ data, message }`
 - [x] Task 8.2 实现 AiModule：Provider CRUD（`GET/POST/PATCH/DELETE /ai/providers`）、模型管理（`POST/DELETE /ai/providers/:id/models`）、连通性测试（`POST /ai/providers/:id/models/:modelId/test`）、`/ai/chat` 代理端点（slot 路由 + fetch 转发）；SettingsService slot 解析（classifyModel/reviewModel/chatModel）
-- [ ] Task 8.3 前端联调：Settings 与 AIModelConfigModal
+- [x] Task 8.3 前端联调：Settings 与 AIModelConfigModal — Store 扩展（loadProviders/loadSettings/syncProviderToBackend/testModelInBackend 等 8 个 action）；AIModelConfigModal 接入真实 API 测试 + handleAddProvider async + debounce 保存 apiKey；Settings 页模型分配从 store 读取并调 setModelSlot 持久化；setTheme 同时 PATCH /settings；Vite proxy 加 /settings /ai bypass；App 启动加载 providers + settings
 
 ## 大功能 9：导入/导出/清理数据
 - [ ] Task 9.1 实现 JSON/CSV 导出接口（notes/writing/review/todos）
