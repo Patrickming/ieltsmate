@@ -108,6 +108,10 @@ interface BackendAiProvider {
   models: { id: string; providerId: string; modelId: string; verified: boolean }[]
 }
 
+function isUUID(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+}
+
 function mapBackendProvider(p: BackendAiProvider): ProviderConfig {
   return {
     id: p.id,
@@ -230,7 +234,44 @@ interface AppState {
   endReview: () => void
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => {
+  // Internal helper: ensure a provider has a real UUID in the backend.
+  // If the provider only has a temp ID (e.g. "p1"), it creates the provider in
+  // the backend, updates the store with the real UUID, and returns that UUID.
+  const ensureProviderUUID = async (providerOrId: ProviderConfig | string): Promise<string | null> => {
+    const provider = typeof providerOrId === 'string'
+      ? get().providers.find((p) => p.id === providerOrId)
+      : providerOrId
+    if (!provider) return null
+    if (isUUID(provider.id)) return provider.id
+
+    // Not a UUID — create in backend
+    try {
+      const res = await fetch(apiUrl('/ai/providers'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: provider.name,
+          displayName: provider.displayName,
+          presetId: provider.presetId,
+          color: provider.color,
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+        }),
+      })
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: { id: string } }
+      const realId = json.data?.id
+      if (!realId) return null
+      // Replace temp ID with real UUID in the store
+      set((s) => ({
+        providers: s.providers.map((p) => p.id === provider.id ? { ...p, id: realId } : p),
+      }))
+      return realId
+    } catch { return null }
+  }
+
+  return ({
   theme: 'dark',
   setTheme: (t) => {
     document.documentElement.classList.toggle('light', t === 'light')
@@ -260,8 +301,23 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   syncProviderToBackend: async (provider) => {
+    // Lazily provision the provider in the backend if it only has a temp ID
+    let id = provider.id
+    if (!isUUID(id)) {
+      const realId = await ensureProviderUUID(provider)
+      if (!realId) return
+      // Also add any pre-existing models from DEFAULT_PROVIDERS
+      for (const m of provider.models) {
+        await fetch(apiUrl(`/ai/providers/${realId}/models`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ modelId: m.id }),
+        }).catch(() => null)
+      }
+      id = realId
+    }
     try {
-      await fetch(apiUrl(`/ai/providers/${provider.id}`), {
+      await fetch(apiUrl(`/ai/providers/${id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -301,8 +357,14 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   addModelToBackend: async (providerId, modelId) => {
+    let id = providerId
+    if (!isUUID(id)) {
+      const realId = await ensureProviderUUID(id)
+      if (!realId) return
+      id = realId
+    }
     try {
-      await fetch(apiUrl(`/ai/providers/${providerId}/models`), {
+      await fetch(apiUrl(`/ai/providers/${id}/models`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ modelId }),
@@ -320,12 +382,31 @@ export const useAppStore = create<AppState>((set) => ({
   },
 
   testModelInBackend: async (providerId, modelId) => {
+    // Ensure provider has a real UUID in the backend
+    let id = providerId
+    if (!isUUID(id)) {
+      const provider = get().providers.find((p) => p.id === providerId)
+      if (!provider) return { ok: false, error: 'Provider not found' }
+      const realId = await ensureProviderUUID(provider)
+      if (!realId) return { ok: false, error: 'Failed to provision provider in backend' }
+      id = realId
+    }
+    // Ensure the model exists in the backend (upsert-style, ignore if already exists)
+    await fetch(apiUrl(`/ai/providers/${id}/models`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelId }),
+    }).catch(() => null)
+
     try {
       const res = await fetch(
-        apiUrl(`/ai/providers/${providerId}/models/${encodeURIComponent(modelId)}/test`),
+        apiUrl(`/ai/providers/${id}/models/${encodeURIComponent(modelId)}/test`),
         { method: 'POST' },
       )
-      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        return { ok: false, error: `HTTP ${res.status}: ${errText.slice(0, 300)}` }
+      }
       const json = (await res.json()) as { data?: { ok: boolean; error?: string } }
       return json.data ?? { ok: false, error: 'No response' }
     } catch (e) {
@@ -622,4 +703,5 @@ export const useAppStore = create<AppState>((set) => ({
     }
   }),
   endReview: () => set({ reviewSession: null }),
-}))
+  })
+})
