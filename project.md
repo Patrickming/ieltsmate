@@ -43,6 +43,7 @@
 ## 大功能 4：复习系统
 
 - [x] `POST /review/sessions/start` 开始复习：按 source（notes/favorites）、categories、range（all/wrong）、mode（random/continue）过滤笔记，创建会话快照（review_sessions + review_session_cards）
+- [x] Review DTO 与类型：`RateReviewDto`、`GenerateReviewDto`、`types/card-ai-content.ts`（CardType、各卡片 AI 结构、`categoryToCardType`）
 - [ ] `PATCH /review/sessions/:sessionId/notes/:noteId/rate` 评分接口：入参 `{ rating: 'easy'|'again', spellingAnswer? }`，事务写入 ReviewSessionCard（isDone/rating/answeredAt）+ ReviewLog + Note 统计（reviewCount/correctCount/wrongCount/reviewStatus/lastReviewedAt）；easy 且 correctCount≥3 升为 mastered，again 降回 learning
 - [ ] `POST /review/sessions/:sessionId/end` 完成会话（翻完最后一张时调用，status=completed）
 - [ ] `POST /review/sessions/:sessionId/abort` 中止会话（用户退出时调用，status=aborted，已评分记录保留）
