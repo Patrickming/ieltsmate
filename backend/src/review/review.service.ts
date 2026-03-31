@@ -104,6 +104,15 @@ export class ReviewService {
   }
 
   async abort(sessionId: string) {
+    const session = await this.prisma.reviewSession.findUnique({
+      where: { id: sessionId },
+    })
+    if (!session) throw new NotFoundException('Session not found')
+
+    if (session.endedAt) {
+      return { ok: true }
+    }
+
     await this.prisma.reviewSession.update({
       where: { id: sessionId },
       data: { endedAt: new Date() },
