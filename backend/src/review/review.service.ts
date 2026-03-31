@@ -80,16 +80,16 @@ export class ReviewService {
       const easyCount = ratedCards.filter((c) => c.rating === 'easy').length
       const againCount = ratedCards.filter((c) => c.rating === 'again').length
 
-      if (session.endedAt) {
-        return this.buildSummary(session, easyCount, againCount, 0)
-      }
-
       const savedExtensionCount = await tx.note.count({
         where: {
           id: { in: ratedCards.map((c) => c.noteId) },
           updatedAt: { gte: session.startedAt },
         },
       })
+
+      if (session.endedAt) {
+        return this.buildSummary(session, easyCount, againCount, savedExtensionCount)
+      }
 
       const updatedSession = await tx.reviewSession.update({
         where: { id: sessionId },
