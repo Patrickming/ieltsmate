@@ -69,6 +69,10 @@ export class ReviewService {
       })
       if (!card) throw new NotFoundException('Card not found in session')
 
+      if (card.isDone) {
+        return { ok: true }
+      }
+
       await tx.reviewSessionCard.update({
         where: { id: card.id },
         data: {
