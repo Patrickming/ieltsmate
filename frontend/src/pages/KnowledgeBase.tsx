@@ -20,13 +20,6 @@ const WRITING_TYPE_COLORS: Record<WritingType, { color: string; bg: string; bord
   '小作文': { color: '#34d399', bg: '#022c22', border: '#065f46', dot: '#34d399' },
 }
 
-// Mock writing notes
-const WRITING_NOTES: { id: string; name: string; path: string; updatedAt: string; writingType: WritingType }[] = [
-  { id: 'w1', name: '雅思写作Task 2模板.md', path: '/notes/writing/task2-template.md', updatedAt: '2天前', writingType: '大作文' },
-  { id: 'w2', name: '大作文高分句型整理.md', path: '/notes/writing/high-score-phrases.md', updatedAt: '5天前', writingType: '大作文' },
-  { id: 'w3', name: '小作文图表描述模板.md', path: '/notes/writing/task1-template.md', updatedAt: '1周前', writingType: '小作文' },
-]
-
 function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
   groupFilter: '全部' | '杂笔记' | '写作' | '收藏夹'
   subFilter: Category | '全部'
@@ -51,7 +44,7 @@ type KnowledgeBaseMainProps = {
 }
 
 function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }: KnowledgeBaseMainProps) {
-  const { notes, openQuickNote, favorites, lastAddedNoteId, clearLastAddedNoteId } = useAppStore()
+  const { notes, openQuickNote, favorites, lastAddedNoteId, clearLastAddedNoteId, writingNotes, writingNotesLoading } = useAppStore()
   const navigate = useNavigate()
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null)
@@ -99,7 +92,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
     return matchSearch
   })
 
-  const filteredWritingNotes = WRITING_NOTES.filter((w) => {
+  const filteredWritingNotes = writingNotes.filter((w) => {
     if (writingSubFilter !== '全部' && w.writingType !== writingSubFilter) return false
     const matchSearch = !search || w.name.toLowerCase().includes(search.toLowerCase())
     return matchSearch
@@ -149,9 +142,9 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
         {/* Group Tabs — with icons and note counts */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {([
-            { g: '全部' as const, icon: LayoutGrid, count: notes.length + WRITING_NOTES.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
+            { g: '全部' as const, icon: LayoutGrid, count: notes.length + writingNotes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
             { g: '杂笔记' as const, icon: NotebookPen, count: notes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
-            { g: '写作' as const, icon: FileText, count: WRITING_NOTES.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
+            { g: '写作' as const, icon: FileText, count: writingNotes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
             { g: '收藏夹' as const, icon: Heart, count: favorites.length, activeClass: 'bg-[#2e1a1a] border-[#ef4444] text-[#fca5a5]', activeIcon: 'text-[#ef4444]', activeBadge: 'bg-[#ef4444]/20 text-[#ef4444]' },
           ]).map(({ g, icon: Icon, count, activeClass, activeIcon, activeBadge }) => (
             <motion.button
@@ -187,8 +180,8 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
             {WRITING_SUB_CATS.map((cat) => {
               const colors = cat !== '全部' ? WRITING_TYPE_COLORS[cat] : undefined
               const count = cat === '全部'
-                ? WRITING_NOTES.length
-                : WRITING_NOTES.filter((w) => w.writingType === cat).length
+                ? writingNotes.length
+                : writingNotes.filter((w) => w.writingType === cat).length
               const isActive = writingSubFilter === cat
               return (
                 <motion.button
@@ -283,6 +276,9 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
             {groupFilter !== '杂笔记' && (
               <h3 className="text-sm font-semibold text-text-muted">写作文件</h3>
             )}
+            {writingNotesLoading && (
+              <div className="text-sm text-text-dim py-4">加载中…</div>
+            )}
             <div className="grid grid-cols-3 gap-4">
               <AnimatePresence mode="popLayout">
               {filteredWritingNotes.map((w, i) => (
@@ -293,7 +289,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.2, delay: i * 0.04 }}
-                  onClick={() => saveScrollAndNavigate(`/kb/w/${w.id.replace(/^w/, '')}`)}
+                  onClick={() => saveScrollAndNavigate(`/kb/w/${w.id}`)}
                   className="relative bg-surface-card border border-border rounded-xl overflow-hidden cursor-pointer hover:-translate-y-0.5 transition-transform group"
                 >
                   <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: '#94a3b8' }} />

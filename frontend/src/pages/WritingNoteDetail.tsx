@@ -1,206 +1,103 @@
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, FileText, Calendar, RefreshCw } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { ArrowLeft, FileText, Calendar, RefreshCw, List } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Layout } from '../components/layout/Layout'
+import { apiUrl } from '../lib/apiBase'
+import { useAppStore, type TocItem } from '../store/useAppStore'
 
-// Mock writing notes with markdown content
-const WRITING_NOTES_CONTENT: Record<string, {
+interface WritingNoteDetail {
+  id: string
   name: string
   path: string
+  writingType: '大作文' | '小作文'
   updatedAt: string
   content: string
-}> = {
-  w1: {
-    name: '雅思写作Task 2模板.md',
-    path: '/notes/writing/task2-template.md',
-    updatedAt: '2天前',
-    content: `# 雅思写作 Task 2 模板
+}
 
-## 文章结构
+function formatDate(isoStr: string): string {
+  const now = new Date()
+  const d = new Date(isoStr)
+  const diffMs = now.getTime() - d.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (diffDays < 7) return `${diffDays}天前`
+  const diffWeeks = Math.floor(diffDays / 7)
+  if (diffWeeks < 5) return `${diffWeeks}周前`
+  return `${Math.floor(diffDays / 30)}个月前`
+}
 
-雅思 Task 2 大作文需要在 40 分钟内写出不少于 **250 字**的文章，满分为 9 分。
+function slugify(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\w\u4e00-\u9fa5-]/g, '')
+}
 
----
+function parseToc(markdown: string): TocItem[] {
+  return markdown
+    .split('\n')
+    .flatMap((line) => {
+      const m = line.match(/^(#{1,5})\s+(.+)/)
+      if (!m) return []
+      return [{ level: m[1].length, text: m[2].trim(), id: slugify(m[2].trim()) }]
+    })
+}
 
-## 开头段（Introduction）
-
-> 改写题目观点 + 表明立场
-
-**模板：**
-> It is widely argued that [话题改写]. While [反方观点], I firmly believe that [己方立场].
-
-**示例：**
-> It is widely argued that technology has fundamentally transformed the way people communicate. While some critics contend that this has led to a decline in face-to-face interaction, I firmly believe that digital communication has, on balance, enriched human relationships.
-
----
-
-## 主体段一（Body 1）— 支持论点
-
-> 主题句 + 说明 + 例子 + 结论
-
-**结构：**
-1. **Topic sentence** — 核心观点
-2. **Explanation** — 展开说明
-3. **Example** — 举例支撑
-4. **Concluding link** — 与主题呼应
-
-\`\`\`
-Firstly, [论点].
-This is because [解释].
-For instance, [例子].
-Therefore, [小结].
-\`\`\`
-
----
-
-## 主体段二（Body 2）— 对立观点 + 反驳
-
-> 承认对立观点 + 提出反驳
-
-**模板：**
-> Admittedly, [对立观点]. However, [反驳 / 更有力的论证].
-
----
-
-## 结尾段（Conclusion）
-
-**模板：**
-> In conclusion, while [承认对立面], I would argue that [重申立场]. [未来展望或建议].
-
----
-
-## 高分词组表
-
-| 功能 | 表达 |
-|------|------|
-| 引入观点 | It is argued that / It is widely held that |
-| 转折 | However / Nevertheless / On the other hand |
-| 举例 | For instance / For example / To illustrate |
-| 递进 | Furthermore / Moreover / In addition |
-| 结论 | In conclusion / To sum up / Overall |
-
----
-
-## 注意事项
-
-- ✅ 字数不少于 **250** 字
-- ✅ 段落清晰，每段有主题句
-- ✅ 使用连接词保持逻辑流畅
-- ✅ 避免重复使用同一词汇（同义替换）
-- ❌ 不要使用缩写（don't → do not）
-- ❌ 不要使用过于口语化的表达
-`,
-  },
-  w2: {
-    name: '大作文高分句型整理.md',
-    path: '/notes/writing/high-score-phrases.md',
-    updatedAt: '5天前',
-    content: `# 大作文高分句型整理
-
-> 本文档收录了雅思 Task 2 常用的高分句型和表达，按功能分类整理。
-
----
-
-## 一、引入主题
-
-\`\`\`
-In recent years, there has been a growing debate over whether...
-The question of whether [话题] has sparked considerable controversy.
-[话题] is a topic that has garnered significant attention in contemporary society.
-\`\`\`
-
----
-
-## 二、表达立场
-
-### 强烈支持
-> I am firmly convinced that...
-> There is no doubt in my mind that...
-> It is my strong belief that...
-
-### 部分认同
-> While I acknowledge that [X], I nevertheless believe that [Y].
-> Although there is some merit in [观点], I would argue that...
-
----
-
-## 三、让步与转折
-
-| 让步 | 转折 |
-|------|------|
-| Admittedly, ... | However, this does not mean that... |
-| It is true that ... | Nevertheless, ... |
-| One might argue that ... | Yet, in reality, ... |
-
----
-
-## 四、举例说明
-
-\`\`\`
-To illustrate this point, consider the case of [例子].
-A striking example of this can be seen in...
-Research conducted by [机构] has demonstrated that...
-\`\`\`
-
----
-
-## 五、因果关系
-
-**原因表达：**
-- owing to / due to / as a result of
-- This can be attributed to...
-- The primary reason for this is that...
-
-**结果表达：**
-- consequently / as a result / therefore
-- This inevitably leads to...
-- The impact of this is far-reaching...
-
----
-
-## 六、对比与比较
-
-\`\`\`
-In contrast to [A], [B] tends to...
-Compared with traditional approaches, modern methods...
-Unlike [A], [B] offers the advantage of...
-\`\`\`
-
----
-
-## 七、结尾总结
-
-\`\`\`
-In conclusion, the evidence strongly suggests that [立场].
-Having examined both sides of the argument, I am of the view that [重申立场].
-It is therefore imperative that [建议/行动].
-\`\`\`
-
----
-
-## 同义替换速查
-
-| 基础词 | 高级替换 |
-|--------|----------|
-| important | crucial / vital / paramount / significant |
-| increase | rise / surge / escalate / soar |
-| decrease | decline / plummet / diminish / dwindle |
-| think | argue / contend / maintain / assert |
-| show | demonstrate / reveal / indicate / suggest |
-| problem | challenge / issue / concern / dilemma |
-`,
-  },
+function extractText(children: React.ReactNode): string {
+  if (typeof children === 'string') return children
+  if (Array.isArray(children)) return children.map(extractText).join('')
+  if (children !== null && typeof children === 'object' && 'props' in (children as object)) {
+    return extractText((children as React.ReactElement).props.children as React.ReactNode)
+  }
+  return String(children ?? '')
 }
 
 export default function WritingNoteDetail() {
-  const { id } = useParams()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [note, setNote] = useState<WritingNoteDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [notFound, setNotFound] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const { setWritingToc, clearWritingToc, writingTocOpen, toggleWritingToc } = useAppStore()
 
-  const note = id ? WRITING_NOTES_CONTENT[`w${id}`] : null
+  const fetchDetail = useCallback(async () => {
+    if (!id) return
+    setLoading(true)
+    setNotFound(false)
+    try {
+      const res = await fetch(apiUrl(`/writing-notes/${encodeURIComponent(id)}`))
+      if (res.status === 404) {
+        setNotFound(true)
+        return
+      }
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: WritingNoteDetail }
+      if (json.data) {
+        setNote(json.data)
+        setWritingToc(parseToc(json.data.content))
+      }
+    } catch {
+      // 静默，保持上次值
+    } finally {
+      setLoading(false)
+    }
+  }, [id, setWritingToc])
 
-  if (!note) {
+  useEffect(() => {
+    void fetchDetail()
+  }, [fetchDetail, refreshKey])
+
+  useEffect(() => {
+    return () => { clearWritingToc() }
+  }, [clearWritingToc])
+
+  if (notFound) {
     return (
       <Layout title="写作笔记">
         <div className="p-8 flex flex-col items-center gap-4 text-text-dim">
@@ -213,6 +110,19 @@ export default function WritingNoteDetail() {
       </Layout>
     )
   }
+
+  if (loading) {
+    return (
+      <Layout title="写作笔记">
+        <div className="p-8 flex flex-col gap-6">
+          <div className="h-20 bg-surface-card border border-border rounded-xl animate-pulse" />
+          <div className="h-96 bg-surface-card border border-border rounded-xl animate-pulse" />
+        </div>
+      </Layout>
+    )
+  }
+
+  if (!note) return null
 
   return (
     <Layout title="写作笔记">
@@ -241,7 +151,7 @@ export default function WritingNoteDetail() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-text-subtle shrink-0">
             <Calendar size={12} />
-            {note.updatedAt}
+            {formatDate(note.updatedAt)}
           </div>
         </motion.div>
 
@@ -256,13 +166,19 @@ export default function WritingNoteDetail() {
             remarkPlugins={[remarkGfm]}
             components={{
               h1: ({ children }) => (
-                <h1 className="text-2xl font-bold text-text-primary mb-4 pb-3 border-b border-border">{children}</h1>
+                <h1 id={slugify(extractText(children))} className="text-2xl font-bold text-text-primary mb-4 pb-3 border-b border-border scroll-mt-6">{children}</h1>
               ),
               h2: ({ children }) => (
-                <h2 className="text-lg font-semibold text-text-primary mt-8 mb-3">{children}</h2>
+                <h2 id={slugify(extractText(children))} className="text-lg font-semibold text-text-primary mt-8 mb-3 scroll-mt-6">{children}</h2>
               ),
               h3: ({ children }) => (
-                <h3 className="text-base font-semibold text-text-secondary mt-5 mb-2">{children}</h3>
+                <h3 id={slugify(extractText(children))} className="text-base font-semibold text-text-secondary mt-5 mb-2 scroll-mt-6">{children}</h3>
+              ),
+              h4: ({ children }) => (
+                <h4 id={slugify(extractText(children))} className="text-[14px] font-semibold text-text-muted mt-4 mb-1.5 scroll-mt-6">{children}</h4>
+              ),
+              h5: ({ children }) => (
+                <h5 id={slugify(extractText(children))} className="text-[13px] font-medium text-text-dim mt-3 mb-1 scroll-mt-6">{children}</h5>
               ),
               p: ({ children }) => (
                 <p className="text-[15px] text-text-secondary leading-relaxed mb-3">{children}</p>
@@ -294,6 +210,13 @@ export default function WritingNoteDetail() {
                   </code>
                 )
               },
+              img: ({ src, alt }) => (
+                <img
+                  src={src}
+                  alt={alt ?? ''}
+                  className="max-w-full rounded-lg border border-border my-4"
+                />
+              ),
               table: ({ children }) => (
                 <div className="my-4 overflow-x-auto rounded-lg border border-border">
                   <table className="w-full text-sm">{children}</table>
@@ -351,12 +274,37 @@ export default function WritingNoteDetail() {
             <ArrowLeft size={13} />
             返回知识库
           </button>
-          <button className="flex items-center gap-1.5 hover:text-text-muted transition-colors">
+          <button
+            onClick={() => setRefreshKey((k) => k + 1)}
+            className="flex items-center gap-1.5 hover:text-text-muted transition-colors"
+          >
             <RefreshCw size={13} />
-            重新导入
+            重新加载
           </button>
         </div>
       </div>
+
+      {/* Floating TOC toggle button */}
+      <AnimatePresence>
+        {note && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ duration: 0.2 }}
+            onClick={toggleWritingToc}
+            title={writingTocOpen ? '关闭目录' : '打开目录'}
+            className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium shadow-lg transition-colors ${
+              writingTocOpen
+                ? 'bg-primary text-white shadow-primary/30'
+                : 'bg-[#1c1c24] border border-border text-text-muted hover:bg-[#27272a] hover:text-text-secondary hover:border-border-strong'
+            }`}
+          >
+            <List size={14} />
+            目录
+          </motion.button>
+        )}
+      </AnimatePresence>
     </Layout>
   )
 }

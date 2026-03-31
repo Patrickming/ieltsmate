@@ -365,6 +365,54 @@ export class AiService {
     return { content: '（处理超时，请重试）', model, provider: provider.displayName, referencedNotes }
   }
 
+  // ── Simple completion (no function calling) ──────────────────────────────
+
+  async complete(dto: { messages: Array<{ role: string; content: string }>; model?: string; slot?: string }): Promise<string> {
+    const { provider, model } = await this.resolveProviderAndModel({
+      messages: dto.messages,
+      model: dto.model,
+      slot: (dto.slot as ChatDto['slot']) ?? 'classify',
+    } as ChatDto)
+
+    if (!provider.apiKey) {
+      throw new BadRequestException(
+        `Provider "${provider.displayName}" has no API key configured`,
+      )
+    }
+
+    const baseUrl = provider.baseUrl.replace(/\/$/, '')
+    const url = `${baseUrl}/chat/completions`
+
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: dto.messages,
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      })
+    } catch (err) {
+      throw new BadRequestException(`Network error: ${String(err)}`)
+    }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => 'unknown error')
+      throw new BadRequestException(`Provider returned ${res.status}: ${text}`)
+    }
+
+    const json = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>
+    }
+    return json.choices?.[0]?.message?.content ?? ''
+  }
+
   // ── Test single model ────────────────────────────────────────────────────
 
   async testModel(providerId: string, modelId: string) {

@@ -14,7 +14,23 @@ const MODEL_SLOTS = [
 ]
 
 export default function Settings() {
-  const { openAIConfig, theme, setTheme, providers, classifyModel, reviewModel, chatModel, setModelSlot } = useAppStore()
+  const { openAIConfig, openImport, theme, setTheme, providers, classifyModel, reviewModel, chatModel, setModelSlot } =
+    useAppStore()
+
+  const handleExport = async (format: 'json' | 'csv') => {
+    const res = await fetch(`/export/notes?format=${format}`)
+    if (!res.ok) return
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    a.href = url
+    a.download = `ieltsmate-notes-${today}.${format}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   const modelValues = {
     classify: classifyModel || providers[0]?.selectedModel?.split('/').pop() || '',
@@ -171,10 +187,18 @@ export default function Settings() {
               <div className="text-sm font-medium text-text-secondary mb-1">导出数据</div>
               <div className="text-xs text-text-dim mb-4">将所有笔记导出为文件</div>
               <div className="flex gap-2">
-                <button className="flex items-center gap-1.5 h-8 px-3 text-xs border border-border rounded-sm text-text-muted hover:bg-[#27272a] transition-colors">
+                <button
+                  type="button"
+                  onClick={() => void handleExport('json')}
+                  className="flex items-center gap-1.5 h-8 px-3 text-xs border border-border rounded-sm text-text-muted hover:bg-[#27272a] transition-colors"
+                >
                   <Download size={12} />JSON
                 </button>
-                <button className="flex items-center gap-1.5 h-8 px-3 text-xs border border-border rounded-sm text-text-muted hover:bg-[#27272a] transition-colors">
+                <button
+                  type="button"
+                  onClick={() => void handleExport('csv')}
+                  className="flex items-center gap-1.5 h-8 px-3 text-xs border border-border rounded-sm text-text-muted hover:bg-[#27272a] transition-colors"
+                >
                   <Download size={12} />CSV
                 </button>
               </div>
@@ -182,7 +206,11 @@ export default function Settings() {
             <div className="bg-surface-card border border-border rounded-xl p-5">
               <div className="text-sm font-medium text-text-secondary mb-1">导入数据</div>
               <div className="text-xs text-text-dim mb-4">从文件导入，AI 辅助解析</div>
-              <button className="flex items-center gap-1.5 h-8 px-3 text-xs bg-primary-btn hover:bg-[#4338ca] rounded-sm text-white transition-colors">
+              <button
+                type="button"
+                onClick={openImport}
+                className="flex items-center gap-1.5 h-8 px-3 text-xs bg-primary-btn hover:bg-[#4338ca] rounded-sm text-white transition-colors"
+              >
                 <Upload size={12} />选择文件
               </button>
             </div>

@@ -82,7 +82,7 @@ function AnimatedRoutes() {
 function AppInner() {
   const store = useAppStore()
   const { showSearch, showQuickNote, showAIPanel, showAIConfig, showImport } = store
-  const { syncFavorites, loadNotes } = store
+  const { syncFavorites, loadNotes, loadWritingNotes } = store
   const loadProviders = (store as any).loadProviders as (() => Promise<void>) | undefined
   const loadSettings = (store as any).loadSettings as (() => Promise<void>) | undefined
 
@@ -91,7 +91,8 @@ function AppInner() {
     void loadProviders?.()
     void loadNotes()
     void syncFavorites()
-  }, [loadSettings, loadProviders, loadNotes, syncFavorites])
+    void loadWritingNotes()
+  }, [loadSettings, loadProviders, loadNotes, syncFavorites, loadWritingNotes])
 
   return (
     <>

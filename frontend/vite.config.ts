@@ -57,6 +57,26 @@ export default defineConfig({
         changeOrigin: true,
         bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
       },
+      '/writing-notes': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/writing-assets': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/export': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/import': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
     },
   },
   test: {

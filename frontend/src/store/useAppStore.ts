@@ -26,6 +26,20 @@ interface DashboardStats {
   total: number
 }
 
+interface WritingNoteItem {
+  id: string
+  name: string
+  path: string
+  writingType: '大作文' | '小作文'
+  updatedAt: string
+}
+
+export interface TocItem {
+  level: number
+  text: string
+  id: string
+}
+
 interface BackendNote {
   id: string
   content: string
@@ -345,6 +359,18 @@ interface AppState {
   dashboardStats: DashboardStats | null
   dashboardStatsLoading: boolean
   loadDashboardStats: () => Promise<void>
+
+  // Writing notes
+  writingNotes: WritingNoteItem[]
+  writingNotesLoading: boolean
+  loadWritingNotes: () => Promise<void>
+
+  // Writing TOC (sidebar overlay)
+  writingTocItems: TocItem[]
+  writingTocOpen: boolean
+  setWritingToc: (items: TocItem[]) => void
+  clearWritingToc: () => void
+  toggleWritingToc: () => void
 
   endReview: () => void
 }
@@ -1202,5 +1228,30 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ dashboardStatsLoading: false })
     }
   },
+
+  // ── Writing notes ─────────────────────────────────────────────────
+  writingNotes: [],
+  writingNotesLoading: false,
+
+  loadWritingNotes: async () => {
+    set({ writingNotesLoading: true })
+    try {
+      const res = await fetch(apiUrl('/writing-notes'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: WritingNoteItem[] }
+      if (json.data) {
+        set({ writingNotes: json.data })
+      }
+    } catch { /* 静默，writingNotes 保持上次值 */ } finally {
+      set({ writingNotesLoading: false })
+    }
+  },
+
+  // ── Writing TOC ───────────────────────────────────────────────────
+  writingTocItems: [],
+  writingTocOpen: false,
+  setWritingToc: (items) => set({ writingTocItems: items, writingTocOpen: false }),
+  clearWritingToc: () => set({ writingTocItems: [], writingTocOpen: false }),
+  toggleWritingToc: () => set((s) => ({ writingTocOpen: !s.writingTocOpen })),
   })
 })

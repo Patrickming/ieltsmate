@@ -81,14 +81,17 @@
 
 ## 大功能 7：写作文件模块
 
-> 前端现状：写作笔记列表是 3 条硬编码 mock；写作详情页内容全部 hardcoded 在代码里（WRITING_NOTES_CONTENT 对象），「重新导入」按钮无逻辑。
+> 方案：纯磁盘实时读取（不引入 WritingNote DB 表），后端扫描 `笔记/写作笔记/` 目录，ServeStaticModule 提供图片静态服务。
 
-- [ ] Prisma 新增 WritingNote 表（name / path / writingType(大作文/小作文) / content(markdown) / updatedAt）
-- [ ] `GET /writing-notes` 列表，支持 writingType 过滤
-- [ ] `GET /writing-notes/:id` 详情（含 markdown 内容）
-- [ ] `POST /writing-notes/import` 导入写作文件（解析上传的 .md 文件，提取元数据写库）
-- [ ] 前端知识库写作 Tab：从接口加载真实写作文件列表，替换 mock
-- [ ] 前端写作详情页：从接口加载真实内容，「重新导入」按钮触发重新解析
+- [x] 安装 `@nestjs/serve-static@4.x`，兼容 NestJS 10
+- [x] `WritingService`：`getNotesRoot()` 统一根路径，`list()` 扫目录，`findOne(id)` 读文件替换图片路径；ALLOWED_IDS 白名单防路径穿越
+- [x] `WritingController`：`GET /writing-notes` 列表、`GET /writing-notes/:id` 详情（含 content）
+- [x] `app.module.ts`：注册 `ServeStaticModule`（`笔记/` → `/writing-assets`）与 `WritingModule`
+- [x] Vite proxy 新增 `/writing-notes` 和 `/writing-assets` 代理规则
+- [x] `useAppStore.ts`：新增 `writingNotes`、`writingNotesLoading`、`loadWritingNotes` action
+- [x] `App.tsx`：启动时调用 `loadWritingNotes()`
+- [x] 前端知识库写作 Tab：删除 `WRITING_NOTES` mock，改为读取 store 真实数据，含加载状态
+- [x] 前端写作详情页：删除 `WRITING_NOTES_CONTENT` mock，fetch `/writing-notes/:id`，支持图片渲染、骨架屏、「重新加载」按钮
 
 ---
 
@@ -98,6 +101,7 @@
 - [x] `GET/POST/PATCH/DELETE /ai/providers` Provider CRUD
 - [x] `POST/PATCH/DELETE /ai/providers/:id/models` 模型管理（含 `test` 接口真实调 API 验证连通性）
 - [x] `POST /ai/chat` 代理端点：按 slot（classify/review/chat）路由到对应模型，支持 Function Calling（5 个工具：search_notes/get_stats/get_weak_notes/get_recent_notes/get_favorites），工具调用循环最多 6 次；enableThinking 时加 reasoning_effort=medium
+- [x] `AiService.complete()`：无 Function Calling 的 `chat/completions` 调用（请求体不含 `tools`），`resolveProviderAndModel` + 默认 slot `classify`、`AbortSignal.timeout(30_000)`，返回首条 `choices[0].message.content` 字符串（供导入解析等使用）
 - [x] `GET/PATCH /settings` 持久化应用设置（theme / classifyModel / reviewModel / chatModel）
 - [x] 前端 AIModelConfigModal：每个模型行可手动标记 isVision（📷）和 isThinking（⚡），保存到后端；保存配置按钮替代 debounce；逐一测试调真实 API
 - [x] 前端 AIPanel（AI 助手）：真实调 `/ai/chat`，支持 Markdown 渲染、图片和文本文件附件（图片 base64，文本注入上下文）、⚡深度思考开关（当前模型标记了 isThinking 时显示）、对话历史存 localStorage（关闭后保留）
@@ -110,21 +114,17 @@
 
 > 前端现状：Settings 页导出 JSON/CSV 按钮、导入按钮均无 onClick；ImportModal 有完整 UI 但 handleImport 只模拟 1.8s 延迟，不真正解析文件；清空数据按钮无 onClick。
 
-- [ ] `GET /export/notes?format=json|csv` 导出杂笔记
+- [x] `GET /export/notes?format=json|csv` 导出杂笔记（ExportModule，`@Res()` 绕过全局 ResponseInterceptor，附件下载）
+- [x] 导出杂笔记：`escapeCell` 对含 `\r` 的字段加引号转义；`format` 非 `json`/`csv` 时 `400 BadRequest`
 - [ ] `GET /export/writing?format=json|csv` 导出写作笔记
+- [x] 杂笔记导入：`backend/src/import/import.parser.ts` — Stage 1 规则解析（大幅优化：`isSpellingListLine` 过滤句末标点/等号/≥4词；`isComplexMultiEntryLine` 用中文词组数检测多词条行；`parseBoldEntry` 优先括号内注释提取，content≤2词+行复杂则整行送AI；有序列表前缀 `1.`/`2.` 剥离；引用块 `> ` 前缀剥离；纯中文开头行跳过；`parseSynonymNoTransEntry` 处理无中文同义词 `A=B`；Stage 2 AI prompt 支持多词条行拆分模式（`split:true`）及同义词/句子翻译规则）
+- [x] 杂笔记导入：`ImportService`（`import.service.ts`）— `preview`：Stage 2 `AiService.complete` 补译（needsAI 或空 translation，支持 `split` 结果拼接/倒序插入）、Stage 3 条数 ≤60 时质量审查返回 `flagged`；`save` 逐条 `prisma.note.create` 汇总 created/failed/errors
+- [x] 杂笔记导入：`ImportModule` + `ImportController`（`POST /import/notes/preview` multipart 5MB、`POST /import/notes/save` + `SaveNotesDto`）、`app.module` 注册 `ImportModule`
 - [ ] `POST /import/notes` 导入杂笔记（解析 JSON 或 CSV，批量写库）
-- [ ] `POST /import/writing` 导入写作文件（上传 .md，调 AI 辅助解析标题/类型）
 - [ ] `DELETE /data/all` 清空全部数据（需传安全确认参数 `confirm=true`）
-- [ ] 前端 Settings 页：导出 JSON/CSV 按钮调接口并触发浏览器下载
-- [ ] 前端 ImportModal：真实解析上传文件并调导入接口，展示成功/失败条数
+- [x] Vite proxy 新增 `/export` 和 `/import` 代理规则（bypass HTML 请求）
+- [x] 前端 Settings 页：导出 JSON/CSV 按钮调 `GET /export/notes?format=json|csv`，`URL.createObjectURL` 触发浏览器下载；导入按钮调 `openImport()` 打开 ImportModal
+- [x] 前端 ImportModal：三步状态机（选择文件+模型 → 预览审核/flagged 建议 → 完成），真实调 `POST /import/notes/preview` 与 `POST /import/notes/save`，展示统计与成功/失败条数
 
 ---
 
-## 大功能 10：质量保障与上线准备
-
-- [ ] 核心 service 单元测试（notes / review / todos）
-- [ ] 关键接口 e2e 集成测试
-- [ ] 联调回归清单（笔记增删改查、收藏、复习全流程、仪表盘数据）
-- [ ] 部署配置：Dockerfile、环境变量文档、`start.sh` 生产模式适配
-
----
