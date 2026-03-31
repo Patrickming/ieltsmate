@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator'
 
 export class RateReviewDto {
   @IsUUID()
@@ -9,5 +9,6 @@ export class RateReviewDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(10000)
   spellingAnswer?: string
 }

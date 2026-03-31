@@ -1,9 +1,10 @@
 import { IsIn, IsUUID } from 'class-validator'
+import { CARD_TYPES, CardType } from '../types/card-ai-content'
 
 export class GenerateReviewDto {
   @IsUUID()
   noteId!: string
 
-  @IsIn(['word-speech', 'phrase', 'synonym', 'sentence', 'spelling'])
-  cardType!: 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling'
+  @IsIn(CARD_TYPES)
+  cardType!: CardType
 }

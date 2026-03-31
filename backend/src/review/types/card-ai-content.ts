@@ -70,3 +70,5 @@ export type CardAIContent =
   | SentenceAI
   | SpellingAI
   | FallbackResponse
+
+export const CARD_TYPES = ['word-speech', 'phrase', 'synonym', 'sentence', 'spelling'] as const

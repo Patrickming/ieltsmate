@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { StartReviewDto } from './dto/start-review.dto'
+import { RateReviewDto } from './dto/rate-review.dto'
 
 function shuffled<T>(items: T[]): T[] {
   const next = [...items]
@@ -59,5 +60,66 @@ export class ReviewService {
       totalCards: cards.length,
       cards,
     }
+  }
+
+  async rate(sessionId: string, dto: RateReviewDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const card = await tx.reviewSessionCard.findFirst({
+        where: { sessionId, noteId: dto.noteId },
+      })
+      if (!card) throw new NotFoundException('Card not found in session')
+
+      await tx.reviewSessionCard.update({
+        where: { id: card.id },
+        data: {
+          isDone: true,
+          rating: dto.rating,
+          spellingAnswer: dto.spellingAnswer ?? null,
+          answeredAt: new Date(),
+        },
+      })
+
+      const note = await tx.note.findUniqueOrThrow({ where: { id: dto.noteId } })
+
+      const isSpellingCorrect = dto.spellingAnswer
+        ? dto.spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
+        : null
+
+      await tx.reviewLog.create({
+        data: {
+          noteId: dto.noteId,
+          sessionId,
+          rating: dto.rating,
+          spellingAnswer: dto.spellingAnswer ?? null,
+          isSpellingCorrect,
+        },
+      })
+
+      const newCorrect = note.correctCount + (dto.rating === 'easy' ? 1 : 0)
+      const newWrong = note.wrongCount + (dto.rating === 'again' ? 1 : 0)
+
+      let newStatus = note.reviewStatus
+      if (note.reviewStatus === 'new') {
+        newStatus = 'learning'
+      }
+      if (dto.rating === 'again') {
+        newStatus = 'learning'
+      } else if (dto.rating === 'easy' && newCorrect >= 3) {
+        newStatus = 'mastered'
+      }
+
+      await tx.note.update({
+        where: { id: dto.noteId },
+        data: {
+          reviewCount: { increment: 1 },
+          correctCount: newCorrect,
+          wrongCount: newWrong,
+          reviewStatus: newStatus,
+          lastReviewedAt: new Date(),
+        },
+      })
+
+      return { ok: true }
+    })
   }
 }
