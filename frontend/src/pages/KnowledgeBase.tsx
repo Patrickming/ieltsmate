@@ -42,17 +42,15 @@ function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
   return { groupFilter: '全部', subFilter: '全部' }
 }
 
-function searchParamsFilterKey(searchParams: URLSearchParams) {
-  return `${searchParams.get('group') ?? ''}|${searchParams.get('cat') ?? ''}`
-}
 
 type KnowledgeBaseMainProps = {
   search: string
   setSearch: Dispatch<SetStateAction<string>>
   searchParams: URLSearchParams
+  setSearchParams: (params: Record<string, string>, opts?: { replace?: boolean }) => void
 }
 
-function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMainProps) {
+function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }: KnowledgeBaseMainProps) {
   const { notes, openQuickNote, favorites, lastAddedNoteId, clearLastAddedNoteId } = useAppStore()
   const navigate = useNavigate()
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -160,7 +158,12 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
               key={g}
               type="button"
               whileTap={{ scale: 0.97 }}
-              onClick={() => { setGroupFilter(g); setSubFilter('全部'); setWritingSubFilter('全部') }}
+              onClick={() => {
+                setGroupFilter(g); setSubFilter('全部'); setWritingSubFilter('全部')
+                const p: Record<string, string> = {}
+                if (g !== '全部') p.group = g
+                setSearchParams(p, { replace: true })
+              }}
               className={`flex items-center gap-1.5 h-9 px-4 rounded-md text-[13px] font-medium border transition-all ${
                 groupFilter === g
                   ? activeClass
@@ -230,7 +233,12 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
                   key={cat}
                   type="button"
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setSubFilter(cat)}
+                  onClick={() => {
+                    setSubFilter(cat)
+                    const p: Record<string, string> = { group: '杂笔记' }
+                    if (cat !== '全部') p.cat = String(cat)
+                    setSearchParams(p, { replace: true })
+                  }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     isActive && cat !== '全部'
                       ? ''
@@ -405,7 +413,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams }: KnowledgeBaseMai
 }
 
 export default function KnowledgeBase() {
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState('')
   const [pageLoading] = useState(false)
 
@@ -420,10 +428,10 @@ export default function KnowledgeBase() {
   return (
     <Layout title="知识库">
       <KnowledgeBaseMain
-        key={searchParamsFilterKey(searchParams)}
         search={search}
         setSearch={setSearch}
         searchParams={searchParams}
+        setSearchParams={(p, opts) => setSearchParams(p, opts)}
       />
     </Layout>
   )

@@ -24,13 +24,29 @@ const stagger = {
   show: { transition: { staggerChildren: 0.08 } },
 }
 
+function loadContinueProgress() {
+  try {
+    const raw = localStorage.getItem('ielts_review_progress')
+    if (!raw) return null
+    const p = JSON.parse(raw) as { cardOrder: string[]; completedIds: string[]; timestamp: number }
+    if (Date.now() - p.timestamp > 7 * 24 * 60 * 60 * 1000) { localStorage.removeItem('ielts_review_progress'); return null }
+    return p
+  } catch { return null }
+}
+
 export default function ReviewSelection() {
   const navigate = useNavigate()
-  const { notes, favorites, startReview } = useAppStore()
+  const { notes, favorites, startReviewSession } = useAppStore()
   const [bigCat, setBigCat] = useState<'杂笔记' | '收藏夹'>('杂笔记')
   const [subCats, setSubCats] = useState<Set<Category | '全部'>>(new Set(['全部']))
   const [range, setRange] = useState<Range>('all')
   const [mode, setMode] = useState<Mode>('random')
+  const [starting, setStarting] = useState(false)
+
+  const continueProgress = loadContinueProgress()
+  const continueRemaining = continueProgress
+    ? continueProgress.cardOrder.length - continueProgress.completedIds.length
+    : 0
 
   const toggleSub = (cat: Category | '全部') => {
     if (cat === '全部') { setSubCats(new Set(['全部'])); return }
@@ -58,10 +74,24 @@ export default function ReviewSelection() {
 
   const reviewCards = getFilteredNotes()
 
-  const handleStart = () => {
-    if (reviewCards.length === 0) return
-    startReview(reviewCards)
-    navigate('/review/cards')
+  const handleStart = async () => {
+    if (reviewCards.length === 0 || starting) return
+    setStarting(true)
+    const params: Parameters<typeof startReviewSession>[0] = {
+      source: bigCat === '收藏夹' ? 'favorites' : 'notes',
+      range,
+      mode,
+    }
+    if (bigCat === '杂笔记' && !subCats.has('全部')) {
+      params.categories = Array.from(subCats).filter((c) => c !== '全部') as string[]
+    }
+    const ok = await startReviewSession(params)
+    setStarting(false)
+    if (ok) {
+      navigate('/review/cards')
+    } else {
+      alert('当前筛选条件下暂无可复习内容，请调整筛选条件')
+    }
   }
 
   return (
@@ -208,44 +238,146 @@ export default function ReviewSelection() {
               )}
             </AnimatePresence>
 
-            {/* ── Step 3: 范围 + 模式 ─────────────── */}
-            <motion.div variants={fadeUp} className="flex flex-col gap-5">
+            {/* ── Step 3: 复习设置 ─────────────── */}
+            <motion.div variants={fadeUp} className="flex flex-col gap-4">
               <SectionLabel step={bigCat === '杂笔记' ? 3 : 2} label="复习设置" />
 
-              {/* Range + Mode in a 2x2 grid */}
+              {/* 主选择：重新开始 / 继续上次 */}
               <div className="grid grid-cols-2 gap-3">
-                {([
-                  { group: 'range', key: 'all', icon: CheckCheck, label: '全部复习', desc: '复习所有内容', active: range === 'all', onSelect: () => setRange('all') },
-                  { group: 'range', key: 'wrong', icon: XCircle, label: '仅复习错题', desc: '上次标记错误的', active: range === 'wrong', onSelect: () => setRange('wrong') },
-                  { group: 'mode', key: 'random', icon: Shuffle, label: '随机顺序', desc: '打乱顺序复习', active: mode === 'random', onSelect: () => setMode('random') },
-                  { group: 'mode', key: 'continue', icon: RotateCcw, label: '继续上次', desc: '按原有顺序', active: mode === 'continue', onSelect: () => setMode('continue') },
-                ]).map(({ key, icon: Icon, label, desc, active, onSelect }) => (
-                  <motion.button
-                    key={key}
-                    whileHover={{ y: -1 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={onSelect}
-                    className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
-                    style={{
-                      background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
-                      borderColor: active ? '#4f46e5' : '#27272a',
-                      boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
-                    }}
-                  >
-                    <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
-                      style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
-                      <Icon size={14} className={active ? 'text-primary' : 'text-text-subtle'} />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>{label}</div>
-                      <div className="text-[11px] mt-0.5" style={{ color: active ? '#818cf877' : '#3f3f46' }}>{desc}</div>
-                    </div>
-                    {active && (
-                      <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />
-                    )}
-                  </motion.button>
-                ))}
+                {/* 重新开始 */}
+                {(() => {
+                  const active = mode !== 'continue'
+                  return (
+                    <motion.button
+                      whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
+                      onClick={() => setMode('random')}
+                      className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
+                      style={{
+                        background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
+                        borderColor: active ? '#4f46e5' : '#27272a',
+                        boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
+                      }}
+                    >
+                      <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
+                        style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
+                        <Play size={14} className={active ? 'text-primary' : 'text-text-subtle'} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>重新开始</div>
+                        <div className="text-[11px] mt-0.5" style={{ color: active ? '#818cf877' : '#3f3f46' }}>自定义范围和顺序</div>
+                      </div>
+                      {active && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </motion.button>
+                  )
+                })()}
+
+                {/* 继续上次 */}
+                {(() => {
+                  const active = mode === 'continue'
+                  const hasRecord = continueRemaining > 0
+                  return (
+                    <motion.button
+                      whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
+                      onClick={() => setMode('continue')}
+                      className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
+                      style={{
+                        background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
+                        borderColor: active ? '#4f46e5' : '#27272a',
+                        boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
+                      }}
+                    >
+                      <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
+                        style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
+                        <RotateCcw size={14} className={active ? 'text-primary' : 'text-text-subtle'} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>继续上次</div>
+                        <div className="text-[11px] mt-0.5" style={{ color: hasRecord ? (active ? '#818cf8' : '#52525b') : (active ? '#818cf877' : '#3f3f46') }}>
+                          {hasRecord ? `还剩 ${continueRemaining} 张未复习` : '暂无上次记录'}
+                        </div>
+                      </div>
+                      {active && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </motion.button>
+                  )
+                })()}
               </div>
+
+              {/* 重新开始的子选项：范围 + 顺序 */}
+              <AnimatePresence>
+                {mode !== 'continue' && (
+                  <motion.div
+                    key="fresh-options"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.28, ease: 'easeInOut' }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-col gap-3 pt-1">
+                      {/* 范围 */}
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-text-subtle">复习范围</span>
+                        <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #27272a, transparent)' }} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {([
+                          { key: 'all', icon: CheckCheck, label: '全部复习', desc: '复习所有内容', active: range === 'all', onSelect: () => setRange('all') },
+                          { key: 'wrong', icon: XCircle, label: '仅复习错题', desc: '上次标记错误的', active: range === 'wrong', onSelect: () => setRange('wrong') },
+                        ] as const).map(({ key, icon: Icon, label, desc, active, onSelect }) => (
+                          <motion.button
+                            key={key} whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
+                            onClick={onSelect}
+                            className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
+                            style={{
+                              background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
+                              borderColor: active ? '#4f46e5' : '#27272a',
+                              boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
+                            }}
+                          >
+                            <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
+                              style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
+                              <Icon size={14} className={active ? 'text-primary' : 'text-text-subtle'} />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-[13px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>{label}</div>
+                              <div className="text-[11px] mt-0.5" style={{ color: active ? '#818cf877' : '#3f3f46' }}>{desc}</div>
+                            </div>
+                            {active && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
+                          </motion.button>
+                        ))}
+                      </div>
+
+                      {/* 顺序 */}
+                      <div className="flex items-center gap-2 mt-1 mb-0.5">
+                        <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-text-subtle">顺序</span>
+                        <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #27272a, transparent)' }} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <motion.button
+                          whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
+                          onClick={() => setMode('random')}
+                          className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
+                          style={{
+                            background: 'linear-gradient(135deg, #1a1a3e, #1e1b4b)',
+                            borderColor: '#4f46e5',
+                            boxShadow: '0 0 16px rgba(79,70,229,0.2)',
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
+                            style={{ background: '#4f46e522', border: '1px solid #818cf866' }}>
+                            <Shuffle size={14} className="text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-semibold" style={{ color: '#e0e7ff' }}>随机顺序</div>
+                            <div className="text-[11px] mt-0.5" style={{ color: '#818cf877' }}>打乱顺序复习</div>
+                          </div>
+                          <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />
+                        </motion.button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
 
           </motion.div>
@@ -267,56 +399,66 @@ export default function ReviewSelection() {
               }}
             >
               {/* Count display */}
-              <div className="flex items-center gap-3 flex-1">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: reviewCards.length > 0 ? '#4f46e5' : '#27272a' }}>
-                  {reviewCards.length > 0
-                    ? <Play size={14} fill="white" className="text-white ml-0.5" />
-                    : <AlertCircle size={14} className="text-text-subtle" />
-                  }
-                </div>
-                <div>
-                  <div className="flex items-baseline gap-1.5">
-                    <motion.span
-                      key={reviewCards.length}
-                      initial={{ scale: 1.3, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ duration: 0.25 }}
-                      className="text-2xl font-bold"
-                      style={{ color: reviewCards.length > 0 ? '#818cf8' : '#52525b' }}
-                    >
-                      {reviewCards.length}
-                    </motion.span>
-                    <span className="text-sm text-text-dim">张卡片待复习</span>
+              {(() => {
+                const isContinue = mode === 'continue'
+                const count = isContinue ? continueRemaining : reviewCards.length
+                const hasContent = count > 0
+                return (
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: hasContent ? '#4f46e5' : '#27272a' }}>
+                      {hasContent
+                        ? <Play size={14} fill="white" className="text-white ml-0.5" />
+                        : <AlertCircle size={14} className="text-text-subtle" />
+                      }
+                    </div>
+                    <div>
+                      <div className="flex items-baseline gap-1.5">
+                        <motion.span
+                          key={count}
+                          initial={{ scale: 1.3, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          transition={{ duration: 0.25 }}
+                          className="text-2xl font-bold"
+                          style={{ color: hasContent ? '#818cf8' : '#52525b' }}
+                        >
+                          {count}
+                        </motion.span>
+                        <span className="text-sm text-text-dim">张卡片待复习</span>
+                      </div>
+                      {!hasContent ? (
+                        <p className="text-[11px] text-[#fbbf24]">
+                          {isContinue ? '暂无上次记录' : '当前筛选条件下暂无内容'}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-text-subtle">
+                          {isContinue ? '继续上次 · 断点续复' : `${bigCat} · ${range === 'all' ? '全部' : '仅错题'} · 随机`}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  {reviewCards.length === 0 ? (
-                    <p className="text-[11px] text-[#fbbf24]">当前筛选条件下暂无内容</p>
-                  ) : (
-                    <p className="text-[11px] text-text-subtle">
-                      {bigCat} · {range === 'all' ? '全部' : '仅错题'} · {mode === 'random' ? '随机' : '顺序'}
-                    </p>
-                  )}
-                </div>
-              </div>
+                )
+              })()}
 
               {/* Start button */}
               <motion.button
-                whileHover={reviewCards.length > 0 ? { scale: 1.02 } : {}}
-                whileTap={reviewCards.length > 0 ? { scale: 0.97 } : {}}
-                onClick={handleStart}
-                disabled={reviewCards.length === 0}
+                whileHover={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting ? { scale: 1.02 } : {}}
+                whileTap={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting ? { scale: 0.97 } : {}}
+                onClick={() => { void handleStart() }}
+                disabled={(mode === 'continue' ? continueRemaining === 0 : reviewCards.length === 0) || starting}
                 className="flex items-center gap-2.5 h-11 px-7 rounded-xl font-semibold text-[15px] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{
-                  background: reviewCards.length > 0
-                    ? 'linear-gradient(135deg, #4f46e5, #6d28d9)'
-                    : '#27272a',
-                  color: reviewCards.length > 0 ? '#fff' : '#52525b',
-                  boxShadow: reviewCards.length > 0 ? '0 4px 20px rgba(79,70,229,0.45)' : 'none',
-                }}
+                style={(() => {
+                  const hasContent = mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0
+                  return {
+                    background: hasContent ? 'linear-gradient(135deg, #4f46e5, #6d28d9)' : '#27272a',
+                    color: hasContent ? '#fff' : '#52525b',
+                    boxShadow: hasContent ? '0 4px 20px rgba(79,70,229,0.45)' : 'none',
+                  }
+                })()}
               >
                 <Play size={15} fill="currentColor" />
-                开始复习
-                <ChevronRight size={15} strokeWidth={2.5} />
+                {starting ? '加载中...' : '开始复习'}
+                {!starting && <ChevronRight size={15} strokeWidth={2.5} />}
               </motion.button>
             </motion.div>
           </div>

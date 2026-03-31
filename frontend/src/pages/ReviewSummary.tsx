@@ -25,48 +25,46 @@ function CountUp({ target, suffix = '' }: { target: number; suffix?: string }) {
 
 export default function ReviewSummary() {
   const navigate = useNavigate()
-  const { reviewSession, endReview, startReview, notes } = useAppStore()
+  const { reviewSession, endReview, startReviewSession, endReviewSession } = useAppStore()
+  const [summary, setSummary] = useState<{
+    totalCards: number
+    correctCount: number
+    wrongCount: number
+    savedExtensionCount: number
+    categoryStats: Array<{ category: string; total: number; correct: number; wrong: number }>
+  } | null>(null)
+
+  useEffect(() => {
+    endReviewSession().then((data) => {
+      if (data) setSummary(data)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const results = reviewSession?.results ?? []
-  const cards = reviewSession?.cards ?? []
-  const total = results.length || cards.length
-  const correct = results.filter((r) => r.rating === 'easy').length
+
+  // Use backend summary if available, else fall back to local
+  const total = summary?.totalCards ?? results.length
+  const correct = summary?.correctCount ?? results.filter(r => r.rating === 'easy').length
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
-
-  // Category breakdown
-  const catStats: Record<string, { correct: number; total: number }> = {}
-  cards.forEach((card) => {
-    const cat = card.category
-    if (!catStats[cat]) catStats[cat] = { correct: 0, total: 0 }
-    catStats[cat].total++
-  })
-  results.forEach((r) => {
-    const card = cards.find((c) => c.id === r.id)
-    if (card && r.rating === 'easy') {
-      catStats[card.category].correct++
-    }
-  })
-
-  // Simulated saved extensions count
-  const savedExtensions = results.length > 0 ? Math.floor(results.length * 0.6) : 0
+  const catStats = summary?.categoryStats ?? []
+  const savedExtensions = summary?.savedExtensionCount ?? reviewSession?.savedExtensionCount ?? 0
 
   const handleHome = () => {
     endReview()
     navigate('/')
   }
 
-  const handleAgain = () => {
-    const wrongCards = results
-      .filter((r) => r.rating === 'again')
-      .map((r) => notes.find((n) => n.id === r.id))
-      .filter(Boolean) as typeof notes
-
-    if (wrongCards.length > 0) {
-      startReview(wrongCards)
+  const handleAgain = async () => {
+    const params = reviewSession?.params
+    if (!params) { endReview(); navigate('/review'); return }
+    const hasWrong = results.some(r => r.rating === 'again')
+    const ok = await startReviewSession({ ...params, range: hasWrong ? 'wrong' : 'all' })
+    if (ok) {
       navigate('/review/cards')
     } else {
-      startReview(cards)
-      navigate('/review/cards')
+      endReview()
+      navigate('/review')
     }
   }
 
@@ -99,16 +97,16 @@ export default function ReviewSummary() {
           </div>
 
           {/* Category stats */}
-          {Object.keys(catStats).length > 0 && (
+          {catStats.length > 0 && (
             <div className="bg-[#18181b] rounded-xl p-4 flex flex-col gap-2.5">
               <div className="text-xs font-semibold text-text-muted mb-1">分类统计</div>
-              {Object.entries(catStats).map(([cat, { correct: c, total: t }]) => (
-                <div key={cat} className="flex items-center gap-3">
+              {catStats.map(({ category, correct: c, total: t }) => (
+                <div key={category} className="flex items-center gap-3">
                   <div
                     className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ background: CATEGORY_BAR[cat as Category] ?? '#71717a' }}
+                    style={{ background: CATEGORY_BAR[category as Category] ?? '#71717a' }}
                   />
-                  <span className="text-sm text-text-muted flex-1">{cat}</span>
+                  <span className="text-sm text-text-muted flex-1">{category}</span>
                   <span className="text-sm font-medium" style={{ color: '#fbbf24' }}>
                     {c}/{t} 正确
                   </span>
@@ -136,7 +134,7 @@ export default function ReviewSummary() {
             </button>
             <motion.button
               whileTap={{ scale: 0.97 }}
-              onClick={handleAgain}
+              onClick={() => { void handleAgain() }}
               className="flex-1 flex items-center justify-center gap-2 h-11 bg-primary-btn hover:bg-[#4338ca] rounded-lg text-white text-sm font-semibold transition-colors"
             >
               <RefreshCw size={15} />

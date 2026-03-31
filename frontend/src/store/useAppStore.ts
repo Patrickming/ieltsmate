@@ -66,10 +66,66 @@ function safeReadFavorites(): string[] {
   }
 }
 
+// ── Review continue-progress helpers ──────────────────────────────────────────
+const CONTINUE_KEY = 'ielts_review_progress'
+const CONTINUE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000  // 7 days
+
+interface ReviewContinueState {
+  cardOrder: string[]      // original ordered card IDs of the session
+  completedIds: string[]   // IDs that have been rated
+  timestamp: number
+}
+
+function loadContinueState(): ReviewContinueState | null {
+  try {
+    const raw = localStorage.getItem(CONTINUE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as ReviewContinueState
+    if (Date.now() - parsed.timestamp > CONTINUE_EXPIRY_MS) {
+      localStorage.removeItem(CONTINUE_KEY)
+      return null
+    }
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function saveContinueState(state: ReviewContinueState) {
+  try {
+    localStorage.setItem(CONTINUE_KEY, JSON.stringify(state))
+  } catch { /* ignore */ }
+}
+
+function clearContinueState() {
+  try {
+    localStorage.removeItem(CONTINUE_KEY)
+  } catch { /* ignore */ }
+}
+
+interface StartReviewParams {
+  source: 'notes' | 'favorites'
+  categories?: string[]
+  range: 'all' | 'wrong'
+  mode: 'random' | 'continue'
+}
+
+interface CardAIContent {
+  fallback: boolean
+  [key: string]: unknown
+}
+
 interface ReviewSession {
+  sessionId: string
   cards: Note[]
   current: number
-  results: { id: string; rating: 'easy' | 'hard' | 'again' }[]
+  results: { id: string; rating: 'easy' | 'again' }[]
+  params: StartReviewParams
+  aiContent: Record<string, CardAIContent | null>
+  aiLoading: Record<string, boolean>
+  savedExtensionCount: number
+  /** Cards already completed before this session started (for "continue" mode progress display) */
+  completedOffset: number
 }
 
 type AddNoteInput = {
@@ -194,7 +250,7 @@ interface AppState {
   notesLoaded: boolean
   loadNotes: () => Promise<void>
   deleteNote: (id: string) => Promise<boolean>
-  updateNote: (id: string, patch: { content?: string; translation?: string; category?: Category }) => Promise<boolean>
+  updateNote: (id: string, patch: { content?: string; translation?: string; category?: Category; synonyms?: string[]; antonyms?: string[] }) => Promise<boolean>
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void
   addQuickNote: (input: AddNoteInput) => Promise<AddQuickNoteResult>
@@ -234,9 +290,20 @@ interface AppState {
 
   // Review session
   reviewSession: ReviewSession | null
-  startReview: (cards: Note[]) => void
+  startReviewSession: (params: StartReviewParams) => Promise<boolean>
   nextCard: () => void
-  rateCard: (id: string, rating: 'easy' | 'hard' | 'again') => void
+  rateCard: (noteId: string, rating: 'easy' | 'again', spellingAnswer?: string) => void
+  endReviewSession: () => Promise<{
+    totalCards: number
+    correctCount: number
+    wrongCount: number
+    savedExtensionCount: number
+    categoryStats: Array<{ category: string; total: number; correct: number; wrong: number }>
+  } | null>
+  abortReviewSession: () => Promise<void>
+  fetchAIContent: (noteId: string, cardType: string) => Promise<void>
+  ensureAIWindow: (currentIdx: number) => void
+  incrementSavedExtensions: () => void
   endReview: () => void
 }
 
@@ -715,20 +782,257 @@ export const useAppStore = create<AppState>((set, get) => {
   setFilter: (cat) => set({ activeFilter: cat }),
 
   reviewSession: null,
-  startReview: (cards) => set({ reviewSession: { cards, current: 0, results: [] } }),
+
+  startReviewSession: async (params) => {
+    try {
+      const res = await fetch(apiUrl('/review/sessions/start'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+      if (!res.ok) return false
+      const json = (await res.json()) as { data?: { sessionId: string; totalCards: number; cards: BackendNote[] } }
+      const d = json.data
+      if (!d?.sessionId) return false
+      let cards = d.cards.map(mapBackendNote)
+
+      let completedOffset = 0
+      if (params.mode === 'continue') {
+        const saved = loadContinueState()
+        if (saved && saved.completedIds.length > 0 && saved.cardOrder.length > 0) {
+          // Restore original order from saved state, then filter out completed
+          const completedSet = new Set(saved.completedIds)
+          const cardMap = new Map(cards.map(c => [c.id, c]))
+          // Rebuild in saved order first, then append any new cards not in saved order
+          const orderedCards = saved.cardOrder
+            .map(id => cardMap.get(id))
+            .filter((c): c is Note => !!c && !completedSet.has(c.id))
+          const savedOrderIds = new Set(saved.cardOrder)
+          const newCards = cards.filter(c => !savedOrderIds.has(c.id) && !completedSet.has(c.id))
+          cards = [...orderedCards, ...newCards]
+          completedOffset = saved.completedIds.length
+        }
+      }
+
+      if (cards.length === 0) return false
+
+      // Persist continue-state: fresh sessions reset completedIds; continue sessions keep them
+      if (params.mode === 'continue') {
+        const existingSaved = loadContinueState()
+        saveContinueState({
+          cardOrder: existingSaved?.cardOrder ?? d.cards.map(c => c.id),
+          completedIds: existingSaved?.completedIds ?? [],
+          timestamp: Date.now(),
+        })
+      } else {
+        saveContinueState({
+          cardOrder: d.cards.map(c => c.id),
+          completedIds: [],
+          timestamp: Date.now(),
+        })
+      }
+
+      set({
+        reviewSession: {
+          sessionId: d.sessionId,
+          cards,
+          current: 0,
+          results: [],
+          params,
+          aiContent: {},
+          aiLoading: {},
+          savedExtensionCount: 0,
+          completedOffset,
+        },
+      })
+      setTimeout(() => get().ensureAIWindow(0), 0)
+      return true
+    } catch {
+      return false
+    }
+  },
+
   nextCard: () => set((s) => {
     if (!s.reviewSession) return s
-    return { reviewSession: { ...s.reviewSession, current: s.reviewSession.current + 1 } }
+    const newCurrent = s.reviewSession.current + 1
+    setTimeout(() => get().ensureAIWindow(newCurrent), 0)
+    return { reviewSession: { ...s.reviewSession, current: newCurrent } }
   }),
-  rateCard: (id, rating) => set((s) => {
+
+  rateCard: (noteId, rating, spellingAnswer) => {
+    set((s) => {
+      if (!s.reviewSession) return s
+
+      // Optimistically update review session results
+      const newReviewSession = {
+        ...s.reviewSession,
+        results: [...s.reviewSession.results, { id: noteId, rating }],
+      }
+
+      // Optimistically update the note's stats in the notes array
+      const newNotes = s.notes.map((n) => {
+        if (n.id !== noteId) return n
+        const newReviewCount = (n.reviewCount ?? 0) + 1
+        const newCorrectCount = rating === 'easy' ? (n.correctCount ?? 0) + 1 : (n.correctCount ?? 0)
+        const newWrongCount = rating === 'again' ? (n.wrongCount ?? 0) + 1 : (n.wrongCount ?? 0)
+        const newStatus: Note['reviewStatus'] =
+          rating === 'easy' && newCorrectCount >= 3
+            ? 'mastered'
+            : rating === 'again'
+              ? 'learning'
+              : n.reviewStatus === 'new'
+                ? 'learning'
+                : n.reviewStatus
+        return {
+          ...n,
+          reviewCount: newReviewCount,
+          correctCount: newCorrectCount,
+          wrongCount: newWrongCount,
+          reviewStatus: newStatus,
+        }
+      })
+
+      return { reviewSession: newReviewSession, notes: newNotes }
+    })
+
+    // Update continue-progress: mark this card as completed
+    const saved = loadContinueState()
+    if (saved) {
+      const completedIds = [...new Set([...saved.completedIds, noteId])]
+      saveContinueState({ ...saved, completedIds, timestamp: Date.now() })
+    }
+
+    const session = get().reviewSession
+    if (session) {
+      // Clear progress when all cards in this session have been rated
+      const allDone = session.results.length + 1 >= session.cards.length
+      if (allDone) clearContinueState()
+
+      fetch(apiUrl(`/review/sessions/${session.sessionId}/rate`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId, rating, spellingAnswer }),
+      }).catch(() => { /* tolerate failure */ })
+    }
+  },
+
+  endReviewSession: async () => {
+    const session = get().reviewSession
+    if (!session) return null
+    try {
+      const res = await fetch(apiUrl(`/review/sessions/${session.sessionId}/end`), {
+        method: 'POST',
+      })
+      if (!res.ok) return null
+      const json = (await res.json()) as {
+        data?: {
+          sessionId: string
+          totalCards: number
+          results: { easy: number; again: number }
+          savedExtensionCount: number
+          startedAt: string
+          endedAt: string | null
+        }
+      }
+      const d = json.data
+      if (!d) return null
+      return {
+        totalCards: d.totalCards,
+        correctCount: d.results.easy,
+        wrongCount: d.results.again,
+        savedExtensionCount: d.savedExtensionCount,
+        categoryStats: [],
+      }
+    } catch {
+      return null
+    }
+  },
+
+  abortReviewSession: async () => {
+    const session = get().reviewSession
+    if (session) {
+      await fetch(apiUrl(`/review/sessions/${session.sessionId}/abort`), {
+        method: 'POST',
+      }).catch(() => {})
+    }
+    set({ reviewSession: null })
+  },
+
+  fetchAIContent: async (noteId, cardType) => {
+    set((s) => {
+      if (!s.reviewSession) return s
+      return {
+        reviewSession: {
+          ...s.reviewSession,
+          aiLoading: { ...s.reviewSession.aiLoading, [noteId]: true },
+        },
+      }
+    })
+    try {
+      const res = await fetch(apiUrl('/review/ai/generate'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ noteId, cardType }),
+      })
+      const json = (await res.json()) as { data?: CardAIContent }
+      const content = json.data ?? { fallback: true }
+      set((s) => {
+        if (!s.reviewSession) return s
+        return {
+          reviewSession: {
+            ...s.reviewSession,
+            aiContent: { ...s.reviewSession.aiContent, [noteId]: content as CardAIContent },
+            aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
+          },
+        }
+      })
+    } catch {
+      set((s) => {
+        if (!s.reviewSession) return s
+        return {
+          reviewSession: {
+            ...s.reviewSession,
+            aiContent: { ...s.reviewSession.aiContent, [noteId]: { fallback: true } as CardAIContent },
+            aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
+          },
+        }
+      })
+    }
+  },
+
+  ensureAIWindow: (currentIdx) => {
+    const session = get().reviewSession
+    if (!session) return
+    const { cards, aiContent, aiLoading } = session
+
+    const getCardType = (cat: string) => {
+      if (cat === '口语' || cat === '单词') return 'word-speech'
+      if (cat === '短语') return 'phrase'
+      if (cat === '同义替换') return 'synonym'
+      if (cat === '句子') return 'sentence'
+      if (cat === '拼写') return 'spelling'
+      return 'word-speech'
+    }
+
+    for (let i = currentIdx; i < Math.min(currentIdx + 3, cards.length); i++) {
+      const card = cards[i]
+      if (!card) continue
+      if (aiContent[card.id] !== undefined) continue
+      if (aiLoading[card.id]) continue
+      void get().fetchAIContent(card.id, getCardType(card.category))
+    }
+  },
+
+  incrementSavedExtensions: () => set((s) => {
     if (!s.reviewSession) return s
     return {
       reviewSession: {
         ...s.reviewSession,
-        results: [...s.reviewSession.results, { id, rating }],
+        savedExtensionCount: s.reviewSession.savedExtensionCount + 1,
       },
     }
   }),
+
   endReview: () => set({ reviewSession: null }),
   })
 })

@@ -8,6 +8,7 @@ import { StrokeButton } from '../components/ui/StrokeButton'
 import { useAppStore } from '../store/useAppStore'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
+import { apiUrl } from '../lib/apiBase'
 
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
   if (category === '口语' || category === '单词') return 'word-speech'
@@ -190,42 +191,233 @@ function CardFront({ note, cardType, answer, onAnswerChange }: {
   )
 }
 
-function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer }: {
-  note: Note
-  savedSyn: string[]
-  savedAnt: string[]
-  onSaveSyn: (s: string) => void
-  onSaveAnt: (s: string) => void
-  spellingAnswer?: string
+// ── AI types (mirroring backend) ────────────────────────────────────────────
+interface AIContentBase { fallback: boolean }
+interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string }
+interface PhraseAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string }
+interface SynonymAI extends AIContentBase { fallback: false; wordMeanings: Array<{ word: string; phonetic: string; meaning: string }>; antonymGroup: string[]; moreSynonyms: string[] }
+interface SentenceAI extends AIContentBase { fallback: false; analysis: string; paraphrases: Array<{ sentence: string; dimension: string }> }
+interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string } }
+interface FallbackAI extends AIContentBase { fallback: true; phonetic: string | null; translation: string; synonyms: string[]; antonyms: string[]; example: string | null; memoryTip: string | null }
+type CardAIContent = WordSpeechAI | PhraseAI | SynonymAI | SentenceAI | SpellingAI | FallbackAI
+
+// ── AI loading animation ──────────────────────────────────────────────────────
+function AILoadingAnimation() {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 p-8">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+        className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent"
+      />
+      <div className="flex items-center gap-1.5">
+        <Sparkles size={14} className="text-primary" />
+        <span className="text-sm text-text-dim">AI 正在生成内容...</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Synonym/Antonym save chip ──────────────────────────────────────────────────
+function SaveChip({ word, saved, onSave }: { word: string; saved: boolean; onSave: (w: string) => void }) {
+  return (
+    <div
+      className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
+      style={saved ? { background: '#1a2e22', borderColor: '#34d399' } : { background: '#1a1a28', borderColor: '#27272a' }}
+    >
+      <span className="text-[15px] text-text-primary">{word}</span>
+      <button onClick={() => onSave(word)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
+        {saved ? <Check size={10} /> : <Plus size={10} />}
+        <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+      </button>
+    </div>
+  )
+}
+
+// ── CardBack sub-components ───────────────────────────────────────────────────
+function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
+  note: Note; ai: WordSpeechAI | PhraseAI
+  savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
-  const isSpelling = note.category === '拼写'
-  const spellingCorrect = isSpelling && spellingAnswer
-    ? spellingAnswer.trim().toLowerCase() === note.content.toLowerCase()
-    : null
-
   return (
-    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={(e) => e.stopPropagation()}>
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
+      {ai.phonetic && (
+        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+          <Volume2 size={16} className="text-primary" />
+          <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
+        </div>
+      )}
+      <div>
+        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
+      </div>
+      <div className="h-px bg-border" />
+      {ai.synonyms.length > 0 && (
+        <div>
+          <AITip label="🔄 同义词/短语" tip="AI 实时生成，点击「存入」可保存到知识库" />
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+          </div>
+        </div>
+      )}
+      {ai.antonyms.length > 0 && (
+        <div>
+          <AITip label="🔀 反义词/短语" tip="AI 生成的语义对立词，点击「存入」可关联到知识库" />
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
+          </div>
+        </div>
+      )}
+      {ai.memoryTip && (
+        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+          <AITip label="✨ 记忆技巧" tip="AI 基于词源/联想生成，帮助加深印象" />
+          <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{ai.memoryTip}</p>
+        </div>
+      )}
+      {ai.example && (
+        <div>
+          <div className="h-px bg-border mb-4" />
+          <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
+          <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5 flex flex-col gap-2">
+            <p className="text-[14px] text-text-secondary italic leading-relaxed">"{ai.example}"</p>
+            {ai.exampleTranslation && (
+              <p className="text-[13px] text-text-dim leading-relaxed">{ai.exampleTranslation}</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
-      {/* Spelling answer comparison */}
-      {isSpelling && spellingAnswer && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-xl border"
-          style={{
-            background: spellingCorrect ? '#0d2b1f' : '#2e0f0f',
-            borderColor: spellingCorrect ? '#34d399' : '#fb7185',
-          }}
-        >
+function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
+  note: Note; ai: SynonymAI
+  savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+}) {
+  // Format a word-meaning pair for saving: "word (briefMeaning)"
+  const formatWmKey = (wm: { word: string; meaning: string }) => {
+    const brief = wm.meaning.split(/[。，]/)[0].trim().slice(0, 20)
+    return brief ? `${wm.word} (${brief})` : wm.word
+  }
+
+  return (
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between">
+        <Badge category={note.category} size="md" />
+        <span className="text-sm text-text-dim">已翻转</span>
+      </div>
+      <div>
+        <AITip label="各词细微差别" tip="点击「存入」可将该词（含中文释义）保存到知识库同义词" />
+        <div className="flex flex-col gap-3 mt-2.5">
+          {ai.wordMeanings.map(wm => {
+            const saveKey = formatWmKey(wm)
+            const isSaved = savedSyn.includes(saveKey)
+            return (
+              <div key={wm.word} className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5">
+                <div className="flex items-start justify-between gap-2 mb-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[17px] font-bold text-text-primary">{wm.word}</span>
+                    {wm.phonetic && <span className="text-[13px] text-[#a5b4fc]">{wm.phonetic}</span>}
+                  </div>
+                  <button
+                    onClick={() => onSaveSyn(saveKey)}
+                    className="flex items-center gap-1 shrink-0 mt-0.5"
+                    style={{ color: isSaved ? '#34d399' : '#818cf8' }}
+                  >
+                    {isSaved ? <Check size={10} /> : <Plus size={10} />}
+                    <span className="text-[11px]">{isSaved ? '✓ 已存入' : '存入'}</span>
+                  </button>
+                </div>
+                <p className="text-[14px] text-text-secondary leading-relaxed">{wm.meaning}</p>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div className="h-px bg-border" />
+      {ai.antonymGroup.length > 0 && (
+        <div>
+          <AITip label="🔀 反义同义替换" tip="AI 生成的语义对立替换词组，点击「存入」可保存到知识库反义词" />
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            {ai.antonymGroup.map(w => <SaveChip key={w} word={w} saved={savedAnt.includes(w)} onSave={onSaveAnt} />)}
+          </div>
+        </div>
+      )}
+      {ai.moreSynonyms.length > 0 && (
+        <div>
+          <AITip label="➕ 更多同义替换" tip="AI 扩展生成的近义词组，点击「存入」可保存到知识库同义词" />
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            {ai.moreSynonyms.map(w => <SaveChip key={w} word={w} saved={savedSyn.includes(w)} onSave={onSaveSyn} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CardBackSentence({ note, ai }: { note: Note; ai: SentenceAI }) {
+  return (
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between">
+        <Badge category={note.category} size="md" />
+        <span className="text-sm text-text-dim">已翻转</span>
+      </div>
+      <div>
+        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
+      </div>
+      <div className="h-px bg-border" />
+      <div>
+        <AITip label="📖 句意解析" tip="AI 用自然语言帮助你读懂这句话的逻辑结构" />
+        <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-4 mt-2.5">
+          <p className="text-[14px] text-text-secondary leading-relaxed">{ai.analysis}</p>
+        </div>
+      </div>
+      {ai.paraphrases.length > 0 && (
+        <div>
+          <AITip label="🔄 同义改写" tip="AI 生成不同维度的同义替换句" />
+          <div className="flex flex-col gap-3 mt-2.5">
+            {ai.paraphrases.map((p, i) => (
+              <div key={i} className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5">
+                <span className="text-[10px] font-bold text-text-subtle uppercase tracking-wider">{p.dimension}</span>
+                <p className="text-[14px] text-text-secondary leading-relaxed mt-1.5 italic">"{p.sentence}"</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer }: {
+  note: Note; ai: SpellingAI
+  savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+  spellingAnswer?: string
+}) {
+  const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
+  const spellingCorrect = spellingAnswer
+    ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
+    : null
+
+  return (
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between">
+        <Badge category={note.category} size="md" />
+        <span className="text-sm text-text-dim">已翻转</span>
+      </div>
+      {spellingAnswer && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+          style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
           <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
           <div>
             <p className="text-sm text-text-dim mb-0.5">你的答案</p>
-            <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>
-              {spellingAnswer}
-            </p>
+            <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>{spellingAnswer}</p>
           </div>
           {!spellingCorrect && (
             <>
@@ -238,101 +430,126 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnsw
           )}
         </div>
       )}
+      {ai.phonetic && (
+        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+          <Volume2 size={16} className="text-primary" />
+          <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
+        </div>
+      )}
+      <div>
+        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
+      </div>
+      <div className="h-px bg-border" />
+      {ai.synonyms.length > 0 && (
+        <div>
+          <AITip label="🔄 同义词" tip="点击「存入」可保存到知识库" />
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+          </div>
+        </div>
+      )}
+      {ai.antonyms.length > 0 && (
+        <div>
+          <AITip label="🔀 反义词" tip="点击「存入」可关联到知识库" />
+          <div className="flex flex-wrap gap-2 mt-2.5">
+            {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
+          </div>
+        </div>
+      )}
+      {ai.memoryTip && (
+        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+          <AITip label="✨ 拼写记忆技巧" tip="词根词缀拆解，帮助记忆拼写" />
+          <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{ai.memoryTip}</p>
+        </div>
+      )}
+      <div>
+        <div className="h-px bg-border mb-4" />
+        <AITip label="💬 例句与分析" tip="AI 生成的语境例句及用法解析" />
+        <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 mt-2.5 flex flex-col gap-2">
+          <p className="text-[14px] text-text-secondary italic leading-relaxed">"{ai.contextExample.sentence}"</p>
+          {ai.contextExample.translation && (
+            <p className="text-[13px] text-text-dim leading-relaxed">{ai.contextExample.translation}</p>
+          )}
+          <p className="text-[12px] text-text-subtle leading-relaxed border-t border-[#27272a] pt-2 mt-1">{ai.contextExample.analysis}</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-      {/* Phonetic */}
+function CardBackFallback({ note, cardType, spellingAnswer }: {
+  note: Note
+  cardType: ReturnType<typeof getCardType>
+  spellingAnswer?: string
+}) {
+  const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
+  const spellingCorrect = cardType === 'spelling' && spellingAnswer
+    ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
+    : null
+
+  return (
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center justify-between">
+        <Badge category={note.category} size="md" />
+        <span className="text-sm text-text-dim">已翻转</span>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-yellow-400 bg-yellow-950/30 border border-yellow-800/40">
+        <span>⚠</span>
+        <span>AI 内容生成失败，显示基础内容</span>
+      </div>
+      {spellingAnswer && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+          style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
+          <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
+          <div>
+            <p className="text-sm text-text-dim mb-0.5">你的答案</p>
+            <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>{spellingAnswer}</p>
+          </div>
+          {!spellingCorrect && (
+            <>
+              <div className="w-px h-10 bg-border mx-1" />
+              <div>
+                <p className="text-sm text-text-dim mb-0.5">正确答案</p>
+                <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
       {note.phonetic && (
         <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
           <Volume2 size={16} className="text-primary" />
           <span className="text-[16px] text-[#a5b4fc]">{note.phonetic}</span>
         </div>
       )}
-
-      {/* Meaning */}
       <div>
         <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
         <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
       </div>
-
-      {/* Divider */}
-      <div className="h-px bg-border" />
-
-      {/* Synonyms */}
+      {(note.synonyms?.length > 0 || note.antonyms?.length > 0) && <div className="h-px bg-border" />}
       {note.synonyms && note.synonyms.length > 0 && (
         <div>
-          <AITip
-            label="🔄 同义短语"
-            tip="AI 基于原词实时生成，点击「存入」可保存到知识库与原词关联"
-          />
-          <div className="flex flex-wrap gap-2 mt-2.5">
-            {note.synonyms.map((syn) => {
-              const saved = savedSyn.includes(syn)
-              return (
-                <div
-                  key={syn}
-                  className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
-                  style={saved
-                    ? { background: '#1a2e22', borderColor: '#34d399' }
-                    : { background: '#1a1a28', borderColor: '#27272a' }
-                  }
-                >
-                  <span className="text-[15px] text-text-primary">{syn}</span>
-                  <button onClick={() => onSaveSyn(syn)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
-                    {saved ? <Check size={10} /> : <Plus size={10} />}
-                    <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+          <div className="text-sm font-semibold text-text-dim mb-2">🔄 同义词/短语</div>
+          <div className="flex flex-wrap gap-2">{note.synonyms.map(s => (
+            <span key={s} className="px-3 py-1.5 rounded-full text-[13px] border" style={{ background: '#1a1a28', borderColor: '#27272a', color: '#a5b4fc' }}>{s}</span>
+          ))}</div>
         </div>
       )}
-
-      {/* Antonyms */}
       {note.antonyms && note.antonyms.length > 0 && (
         <div>
-          <AITip
-            label="🔀 反义短语"
-            tip="AI 生成的语义对立词/短语，供扩展记忆，点击「存入」可关联到知识库"
-          />
-          <div className="flex flex-wrap gap-2 mt-2.5">
-            {note.antonyms.map((ant) => {
-              const saved = savedAnt.includes(ant)
-              return (
-                <div
-                  key={ant}
-                  className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
-                  style={saved
-                    ? { background: '#1a2e22', borderColor: '#34d399' }
-                    : { background: '#1a1a28', borderColor: '#27272a' }
-                  }
-                >
-                  <span className="text-[15px] text-text-primary">{ant}</span>
-                  <button onClick={() => onSaveAnt(ant)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
-                    {saved ? <Check size={10} /> : <Plus size={10} />}
-                    <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+          <div className="text-sm font-semibold text-text-dim mb-2">🔀 反义词/短语</div>
+          <div className="flex flex-wrap gap-2">{note.antonyms.map(s => (
+            <span key={s} className="px-3 py-1.5 rounded-full text-[13px] border" style={{ background: '#1a1a28', borderColor: '#27272a', color: '#fca5a5' }}>{s}</span>
+          ))}</div>
         </div>
       )}
-
-      {/* Memory tip */}
       {note.memoryTip && (
-        <div
-          className="rounded-lg border px-4 py-3.5"
-          style={{ background: '#1e1a2e', borderColor: barColor + '40' }}
-        >
-          <AITip
-            label="✨ 记忆技巧"
-            tip="AI 基于词源/联想生成记忆辅助，每次复习可能不同，帮助加深印象"
-          />
-          <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{note.memoryTip}</p>
+        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+          <div className="text-sm font-semibold text-text-dim mb-1">✨ 记忆技巧</div>
+          <p className="text-[13px] text-[#c4b5fd] leading-relaxed">{note.memoryTip}</p>
         </div>
       )}
-
-      {/* Example */}
       {note.example && (
         <div>
           <div className="h-px bg-border mb-4" />
@@ -344,6 +561,40 @@ function CardBack({ note, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnsw
       )}
     </div>
   )
+}
+
+// ── Main CardBack dispatcher ──────────────────────────────────────────────────
+function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer }: {
+  note: Note
+  cardType: ReturnType<typeof getCardType>
+  aiContent: CardAIContent | null | undefined
+  savedSyn: string[]
+  savedAnt: string[]
+  onSaveSyn: (s: string) => void
+  onSaveAnt: (s: string) => void
+  spellingAnswer?: string
+}) {
+  if (aiContent === undefined || aiContent === null) {
+    return <AILoadingAnimation />
+  }
+
+  if (aiContent.fallback) {
+    return <CardBackFallback note={note} cardType={cardType} spellingAnswer={spellingAnswer} />
+  }
+
+  switch (cardType) {
+    case 'word-speech':
+    case 'phrase':
+      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} />
+    case 'synonym':
+      return <CardBackSynonym note={note} ai={aiContent as SynonymAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} />
+    case 'sentence':
+      return <CardBackSentence note={note} ai={aiContent as SentenceAI} />
+    case 'spelling':
+      return <CardBackSpelling note={note} ai={aiContent as SpellingAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} spellingAnswer={spellingAnswer} />
+    default:
+      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} />
+  }
 }
 
 /** Pill-style favorite toggle used inside review session */
@@ -369,19 +620,23 @@ function ReviewFavButton({ noteId }: { noteId: string }) {
 
 export default function ReviewCards() {
   const navigate = useNavigate()
-  const { reviewSession, nextCard, rateCard, endReview } = useAppStore()
+  const { reviewSession, nextCard, rateCard, abortReviewSession, incrementSavedExtensions } = useAppStore()
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
   const [savedAnt, setSavedAnt] = useState<string[]>([])
   const [spellingAnswer, setSpellingAnswer] = useState('')
-  // No exiting state — use flip-back + setTimeout instead
 
   const session = reviewSession
   const card = session?.cards[session.current]
-  const total = session?.cards.length ?? 0
+  const remaining = session?.cards.length ?? 0
   const current = session?.current ?? 0
-  const progress = total > 0 ? ((current + 1) / total) * 100 : 0
+  const completedOffset = session?.completedOffset ?? 0
+  // Total includes already-completed cards from a previous continue session
+  const total = remaining + completedOffset
+  // Display position accounts for the offset so progress bar starts from the middle in continue mode
+  const displayCurrent = current + completedOffset
+  const progress = total > 0 ? ((displayCurrent + 1) / total) * 100 : 0
 
   useEffect(() => {
     if (!session) navigate('/review')
@@ -403,21 +658,63 @@ export default function ReviewCards() {
 
   const cardType = getCardType(card.category as Category)
   const barColor = CATEGORY_BAR[card.category] ?? '#818cf8'
+  const aiContent = session.aiContent[card.id] as CardAIContent | null | undefined
 
   const handleRate = (rating: 'easy' | 'again') => {
-    rateCard(card.id, rating)
-    // First flip back to front face, then transition to next card
+    rateCard(card.id, rating, cardType === 'spelling' ? spellingAnswer : undefined)
     setFlipped(false)
     setSavedSyn([])
     setSavedAnt([])
     setSpellingAnswer('')
     setTimeout(() => {
-      if (current + 1 >= total) {
+      if (current + 1 >= remaining) {
         navigate('/review/summary')
       } else {
-        nextCard() // key change triggers AnimatePresence — card is already front-facing, no rotation visible
+        nextCard()
       }
     }, 300)
+  }
+
+  const handleSaveSyn = async (syn: string) => {
+    if (savedSyn.includes(syn)) return
+    setSavedSyn(p => [...p, syn])
+    // Include all previously saved synonyms + the new one to avoid overwriting
+    const newSynonyms = [...(card.synonyms ?? []), ...savedSyn, syn]
+    try {
+      const res = await fetch(apiUrl(`/notes/${card.id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ synonyms: newSynonyms }),
+      })
+      if (res.ok) {
+        incrementSavedExtensions()
+      } else {
+        setSavedSyn(p => p.filter(s => s !== syn))
+      }
+    } catch {
+      setSavedSyn(p => p.filter(s => s !== syn))
+    }
+  }
+
+  const handleSaveAnt = async (ant: string) => {
+    if (savedAnt.includes(ant)) return
+    setSavedAnt(p => [...p, ant])
+    // Include all previously saved antonyms + the new one to avoid overwriting
+    const newAntonyms = [...(card.antonyms ?? []), ...savedAnt, ant]
+    try {
+      const res = await fetch(apiUrl(`/notes/${card.id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ antonyms: newAntonyms }),
+      })
+      if (res.ok) {
+        incrementSavedExtensions()
+      } else {
+        setSavedAnt(p => p.filter(s => s !== ant))
+      }
+    } catch {
+      setSavedAnt(p => p.filter(s => s !== ant))
+    }
   }
 
   return (
@@ -435,11 +732,11 @@ export default function ReviewCards() {
             退出
           </button>
           <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-text-primary tabular-nums">{current + 1} / {total}</span>
+            <span className="text-sm font-semibold text-text-primary tabular-nums">{displayCurrent + 1} / {total}</span>
             <div className="w-40 h-1.5 bg-[#27272a] rounded-full overflow-hidden">
               <motion.div
                 className="h-full rounded-full bg-primary"
-                initial={{ width: 0 }}
+                initial={{ width: `${total > 0 ? (completedOffset / total) * 100 : 0}%` }}
                 animate={{ width: `${progress}%` }}
                 transition={{ duration: 0.3 }}
               />
@@ -483,7 +780,7 @@ export default function ReviewCards() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { endReview(); navigate('/review') }}
+                  onClick={() => { void abortReviewSession(); navigate('/review') }}
                   className="h-9 px-4 rounded-lg text-sm font-semibold text-white transition-all"
                   style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', boxShadow: '0 4px 12px rgba(239,68,68,0.3)' }}
                 >
@@ -539,10 +836,12 @@ export default function ReviewCards() {
                   >
                     <CardBack
                       note={card}
+                      cardType={cardType}
+                      aiContent={aiContent}
                       savedSyn={savedSyn}
                       savedAnt={savedAnt}
-                      onSaveSyn={(s) => setSavedSyn((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
-                      onSaveAnt={(s) => setSavedAnt((p) => p.includes(s) ? p.filter((x) => x !== s) : [...p, s])}
+                      onSaveSyn={(s) => { void handleSaveSyn(s) }}
+                      onSaveAnt={(s) => { void handleSaveAnt(s) }}
                       spellingAnswer={spellingAnswer}
                     />
                   </div>

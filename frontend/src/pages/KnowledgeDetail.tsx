@@ -38,6 +38,14 @@ export default function KnowledgeDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Extension editing state
+  const [editingExt, setEditingExt] = useState(false)
+  const [extSaving, setExtSaving] = useState(false)
+  const [editSyns, setEditSyns] = useState<string[]>([])
+  const [editAnts, setEditAnts] = useState<string[]>([])
+  const [newSyn, setNewSyn] = useState('')
+  const [newAnt, setNewAnt] = useState('')
+
   const noteIdx = notes.findIndex((n) => n.id === id)
   const note = notes[noteIdx]
   const prevNote = noteIdx > 0 ? notes[noteIdx - 1] : null
@@ -137,6 +145,44 @@ export default function KnowledgeDetail() {
     if (ok) setEditing(false)
   }
 
+  // Extension (synonyms/antonyms) editing
+  const handleStartEditExt = () => {
+    if (!note) return
+    setEditSyns([...(note.synonyms ?? [])])
+    setEditAnts([...(note.antonyms ?? [])])
+    setNewSyn('')
+    setNewAnt('')
+    setEditingExt(true)
+  }
+
+  const handleCancelEditExt = () => {
+    setEditingExt(false)
+    setNewSyn('')
+    setNewAnt('')
+  }
+
+  const handleSaveEditExt = async () => {
+    if (!note || extSaving) return
+    setExtSaving(true)
+    const ok = await updateNote(note.id, { synonyms: editSyns, antonyms: editAnts })
+    setExtSaving(false)
+    if (ok) setEditingExt(false)
+  }
+
+  const handleAddSyn = () => {
+    const v = newSyn.trim()
+    if (!v || editSyns.includes(v)) { setNewSyn(''); return }
+    setEditSyns(p => [...p, v])
+    setNewSyn('')
+  }
+
+  const handleAddAnt = () => {
+    const v = newAnt.trim()
+    if (!v || editAnts.includes(v)) { setNewAnt(''); return }
+    setEditAnts(p => [...p, v])
+    setNewAnt('')
+  }
+
   const handleDelete = async () => {
     if (!note || deleting) return
     setDeleting(true)
@@ -230,45 +276,152 @@ export default function KnowledgeDetail() {
             <div className="bg-surface-card border border-border rounded-xl overflow-hidden">
               <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
                 <span className="text-sm font-semibold text-text-secondary">AI 延伸内容</span>
-                <div className="flex items-center gap-1.5 text-primary">
-                  <Sparkles size={12} />
-                  <span className="text-[11px] font-medium">AI 生成</span>
+                <div className="flex items-center gap-2">
+                  {!editingExt ? (
+                    <button
+                      onClick={handleStartEditExt}
+                      className="flex items-center gap-1 text-[11px] text-text-subtle hover:text-text-muted transition-colors px-2 py-1 rounded-md hover:bg-[#27272a]"
+                    >
+                      <Pencil size={11} />
+                      <span>编辑</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={handleSaveEditExt}
+                        disabled={extSaving}
+                        className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 transition-colors px-2 py-1 rounded-md hover:bg-emerald-950/30 disabled:opacity-50"
+                      >
+                        <Check size={11} />
+                        <span>{extSaving ? '保存中...' : '保存'}</span>
+                      </button>
+                      <button
+                        onClick={handleCancelEditExt}
+                        className="flex items-center gap-1 text-[11px] text-text-subtle hover:text-text-muted transition-colors px-2 py-1 rounded-md hover:bg-[#27272a]"
+                      >
+                        <X size={11} />
+                        <span>取消</span>
+                      </button>
+                    </div>
+                  )}
+                  {!editingExt && (
+                    <div className="flex items-center gap-1.5 text-primary">
+                      <Sparkles size={12} />
+                      <span className="text-[11px] font-medium">AI 生成</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="p-5 flex flex-col gap-5">
-                {/* Synonyms — read-only, already stored */}
-                {note.synonyms && note.synonyms.length > 0 && (
+                {/* Synonyms */}
+                {!editingExt ? (
+                  note.synonyms && note.synonyms.length > 0 && (
+                    <div>
+                      <div className="text-sm font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
+                      <div className="flex flex-wrap gap-2">
+                        {note.synonyms.map((syn) => (
+                          <div
+                            key={syn}
+                            className="flex items-center gap-2 px-3 py-2 rounded-md border"
+                            style={{ background: '#1a1a28', borderColor: '#27272a' }}
+                          >
+                            <span className="text-[15px] text-text-primary">{syn}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                ) : (
                   <div>
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
-                    <div className="flex flex-wrap gap-2">
-                      {note.synonyms.map((syn) => (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {editSyns.map((syn) => (
                         <div
                           key={syn}
-                          className="flex items-center gap-2 px-3 py-2 rounded-md border"
-                          style={{ background: '#1a1a28', borderColor: '#27272a' }}
+                          className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-md border"
+                          style={{ background: '#1a1a28', borderColor: '#3f3f46' }}
                         >
-                          <span className="text-[15px] text-text-primary">{syn}</span>
+                          <span className="text-[14px] text-text-primary">{syn}</span>
+                          <button
+                            onClick={() => setEditSyns(p => p.filter(s => s !== syn))}
+                            className="text-text-subtle hover:text-red-400 transition-colors ml-0.5"
+                          >
+                            <X size={12} />
+                          </button>
                         </div>
                       ))}
+                    </div>
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        value={newSyn}
+                        onChange={e => setNewSyn(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddSyn() }}
+                        placeholder="添加同义词..."
+                        className="flex-1 bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-1.5 text-[13px] text-text-primary outline-none focus:border-primary/60 transition-colors"
+                      />
+                      <button
+                        onClick={handleAddSyn}
+                        className="px-3 py-1.5 rounded-md text-[12px] font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-colors"
+                      >
+                        <Plus size={13} />
+                      </button>
                     </div>
                   </div>
                 )}
 
-                {/* Antonyms — read-only, already stored */}
-                {note.antonyms && note.antonyms.length > 0 && (
+                {/* Antonyms */}
+                {!editingExt ? (
+                  note.antonyms && note.antonyms.length > 0 && (
+                    <div>
+                      <div className="text-sm font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
+                      <div className="flex flex-wrap gap-2">
+                        {note.antonyms.map((ant) => (
+                          <div
+                            key={ant}
+                            className="flex items-center gap-2 px-3 py-2 rounded-md border"
+                            style={{ background: '#1a1a28', borderColor: '#27272a' }}
+                          >
+                            <span className="text-[15px] text-text-primary">{ant}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                ) : (
                   <div>
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
-                    <div className="flex flex-wrap gap-2">
-                      {note.antonyms.map((ant) => (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {editAnts.map((ant) => (
                         <div
                           key={ant}
-                          className="flex items-center gap-2 px-3 py-2 rounded-md border"
-                          style={{ background: '#1a1a28', borderColor: '#27272a' }}
+                          className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-md border"
+                          style={{ background: '#1a1a28', borderColor: '#3f3f46' }}
                         >
-                          <span className="text-[15px] text-text-primary">{ant}</span>
+                          <span className="text-[14px] text-text-primary">{ant}</span>
+                          <button
+                            onClick={() => setEditAnts(p => p.filter(s => s !== ant))}
+                            className="text-text-subtle hover:text-red-400 transition-colors ml-0.5"
+                          >
+                            <X size={12} />
+                          </button>
                         </div>
                       ))}
+                    </div>
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        value={newAnt}
+                        onChange={e => setNewAnt(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddAnt() }}
+                        placeholder="添加反义词..."
+                        className="flex-1 bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-1.5 text-[13px] text-text-primary outline-none focus:border-primary/60 transition-colors"
+                      />
+                      <button
+                        onClick={handleAddAnt}
+                        className="px-3 py-1.5 rounded-md text-[12px] font-medium text-primary border border-primary/30 hover:bg-primary/10 transition-colors"
+                      >
+                        <Plus size={13} />
+                      </button>
                     </div>
                   </div>
                 )}

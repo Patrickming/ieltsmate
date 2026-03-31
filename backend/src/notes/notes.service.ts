@@ -65,8 +65,8 @@ export class NotesService {
     if (dto.translation !== undefined) data.translation = dto.translation
     if (dto.category !== undefined) data.category = dto.category
     if (dto.phonetic !== undefined) data.phonetic = dto.phonetic
-    if (dto.synonyms !== undefined) data.synonyms = dto.synonyms
-    if (dto.antonyms !== undefined) data.antonyms = dto.antonyms
+    if (dto.synonyms !== undefined) data.synonyms = [...new Set(dto.synonyms.map((s) => s.trim()).filter(Boolean))]
+    if (dto.antonyms !== undefined) data.antonyms = [...new Set(dto.antonyms.map((s) => s.trim()).filter(Boolean))]
     if (dto.example !== undefined) data.example = dto.example
     if (dto.memoryTip !== undefined) data.memoryTip = dto.memoryTip
     if (dto.reviewStatus !== undefined) data.reviewStatus = dto.reviewStatus

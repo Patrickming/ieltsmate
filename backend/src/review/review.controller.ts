@@ -1,11 +1,16 @@
 import { Body, Controller, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common'
 import { StartReviewDto } from './dto/start-review.dto'
 import { RateReviewDto } from './dto/rate-review.dto'
+import { GenerateReviewDto } from './dto/generate-review.dto'
 import { ReviewService } from './review.service'
+import { ReviewAiService } from './review-ai.service'
 
 @Controller('review')
 export class ReviewController {
-  constructor(private readonly reviewService: ReviewService) {}
+  constructor(
+    private readonly reviewService: ReviewService,
+    private readonly reviewAiService: ReviewAiService,
+  ) {}
 
   @Post('sessions/start')
   @HttpCode(HttpStatus.CREATED)
@@ -32,5 +37,11 @@ export class ReviewController {
   @HttpCode(HttpStatus.OK)
   abort(@Param('sessionId') sessionId: string) {
     return this.reviewService.abort(sessionId)
+  }
+
+  @Post('ai/generate')
+  @HttpCode(HttpStatus.OK)
+  generate(@Body() dto: GenerateReviewDto) {
+    return this.reviewAiService.generate(dto.noteId, dto.cardType)
   }
 }

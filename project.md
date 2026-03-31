@@ -45,13 +45,15 @@
 - [x] `POST /review/sessions/start` 开始复习：按 source（notes/favorites）、categories、range（all/wrong）、mode（random/continue）过滤笔记，创建会话快照（review_sessions + review_session_cards）
 - [x] ReviewService.abort()：先 findUnique，不存在抛 NotFoundException（404）；已 endedAt 则直接返回 { ok: true }，避免重复调用刷新 endedAt（幂等）
 - [x] Review DTO 与类型：`RateReviewDto`、`GenerateReviewDto`、`types/card-ai-content.ts`（CardType、各卡片 AI 结构、`categoryToCardType`）
-- [ ] `PATCH /review/sessions/:sessionId/notes/:noteId/rate` 评分接口：入参 `{ rating: 'easy'|'again', spellingAnswer? }`，事务写入 ReviewSessionCard（isDone/rating/answeredAt）+ ReviewLog + Note 统计（reviewCount/correctCount/wrongCount/reviewStatus/lastReviewedAt）；easy 且 correctCount≥3 升为 mastered，again 降回 learning
-- [ ] `POST /review/sessions/:sessionId/end` 完成会话（翻完最后一张时调用，status=completed）
-- [ ] `POST /review/sessions/:sessionId/abort` 中止会话（用户退出时调用，status=aborted，已评分记录保留）
-- [ ] 前端 store 联调：ReviewSession 类型加 sessionId + 筛选参数字段；`startReviewSession(params)` 替换同步 `startReview(cards)` 改为异步调后端；`rateCard` 改为异步（本地先更新保 UI 流畅，fire-and-forget 调评分接口）；加 `endReviewSession` / `abortReviewSession`
-- [ ] 前端 ReviewSelection 页：handleStart 改为 async，startReviewSession 成功后再 navigate
-- [ ] 前端 ReviewCards 页：最后一张评完调 end，退出确认按钮调 abort
-- [ ] 前端 ReviewSummary 页：「再来一轮」复用 session 的筛选参数重新调 startReviewSession（有错题则 range=wrong，否则 range=all）
+- [x] `PATCH /review/sessions/:sessionId/rate` 评分接口：事务写入 ReviewSessionCard（isDone/rating/answeredAt）+ ReviewLog + Note 统计；幂等（已评分直接返回 ok）；easy 且 correctCount≥3 升为 mastered，again 降回 learning
+- [x] `POST /review/sessions/:sessionId/end` 完成会话：返回 totalCards/results(easy,again)/savedExtensionCount；幂等；savedExtensionCount 统计会话期间被更新的笔记数
+- [x] `POST /review/sessions/:sessionId/abort` 中止会话（幂等：已结束则直接返回 ok，未结束则写 endedAt）
+- [x] `POST /review/ai/generate` AI 内容生成：按 cardType 构建 prompt，Promise.race 15s 超时，失败降级返回 DB 基础内容（fallback: true）
+- [x] 后端 ReviewAiService：5 种 cardType 各有独立 prompt 模板；JSON 解析失败自动降级；AiModule 导出 AiService 供 ReviewModule 使用
+- [x] 前端 store 联调：ReviewSession 类型加 sessionId/params/aiContent/aiLoading/savedExtensionCount；`startReviewSession(params)` 异步调后端；`rateCard` fire-and-forget；加 `endReviewSession`/`abortReviewSession`/`fetchAIContent`/`ensureAIWindow`/`incrementSavedExtensions`
+- [x] 前端 ReviewSelection 页：handleStart 改为 async + loading 状态，startReviewSession 成功后 navigate
+- [x] 前端 ReviewCards 页：CardBack 按 cardType 分支渲染（AI 加载动画/降级模式/5种卡型子组件）；存入同义词/反义词调 PATCH /notes/:id 并持久化；退出按钮调 abortReviewSession
+- [x] 前端 ReviewSummary 页：mount 时调 endReviewSession() 获取真实统计；「再来一轮」复用 session.params 重新调 startReviewSession（有错题则 range=wrong）
 
 ---
 
