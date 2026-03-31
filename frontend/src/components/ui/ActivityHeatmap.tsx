@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect } from 'react'
+import { useAppStore } from '../../store/useAppStore'
 
 const WEEKS = 52          // full year
 const GAP   = 3           // gap between cells (px, in SVG units)
@@ -13,24 +14,11 @@ const MONTH_INITIALS = ['J','F','M','A','M','J','J','A','S','O','N','D']
 const MONTH_NAMES_ZH = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const LABEL_ROWS: Record<number, string> = { 1: 'M', 3: 'W', 5: 'F' }
 
-function toKey(d: Date) { return d.toISOString().slice(0, 10) }
-
-function generateMockActivity(todayKey: string): Record<string, number> {
-  const data: Record<string, number> = {}
-  const today = new Date(todayKey)
-  const totalDays = WEEKS * 7
-  for (let i = totalDays - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
-    const key = toKey(d)
-    const rand = Math.random()
-    if      (rand < 0.12) data[key] = 0
-    else if (rand < 0.40) data[key] = Math.floor(Math.random() * 3) + 1
-    else if (rand < 0.72) data[key] = Math.floor(Math.random() * 4) + 4
-    else                  data[key] = Math.floor(Math.random() * 5) + 8
-  }
-  data[todayKey] = Math.floor(Math.random() * 5) + 6
-  return data
+function getCSTDateString(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d)
 }
 
 function getCellColor(count: number): string {
@@ -43,10 +31,10 @@ function getCellColor(count: number): string {
 function calcStreaks(activity: Record<string, number>, todayKey: string) {
   const keys = Object.keys(activity).sort()
   let longest = 0, current = 0, streak = 0
-  const today = new Date(todayKey)
+  const today = new Date(todayKey + 'T00:00:00+08:00')
   for (let i = 0; ; i++) {
     const d = new Date(today); d.setDate(today.getDate() - i)
-    if (activity[toKey(d)] > 0) current++; else break
+    if (activity[getCSTDateString(d)] > 0) current++; else break
   }
   for (const k of keys) {
     if (activity[k] > 0) { streak++; longest = Math.max(longest, streak) }
@@ -76,9 +64,28 @@ function calcStats(activity: Record<string, number>) {
   }
 }
 
-export function ActivityHeatmap({ todayAllDone = false }: ActivityHeatmapProps) {
-  const todayKey = toKey(new Date())
-  const activity = useMemo(() => generateMockActivity(todayKey), [todayKey])
+export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: ActivityHeatmapProps) {
+  const todayKey = getCSTDateString(new Date())
+  const { activity: storeActivity, loadActivity, activityLoading } = useAppStore()
+
+  useEffect(() => {
+    const end = todayKey
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - (WEEKS * 7 - 1))
+    const start = getCSTDateString(startDate)
+    void loadActivity(start, end)
+  }, [todayKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const activity = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const [key, val] of Object.entries(storeActivity)) {
+      map[key] = val.studyCount
+    }
+    return map
+  }, [storeActivity])
+
+  const todayAllDoneFromStore = storeActivity[todayKey]?.allTodosDone ?? false
+  const todayAllDone = todayAllDoneFromStore || todayAllDoneProp
 
   // ── Measure container width ──────────────────────────────
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -98,14 +105,14 @@ export function ActivityHeatmap({ todayAllDone = false }: ActivityHeatmapProps) 
   const CELL = Math.max(8, Math.floor((availW + GAP) / WEEKS) - GAP)
 
   // ── Build columns ───────────────────────────────────────
-  const startDate = new Date(todayKey)
+  const startDate = new Date(todayKey + 'T00:00:00+08:00')
   startDate.setDate(startDate.getDate() - (WEEKS * 7 - 1))
   const columns: { date: Date; key: string; count: number }[][] = []
   const cur = new Date(startDate)
   for (let w = 0; w < WEEKS; w++) {
     const week: { date: Date; key: string; count: number }[] = []
     for (let d = 0; d < 7; d++) {
-      const key = toKey(cur)
+      const key = getCSTDateString(cur)
       week.push({ date: new Date(cur), key, count: activity[key] ?? 0 })
       cur.setDate(cur.getDate() + 1)
     }
@@ -130,6 +137,15 @@ export function ActivityHeatmap({ todayAllDone = false }: ActivityHeatmapProps) 
   // SVG dimensions (everything inside one SVG including labels)
   const svgW = LEFT_LABEL_W + WEEKS * (CELL + GAP) - GAP
   const svgH = TOP_LABEL_H + 7 * (CELL + GAP) - GAP
+
+  if (activityLoading && Object.keys(storeActivity).length === 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="h-6 w-32 rounded bg-[#27272a] animate-pulse" />
+        <div className="h-[120px] rounded-lg bg-[#27272a] animate-pulse" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4">

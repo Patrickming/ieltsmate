@@ -1,10 +1,12 @@
 import { Controller, Get, Module } from '@nestjs/common'
 import { AiModule } from './ai/ai.module'
+import { DashboardModule } from './dashboard/dashboard.module'
 import { FavoritesModule } from './favorites/favorites.module'
 import { NotesModule } from './notes/notes.module'
 import { PrismaModule } from './prisma/prisma.module'
 import { ReviewModule } from './review/review.module'
 import { SettingsModule } from './settings/settings.module'
+import { TodosModule } from './todos/todos.module'
 
 @Controller()
 class HealthController {
@@ -15,7 +17,16 @@ class HealthController {
 }
 
 @Module({
-  imports: [PrismaModule, NotesModule, FavoritesModule, ReviewModule, SettingsModule, AiModule],
+  imports: [
+    PrismaModule,
+    NotesModule,
+    FavoritesModule,
+    ReviewModule,
+    SettingsModule,
+    AiModule,
+    TodosModule,
+    DashboardModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

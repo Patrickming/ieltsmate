@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { StartReviewDto } from './dto/start-review.dto'
 import { RateReviewDto } from './dto/rate-review.dto'
+import { todayCSTMidnight } from '../common/date.util'
 
 function shuffled<T>(items: T[]): T[] {
   const next = [...items]
@@ -195,6 +196,13 @@ export class ReviewService {
           reviewStatus: newStatus,
           lastReviewedAt: new Date(),
         },
+      })
+
+      const activityDate = todayCSTMidnight()
+      await tx.dailyActivity.upsert({
+        where: { activityDate },
+        create: { activityDate, studyCount: 1, allTodosDone: false },
+        update: { studyCount: { increment: 1 } },
       })
 
       return { ok: true }

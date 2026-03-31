@@ -1,48 +1,39 @@
 import { useState, useEffect, useRef } from 'react'
 import { Plus, Check, X, ClipboardList } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAppStore } from '../../store/useAppStore'
 
-interface TodoItem {
-  id: string
-  text: string
-  done: boolean
+function getTodayCSTString(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
 }
 
 interface TodoListProps {
   onAllDone: (done: boolean) => void
 }
 
-function todayKey() {
-  return `todos-${new Date().toISOString().slice(0, 10)}`
-}
-
-function loadTodos(): TodoItem[] {
-  try {
-    const raw = localStorage.getItem(todayKey())
-    if (raw) return JSON.parse(raw) as TodoItem[]
-  } catch {}
-  return []
-}
-
-function saveTodos(todos: TodoItem[]) {
-  localStorage.setItem(todayKey(), JSON.stringify(todos))
-}
-
 export function TodoList({ onAllDone }: TodoListProps) {
-  const [todos, setTodos] = useState<TodoItem[]>(loadTodos)
+  const { todos, todosLoading, loadTodos, addTodo, toggleTodo, deleteTodo } = useAppStore()
   const [modalOpen, setModalOpen] = useState(false)
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const today = getTodayCSTString()
 
-  const doneCount = todos.filter((t) => t.done).length
-  const total = todos.length
+  useEffect(() => {
+    void loadTodos(today)
+  }, [today]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const todayTodos = todos.filter((t) => t.taskDate === today)
+  const doneCount = todayTodos.filter((t) => t.done).length
+  const total = todayTodos.length
   const allDone = total > 0 && doneCount === total
   const progress = total > 0 ? (doneCount / total) * 100 : 0
 
   useEffect(() => {
-    saveTodos(todos)
-    onAllDone(total > 0 && todos.every((t) => t.done))
-  }, [todos, onAllDone, total])
+    onAllDone(total > 0 && todayTodos.every((t) => t.done))
+  }, [todayTodos, onAllDone, total])
 
   useEffect(() => {
     if (modalOpen) {
@@ -55,16 +46,20 @@ export function TodoList({ onAllDone }: TodoListProps) {
   function confirmAdd() {
     const text = input.trim()
     if (!text) return
-    setTodos((prev) => [...prev, { id: `${Date.now()}`, text, done: false }])
+    void addTodo(text, today)
     setModalOpen(false)
   }
 
-  function toggleTodo(id: string) {
-    setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, done: !t.done } : t)))
-  }
-
-  function deleteTodo(id: string) {
-    setTodos((prev) => prev.filter((t) => t.id !== id))
+  if (todosLoading && todayTodos.length === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-text-secondary">今日任务</span>
+        </div>
+        <div className="h-8 rounded-lg bg-[#27272a] animate-pulse" />
+        <div className="h-8 rounded-lg bg-[#27272a] animate-pulse w-3/4" />
+      </div>
+    )
   }
 
   return (
@@ -134,7 +129,7 @@ export function TodoList({ onAllDone }: TodoListProps) {
                 </button>
               </motion.div>
             ) : (
-              todos.map((todo, i) => (
+              todayTodos.map((todo, i) => (
                 <motion.div
                   key={todo.id}
                   initial={{ opacity: 0, y: -4 }}
@@ -143,10 +138,9 @@ export function TodoList({ onAllDone }: TodoListProps) {
                   transition={{ duration: 0.18 }}
                   className={`flex items-center gap-3 py-2.5 group ${i !== 0 ? 'border-t border-[#27272a]' : ''}`}
                 >
-                  {/* Custom checkbox */}
                   <button
                     type="button"
-                    onClick={() => toggleTodo(todo.id)}
+                    onClick={() => void toggleTodo(todo.id)}
                     className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
                       todo.done
                         ? 'bg-[#34d399] border-[#34d399] scale-95'
@@ -167,9 +161,8 @@ export function TodoList({ onAllDone }: TodoListProps) {
                     </AnimatePresence>
                   </button>
 
-                  {/* Text */}
                   <span
-                    onClick={() => toggleTodo(todo.id)}
+                    onClick={() => void toggleTodo(todo.id)}
                     className={`flex-1 text-[13px] leading-snug cursor-pointer select-none transition-all duration-200 ${
                       todo.done ? 'line-through text-text-subtle opacity-50' : 'text-text-muted'
                     }`}
@@ -177,10 +170,9 @@ export function TodoList({ onAllDone }: TodoListProps) {
                     {todo.text}
                   </span>
 
-                  {/* Delete */}
                   <motion.button
                     type="button"
-                    onClick={() => deleteTodo(todo.id)}
+                    onClick={() => void deleteTodo(todo.id)}
                     initial={{ opacity: 0 }}
                     whileHover={{ scale: 1.1 }}
                     className="opacity-0 group-hover:opacity-100 shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-text-subtle hover:text-red-400 hover:bg-red-500/10 transition-all"
@@ -215,7 +207,6 @@ export function TodoList({ onAllDone }: TodoListProps) {
               transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
               className="fixed z-50 left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[380px] bg-[#18181b] border border-[#3f3f46] rounded-2xl shadow-[0_24px_64px_-12px_rgba(0,0,0,0.8)] p-6 flex flex-col gap-5"
             >
-              {/* Modal header */}
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="text-[15px] font-semibold text-text-primary">添加今日任务</h3>
@@ -230,7 +221,6 @@ export function TodoList({ onAllDone }: TodoListProps) {
                 </button>
               </div>
 
-              {/* Input */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] text-text-subtle font-medium uppercase tracking-wide">任务名称</label>
                 <input
@@ -246,7 +236,6 @@ export function TodoList({ onAllDone }: TodoListProps) {
                 />
               </div>
 
-              {/* Actions */}
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"

@@ -59,27 +59,23 @@
 
 ## 大功能 5：Todo 与学习热力图
 
-> 前端现状：TodoList 数据存 localStorage（按日期 key），完全没有后端；ActivityHeatmap 数据是 `generateMockActivity` 随机生成，完全 mock。
-
-- [ ] `GET/POST /todos` 按日期查询与新增 todo（text / taskDate / done / sortOrder）
-- [ ] `PATCH /todos/:id` 勾选/取消勾选 todo
-- [ ] `DELETE /todos/:id` 删除 todo
-- [ ] 当日所有 todo 全部完成时，更新 DailyActivity.allTodosDone = true
-- [ ] `GET /activity?start=&end=` 热力图数据查询：返回日期范围内每日的 studyCount（当日评分次数）
-- [ ] 每次评分时同步写入当日 DailyActivity.studyCount++（与评分接口同事务）
-- [ ] 前端 TodoList 组件：从后端加载当日 todos，增删勾选全部调接口
-- [ ] 前端 ActivityHeatmap 组件：从后端加载近一年数据，替换随机 mock；颜色四档（0 / 1-3 / 4-7 / 8+）
-- [ ] 日期口径统一为 Asia/Shanghai 日历日，避免 UTC 跨日误差
+- [x] `GET/POST /todos` 按日期查询与新增 todo（text / taskDate / done / sortOrder）
+- [x] `PATCH /todos/:id` 勾选/取消勾选 todo
+- [x] `DELETE /todos/:id` 删除 todo
+- [x] 当日所有 todo 全部完成时，更新 DailyActivity.allTodosDone = true（POST/PATCH/DELETE 均触发 syncAllTodosDoneForDate，事务内执行）
+- [x] `GET /activity?start=&end=` 热力图数据查询：返回日期范围内每日的 studyCount（当日评分次数）
+- [x] 每次评分时同步写入当日 DailyActivity.studyCount++（与评分接口同事务）
+- [x] 前端 TodoList 组件：从后端加载当日 todos，增删勾选全部调接口；乐观更新 + 失败回滚
+- [x] 前端 ActivityHeatmap 组件：从后端加载近一年数据，替换随机 mock；颜色四档（0 / 1-3 / 4-7 / 8+）
+- [x] 日期口径统一为 Asia/Shanghai 日历日（`date.util.ts`），避免 UTC 跨日误差
 
 ---
 
 ## 大功能 6：仪表盘统计
 
-> 前端现状：4 个 StatCard 全部使用 mockStats（dueToday/mastered/streak/total 均为硬编码数字）；MasteryRing 直接用 notes 数组计算 new/learning/mastered 分布（已接真实数据）。
-
-- [ ] `GET /dashboard/stats` 返回：总笔记数、今日待复习数（reviewStatus=new 或 lastReviewedAt 超过 N 天）、已掌握数（reviewStatus=mastered）、连续学习天数（DailyActivity 连续有 studyCount>0 的天数）
-- [ ] 前端 Dashboard 页：4 个 StatCard 从接口读取，替换 mockStats
-- [ ] MasteryRing 保持现有逻辑（直接用 notes 数组计算），无需额外接口
+- [x] `GET /dashboard/stats` 返回：总笔记数（total）、今日新增数（createdToday）、已掌握数（mastered）、连续学习天数（streak，今日无记录则从昨天起算）
+- [x] 前端 Dashboard 页：4 个 StatCard 从接口读取，替换 mockStats；每个 StatCard 带 tooltip 说明计算口径
+- [x] MasteryRing 保持现有逻辑（直接用 notes 数组计算），无需额外接口
 
 ---
 

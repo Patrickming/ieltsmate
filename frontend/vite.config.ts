@@ -42,6 +42,21 @@ export default defineConfig({
         changeOrigin: true,
         bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
       },
+      '/todos': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/activity': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
+      '/dashboard': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+      },
     },
   },
   test: {

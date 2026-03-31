@@ -3,6 +3,29 @@ import type { Note, Category } from '../data/mockData'
 import { mockNotes } from '../data/mockData'
 import { apiUrl } from '../lib/apiBase'
 
+// ── 上海当日 YYYY-MM-DD ───────────────────────────────────────────
+function getTodayCSTString(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+}
+
+interface TodoItem {
+  id: string
+  text: string
+  done: boolean
+  sortOrder: number
+  taskDate: string
+}
+
+interface DashboardStats {
+  createdToday: number
+  mastered: number
+  streak: number
+  total: number
+}
+
 interface BackendNote {
   id: string
   content: string
@@ -304,6 +327,25 @@ interface AppState {
   fetchAIContent: (noteId: string, cardType: string) => Promise<void>
   ensureAIWindow: (currentIdx: number) => void
   incrementSavedExtensions: () => void
+
+  // Todos
+  todos: TodoItem[]
+  todosLoading: boolean
+  loadTodos: (date: string) => Promise<void>
+  addTodo: (text: string, date: string) => Promise<void>
+  toggleTodo: (id: string) => Promise<void>
+  deleteTodo: (id: string) => Promise<void>
+
+  // Activity (heatmap)
+  activity: Record<string, { studyCount: number; allTodosDone: boolean }>
+  activityLoading: boolean
+  loadActivity: (start: string, end: string) => Promise<void>
+
+  // Dashboard stats
+  dashboardStats: DashboardStats | null
+  dashboardStatsLoading: boolean
+  loadDashboardStats: () => Promise<void>
+
   endReview: () => void
 }
 
@@ -1034,5 +1076,131 @@ export const useAppStore = create<AppState>((set, get) => {
   }),
 
   endReview: () => set({ reviewSession: null }),
+
+  // ── Todos ─────────────────────────────────────────────────────────
+  todos: [],
+  todosLoading: false,
+
+  loadTodos: async (date) => {
+    set({ todosLoading: true })
+    try {
+      const res = await fetch(apiUrl(`/todos?date=${date}`))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: TodoItem[] }
+      if (Array.isArray(json.data)) {
+        set({ todos: json.data })
+      }
+    } catch { /* 静默 */ } finally {
+      set({ todosLoading: false })
+    }
+  },
+
+  addTodo: async (text, date) => {
+    const prevTodos = get().todos
+    const optimisticId = `opt-${Date.now()}`
+    set((s) => ({
+      todos: [...s.todos, { id: optimisticId, text, done: false, sortOrder: s.todos.length, taskDate: date }],
+    }))
+    try {
+      const res = await fetch(apiUrl('/todos'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, taskDate: date }),
+      })
+      if (!res.ok) { set({ todos: prevTodos }); return }
+      const json = (await res.json()) as { data?: TodoItem }
+      if (json.data) {
+        set((s) => ({ todos: s.todos.map((t) => t.id === optimisticId ? json.data! : t) }))
+      }
+      const today = getTodayCSTString()
+      const todos = get().todos
+      const allDone = todos.length > 0 && todos.every((t) => t.done)
+      set((s) => ({
+        activity: {
+          ...s.activity,
+          [today]: { studyCount: s.activity[today]?.studyCount ?? 0, allTodosDone: allDone },
+        },
+      }))
+    } catch { set({ todos: prevTodos }) }
+  },
+
+  toggleTodo: async (id) => {
+    const prevTodos = get().todos
+    const todo = prevTodos.find((t) => t.id === id)
+    if (!todo) return
+    const newDone = !todo.done
+    set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, done: newDone } : t) }))
+    try {
+      const res = await fetch(apiUrl(`/todos/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ done: newDone }),
+      })
+      if (!res.ok) { set({ todos: prevTodos }); return }
+      const today = getTodayCSTString()
+      const todos = get().todos
+      const allDone = todos.length > 0 && todos.every((t) => t.done)
+      set((s) => ({
+        activity: {
+          ...s.activity,
+          [today]: { studyCount: s.activity[today]?.studyCount ?? 0, allTodosDone: allDone },
+        },
+      }))
+    } catch { set({ todos: prevTodos }) }
+  },
+
+  deleteTodo: async (id) => {
+    const prevTodos = get().todos
+    set((s) => ({ todos: s.todos.filter((t) => t.id !== id) }))
+    try {
+      const res = await fetch(apiUrl(`/todos/${id}`), { method: 'DELETE' })
+      if (!res.ok) { set({ todos: prevTodos }); return }
+      const today = getTodayCSTString()
+      const todos = get().todos
+      const allDone = todos.length > 0 && todos.every((t) => t.done)
+      set((s) => ({
+        activity: {
+          ...s.activity,
+          [today]: { studyCount: s.activity[today]?.studyCount ?? 0, allTodosDone: allDone },
+        },
+      }))
+    } catch { set({ todos: prevTodos }) }
+  },
+
+  // ── Activity (heatmap) ────────────────────────────────────────────
+  activity: {},
+  activityLoading: false,
+
+  loadActivity: async (start, end) => {
+    set({ activityLoading: true })
+    try {
+      const res = await fetch(apiUrl(`/activity?start=${start}&end=${end}`))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: Record<string, { studyCount: number; allTodosDone: boolean }> }
+      if (json.data && typeof json.data === 'object') {
+        set({ activity: json.data })
+      }
+    } catch { /* 静默，activity 保持空对象 */ } finally {
+      set({ activityLoading: false })
+    }
+  },
+
+  // ── Dashboard stats ───────────────────────────────────────────────
+  dashboardStats: null,
+  dashboardStatsLoading: false,
+
+  loadDashboardStats: async () => {
+    set({ dashboardStatsLoading: true })
+    try {
+      const res = await fetch(apiUrl('/dashboard/stats'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: DashboardStats }
+      if (json.data) {
+        set({ dashboardStats: json.data })
+      }
+    } catch { /* 静默，dashboardStats 保持上次值 */ } finally {
+      set({ dashboardStatsLoading: false })
+    }
+  },
   })
 })

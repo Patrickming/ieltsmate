@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
+import { Info } from 'lucide-react'
 import { motion, useMotionValue, useSpring } from 'framer-motion'
+import { Tooltip } from './Tooltip'
 
 interface StatCardProps {
-  value: number
+  value: number | string
   label: string
-  sublabel: string
+  sublabel?: string
   accentColor: string
+  tooltip?: string
 }
 
 function AnimatedNumber({ target }: { target: number }) {
@@ -29,7 +32,7 @@ function AnimatedNumber({ target }: { target: number }) {
   return <span>{display}</span>
 }
 
-export function StatCard({ value, label, sublabel, accentColor }: StatCardProps) {
+export function StatCard({ value, label, sublabel, accentColor, tooltip }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -40,11 +43,18 @@ export function StatCard({ value, label, sublabel, accentColor }: StatCardProps)
     >
       <div className="h-[3px] w-full" style={{ background: accentColor }} />
       <div className="p-5 flex flex-col gap-2">
-        <div className="text-4xl font-bold" style={{ color: accentColor }}>
-          <AnimatedNumber target={value} />
+        <div className="flex items-center gap-1.5">
+          <div className="text-4xl font-bold" style={{ color: accentColor }}>
+            {typeof value === 'number' ? <AnimatedNumber target={value} /> : <span>{value}</span>}
+          </div>
+          {tooltip && (
+            <Tooltip content={tooltip}>
+              <Info size={13} className="text-text-subtle shrink-0 mt-1 cursor-help" />
+            </Tooltip>
+          )}
         </div>
         <div className="text-sm font-semibold text-text-secondary">{label}</div>
-        <div className="text-xs text-text-dim">{sublabel}</div>
+        {sublabel && <div className="text-xs text-text-dim">{sublabel}</div>}
       </div>
     </motion.div>
   )
