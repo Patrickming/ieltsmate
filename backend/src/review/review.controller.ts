@@ -21,4 +21,16 @@ export class ReviewController {
   ) {
     return this.reviewService.rate(sessionId, dto)
   }
+
+  @Post('sessions/:sessionId/end')
+  @HttpCode(HttpStatus.OK)
+  end(@Param('sessionId') sessionId: string) {
+    return this.reviewService.end(sessionId)
+  }
+
+  @Post('sessions/:sessionId/abort')
+  @HttpCode(HttpStatus.OK)
+  abort(@Param('sessionId') sessionId: string) {
+    return this.reviewService.abort(sessionId)
+  }
 }

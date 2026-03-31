@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { StartReviewDto } from './dto/start-review.dto'
@@ -31,6 +31,10 @@ export class ReviewService {
     })
     const cards = dto.mode === 'random' ? shuffled(notes) : notes
 
+    if (cards.length === 0) {
+      throw new BadRequestException('No cards available for review with selected filters')
+    }
+
     const session = await this.prisma.$transaction(async (tx) => {
       const created = await tx.reviewSession.create({
         data: {
@@ -59,6 +63,67 @@ export class ReviewService {
       sessionId: session.id,
       totalCards: cards.length,
       cards,
+    }
+  }
+
+  async end(sessionId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.reviewSession.findUniqueOrThrow({
+        where: { id: sessionId },
+      })
+
+      const cards = await tx.reviewSessionCard.findMany({
+        where: { sessionId },
+      })
+
+      const ratedCards = cards.filter((c) => c.isDone)
+      const easyCount = ratedCards.filter((c) => c.rating === 'easy').length
+      const againCount = ratedCards.filter((c) => c.rating === 'again').length
+
+      if (session.endedAt) {
+        return this.buildSummary(session, easyCount, againCount, 0)
+      }
+
+      const savedExtensionCount = await tx.note.count({
+        where: {
+          id: { in: ratedCards.map((c) => c.noteId) },
+          updatedAt: { gte: session.startedAt },
+        },
+      })
+
+      const updatedSession = await tx.reviewSession.update({
+        where: { id: sessionId },
+        data: {
+          endedAt: new Date(),
+          totalCards: cards.length,
+        },
+      })
+
+      return this.buildSummary(updatedSession, easyCount, againCount, savedExtensionCount)
+    })
+  }
+
+  async abort(sessionId: string) {
+    await this.prisma.reviewSession.update({
+      where: { id: sessionId },
+      data: { endedAt: new Date() },
+    })
+    return { ok: true }
+  }
+
+  private buildSummary(
+    session: { id: string; totalCards: number; startedAt: Date; endedAt: Date | null },
+    easyCount: number,
+    againCount: number,
+    savedExtensionCount: number,
+  ) {
+    return {
+      sessionId: session.id,
+      totalCards: session.totalCards,
+      results: { easy: easyCount, again: againCount },
+      savedExtensionCount,
+      startedAt: session.startedAt,
+      endedAt: session.endedAt,
     }
   }
 
