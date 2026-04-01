@@ -339,6 +339,7 @@ interface AppState {
   } | null>
   abortReviewSession: () => Promise<void>
   fetchAIContent: (noteId: string, cardType: string) => Promise<void>
+  retryAIContent: (noteId: string, cardType: string) => void
   ensureAIWindow: (currentIdx: number) => void
   incrementSavedExtensions: () => void
 
@@ -1066,6 +1067,17 @@ export const useAppStore = create<AppState>((set, get) => {
         }
       })
     }
+  },
+
+  retryAIContent: (noteId, cardType) => {
+    // 清除旧的 fallback 结果，使卡片重新显示加载动画，然后重新请求
+    set((s) => {
+      if (!s.reviewSession) return s
+      const aiContent = { ...s.reviewSession.aiContent }
+      delete aiContent[noteId]
+      return { reviewSession: { ...s.reviewSession, aiContent } }
+    })
+    void get().fetchAIContent(noteId, cardType)
   },
 
   ensureAIWindow: (currentIdx) => {

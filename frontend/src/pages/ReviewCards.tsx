@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut, BookOpen, Keyboard } from 'lucide-react'
+import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut, BookOpen, Keyboard, RotateCcw } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
@@ -478,10 +478,12 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   )
 }
 
-function CardBackFallback({ note, cardType, spellingAnswer }: {
+function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   spellingAnswer?: string
+  onRetry?: () => void
+  isRetrying?: boolean
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = cardType === 'spelling' && spellingAnswer
@@ -494,9 +496,22 @@ function CardBackFallback({ note, cardType, spellingAnswer }: {
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
-      <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] text-yellow-400 bg-yellow-950/30 border border-yellow-800/40">
-        <span>⚠</span>
-        <span>AI 内容生成失败，显示基础内容</span>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40">
+        <div className="flex items-center gap-2 text-[12px] text-yellow-400">
+          <span>⚠</span>
+          <span>AI 内容生成失败，显示基础内容</span>
+        </div>
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            disabled={isRetrying}
+            className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all disabled:opacity-50"
+            style={{ background: '#1e1a2e', border: '1px solid #7c3aed66', color: '#a78bfa' }}
+          >
+            <RotateCcw size={11} className={isRetrying ? 'animate-spin' : ''} />
+            {isRetrying ? '生成中...' : '重新生成'}
+          </button>
+        )}
       </div>
       {spellingAnswer && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
@@ -564,7 +579,7 @@ function CardBackFallback({ note, cardType, spellingAnswer }: {
 }
 
 // ── Main CardBack dispatcher ──────────────────────────────────────────────────
-function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer }: {
+function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, onRetry, isRetrying }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   aiContent: CardAIContent | null | undefined
@@ -573,13 +588,23 @@ function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, on
   onSaveSyn: (s: string) => void
   onSaveAnt: (s: string) => void
   spellingAnswer?: string
+  onRetry?: () => void
+  isRetrying?: boolean
 }) {
   if (aiContent === undefined || aiContent === null) {
     return <AILoadingAnimation />
   }
 
   if (aiContent.fallback) {
-    return <CardBackFallback note={note} cardType={cardType} spellingAnswer={spellingAnswer} />
+    return (
+      <CardBackFallback
+        note={note}
+        cardType={cardType}
+        spellingAnswer={spellingAnswer}
+        onRetry={onRetry}
+        isRetrying={isRetrying}
+      />
+    )
   }
 
   switch (cardType) {
@@ -620,7 +645,7 @@ function ReviewFavButton({ noteId }: { noteId: string }) {
 
 export default function ReviewCards() {
   const navigate = useNavigate()
-  const { reviewSession, nextCard, rateCard, abortReviewSession, incrementSavedExtensions } = useAppStore()
+  const { reviewSession, nextCard, rateCard, abortReviewSession, incrementSavedExtensions, retryAIContent } = useAppStore()
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
@@ -659,6 +684,7 @@ export default function ReviewCards() {
   const cardType = getCardType(card.category as Category)
   const barColor = CATEGORY_BAR[card.category] ?? '#818cf8'
   const aiContent = session.aiContent[card.id] as CardAIContent | null | undefined
+  const aiIsRetrying = session.aiLoading[card.id] ?? false
 
   const handleRate = (rating: 'easy' | 'again') => {
     rateCard(card.id, rating, cardType === 'spelling' ? spellingAnswer : undefined)
@@ -843,6 +869,8 @@ export default function ReviewCards() {
                       onSaveSyn={(s) => { void handleSaveSyn(s) }}
                       onSaveAnt={(s) => { void handleSaveAnt(s) }}
                       spellingAnswer={spellingAnswer}
+                      onRetry={() => retryAIContent(card.id, cardType)}
+                      isRetrying={aiIsRetrying}
                     />
                   </div>
                 </motion.div>
