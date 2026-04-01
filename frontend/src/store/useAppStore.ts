@@ -110,6 +110,7 @@ interface ReviewContinueState {
   cardOrder: string[]      // original ordered card IDs of the session
   completedIds: string[]   // IDs that have been rated
   timestamp: number
+  sessionParams?: StartReviewParams  // original params used to start the session
 }
 
 function loadContinueState(): ReviewContinueState | null {
@@ -139,7 +140,7 @@ function clearContinueState() {
   } catch { /* ignore */ }
 }
 
-interface StartReviewParams {
+export interface StartReviewParams {
   source: 'notes' | 'favorites'
   categories?: string[]
   range: 'all' | 'wrong'
@@ -864,12 +865,14 @@ export const useAppStore = create<AppState>((set, get) => {
           cardOrder: existingSaved?.cardOrder ?? d.cards.map(c => c.id),
           completedIds: existingSaved?.completedIds ?? [],
           timestamp: Date.now(),
+          sessionParams: existingSaved?.sessionParams ?? params,
         })
       } else {
         saveContinueState({
           cardOrder: d.cards.map(c => c.id),
           completedIds: [],
           timestamp: Date.now(),
+          sessionParams: params,
         })
       }
 

@@ -7,7 +7,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
-import { useAppStore } from '../store/useAppStore'
+import { useAppStore, type StartReviewParams } from '../store/useAppStore'
 
 const SUB_CATS: Category[] = ['口语', '短语', '同义替换', '拼写', '单词']
 
@@ -28,7 +28,7 @@ function loadContinueProgress() {
   try {
     const raw = localStorage.getItem('ielts_review_progress')
     if (!raw) return null
-    const p = JSON.parse(raw) as { cardOrder: string[]; completedIds: string[]; timestamp: number }
+    const p = JSON.parse(raw) as { cardOrder: string[]; completedIds: string[]; timestamp: number; sessionParams?: StartReviewParams }
     if (Date.now() - p.timestamp > 7 * 24 * 60 * 60 * 1000) { localStorage.removeItem('ielts_review_progress'); return null }
     return p
   } catch { return null }
@@ -75,16 +75,26 @@ export default function ReviewSelection() {
   const reviewCards = getFilteredNotes()
 
   const handleStart = async () => {
-    if (reviewCards.length === 0 || starting) return
+    const isContinue = mode === 'continue'
+    const canStart = isContinue ? continueRemaining > 0 : reviewCards.length > 0
+    if (!canStart || starting) return
     setStarting(true)
-    const params: Parameters<typeof startReviewSession>[0] = {
-      source: bigCat === '收藏夹' ? 'favorites' : 'notes',
-      range,
-      mode,
+
+    let params: StartReviewParams
+    if (isContinue && continueProgress?.sessionParams) {
+      // Use the original session's params so the backend returns the same card pool
+      params = { ...continueProgress.sessionParams, mode: 'continue' }
+    } else {
+      params = {
+        source: bigCat === '收藏夹' ? 'favorites' : 'notes',
+        range,
+        mode,
+      }
+      if (bigCat === '杂笔记' && !subCats.has('全部')) {
+        params.categories = Array.from(subCats).filter((c) => c !== '全部') as string[]
+      }
     }
-    if (bigCat === '杂笔记' && !subCats.has('全部')) {
-      params.categories = Array.from(subCats).filter((c) => c !== '全部') as string[]
-    }
+
     const ok = await startReviewSession(params)
     setStarting(false)
     if (ok) {
