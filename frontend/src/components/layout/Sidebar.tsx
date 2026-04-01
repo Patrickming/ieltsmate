@@ -1,7 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, BookOpen, RefreshCw, Upload, Settings,
-  ChevronDown, ChevronRight, List,
+  ChevronDown, ChevronRight, List, PenLine,
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
@@ -37,7 +37,7 @@ export function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const reduceMotion = useReducedMotion()
-  const { expandedGroups, toggleGroup, openImport, writingTocOpen, writingTocItems, toggleWritingToc } = useAppStore()
+  const { expandedGroups, toggleGroup, openImport, openQuickNote, writingTocOpen, writingTocItems, toggleWritingToc } = useAppStore()
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/'
@@ -276,6 +276,15 @@ export function Sidebar() {
 
       {/* Bottom actions */}
       <div className="border-t border-border pt-1 pb-2">
+        <button
+          type="button"
+          onClick={openQuickNote}
+          className={`group mx-2 flex h-9 w-full items-center gap-2.5 rounded-md border border-transparent px-3 text-text-muted hover:border-primary/30 hover:bg-primary/8 hover:text-primary ${surfaceHoverTransition}`}
+          style={{ width: 'calc(100% - 16px)' }}
+        >
+          <PenLine size={14} className="text-text-dim transition-colors duration-200 ease-out group-hover:text-primary" />
+          <span className="text-[13px] font-medium">添加笔记</span>
+        </button>
         <button
           type="button"
           onClick={openImport}

@@ -2,17 +2,20 @@ import { useMemo, useRef, useState, useEffect } from 'react'
 import { useAppStore } from '../../store/useAppStore'
 
 const GAP          = 3
-const LEFT_LABEL_W = 26   // 中文星期标签宽度
-const TOP_LABEL_H  = 20   // 月份标签高度
+const LEFT_LABEL_W = 26
+const TOP_LABEL_H  = 20
+const MAX_WEEKS    = 104  // 最多展示 2 年
 
 const MONTH_NAMES_ZH = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月']
 const LABEL_ROWS: Record<number, string> = { 1: '一', 3: '三', 5: '五' }
 
-const RANGE_OPTIONS = [
+const PRESET_OPTIONS = [
   { label: '3个月', weeks: 13 },
   { label: '半年',  weeks: 26 },
   { label: '一年',  weeks: 52 },
 ] as const
+
+type PresetWeeks = 13 | 26 | 52
 
 interface DayData {
   date: Date
@@ -92,19 +95,56 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
   const todayKey = getCSTDateString(new Date())
   const { activity: storeActivity, loadActivity, activityLoading } = useAppStore()
 
-  const [rangeWeeks, setRangeWeeks] = useState<13 | 26 | 52>(52)
+  // ── 范围状态 ──
+  const [mode, setMode] = useState<'preset' | 'custom'>('preset')
+  const [presetWeeks, setPresetWeeks] = useState<PresetWeeks>(52)
+  // 自定义模式：默认显示最近 3 个月到今天
+  const defaultCustomStart = (() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 3)
+    return getCSTDateString(d)
+  })()
+  const [customStart, setCustomStart] = useState(defaultCustomStart)
+  const [customEnd,   setCustomEnd]   = useState(todayKey)
+  // 自定义模式暂存（点应用后才生效）
+  const [pendingStart, setPendingStart] = useState(defaultCustomStart)
+  const [pendingEnd,   setPendingEnd]   = useState(todayKey)
+
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
 
-  // 切换时间范围时重新拉数据
-  useEffect(() => {
-    const end = todayKey
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() - (rangeWeeks * 7 - 1))
-    const start = getCSTDateString(startDate)
-    void loadActivity(start, end)
-  }, [todayKey, rangeWeeks]) // eslint-disable-line react-hooks/exhaustive-deps
+  // ── 推导当前视图的起止日期 & 周数 ──
+  const { viewStart, viewEnd, weeksCount } = useMemo(() => {
+    if (mode === 'custom') {
+      const s = new Date(customStart + 'T00:00:00+08:00')
+      const e = new Date(customEnd   + 'T00:00:00+08:00')
+      if (s > e) return { viewStart: customEnd, viewEnd: customEnd, weeksCount: 1 }
+      const dayDiff = Math.round((e.getTime() - s.getTime()) / 86_400_000)
+      const wks = Math.min(MAX_WEEKS, Math.ceil(dayDiff / 7) + 1)
+      // 从周日/周一对齐起点
+      const aligned = new Date(s)
+      aligned.setDate(aligned.getDate() - aligned.getDay())
+      return {
+        viewStart: getCSTDateString(aligned),
+        viewEnd: customEnd,
+        weeksCount: wks,
+      }
+    }
+    // preset
+    const endDate = new Date(todayKey + 'T00:00:00+08:00')
+    const startDate = new Date(endDate)
+    startDate.setDate(startDate.getDate() - (presetWeeks * 7 - 1))
+    return {
+      viewStart: getCSTDateString(startDate),
+      viewEnd: todayKey,
+      weeksCount: presetWeeks,
+    }
+  }, [mode, presetWeeks, customStart, customEnd, todayKey])
 
-  // 构建 activityMap（包含 allDone）
+  // 范围变化时拉取数据
+  useEffect(() => {
+    void loadActivity(viewStart, viewEnd)
+  }, [viewStart, viewEnd]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── activityMap ──
   const activityMap = useMemo(() => {
     const map: Record<string, { count: number; allDone: boolean }> = {}
     for (const [key, val] of Object.entries(storeActivity)) {
@@ -129,42 +169,46 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
   }, [])
 
   const availW = containerW - LEFT_LABEL_W - GAP
-  const CELL = Math.max(8, Math.floor((availW + GAP) / rangeWeeks) - GAP)
+  const CELL = Math.max(6, Math.floor((availW + GAP) / weeksCount) - GAP)
 
-  // 构建列数据
-  const startDate = new Date(todayKey + 'T00:00:00+08:00')
-  startDate.setDate(startDate.getDate() - (rangeWeeks * 7 - 1))
-  const columns: DayData[][] = []
-  const cur = new Date(startDate)
-  for (let w = 0; w < rangeWeeks; w++) {
-    const week: DayData[] = []
-    for (let d = 0; d < 7; d++) {
-      const key = getCSTDateString(cur)
-      const isToday = key === todayKey
-      const stored = activityMap[key]
-      week.push({
-        date: new Date(cur),
-        key,
-        count: stored?.count ?? 0,
-        allDone: isToday ? todayAllDone : (stored?.allDone ?? false),
-      })
-      cur.setDate(cur.getDate() + 1)
-    }
-    columns.push(week)
-  }
-
-  // 月份标记（最小间隔 3 周，避免重叠）
-  const monthMarkers: { weekIdx: number; label: string }[] = []
-  columns.forEach((week, wi) => {
-    const d = week[0].date
-    if (wi === 0 || d.getDate() <= 7) {
-      const label = MONTH_NAMES_ZH[d.getMonth()]
-      const prev = monthMarkers[monthMarkers.length - 1]
-      if (!prev || wi - prev.weekIdx >= 3) {
-        monthMarkers.push({ weekIdx: wi, label })
+  // ── 构建列数据 ──
+  const columns: DayData[][] = useMemo(() => {
+    const cols: DayData[][] = []
+    const cur = new Date(viewStart + 'T00:00:00+08:00')
+    for (let w = 0; w < weeksCount; w++) {
+      const week: DayData[] = []
+      for (let d = 0; d < 7; d++) {
+        const key = getCSTDateString(cur)
+        const isToday = key === todayKey
+        const stored = activityMap[key]
+        week.push({
+          date: new Date(cur),
+          key,
+          count: stored?.count ?? 0,
+          allDone: isToday ? todayAllDone : (stored?.allDone ?? false),
+        })
+        cur.setDate(cur.getDate() + 1)
       }
+      cols.push(week)
     }
-  })
+    return cols
+  }, [viewStart, weeksCount, activityMap, todayKey, todayAllDone])
+
+  // 月份标记
+  const monthMarkers = useMemo(() => {
+    const markers: { weekIdx: number; label: string }[] = []
+    columns.forEach((week, wi) => {
+      const d = week[0].date
+      if (wi === 0 || d.getDate() <= 7) {
+        const label = MONTH_NAMES_ZH[d.getMonth()]
+        const prev = markers[markers.length - 1]
+        if (!prev || wi - prev.weekIdx >= 3) {
+          markers.push({ weekIdx: wi, label })
+        }
+      }
+    })
+    return markers
+  }, [columns])
 
   // 统计
   const plainActivity: Record<string, number> = {}
@@ -173,8 +217,17 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
   const { mostActiveMonth, mostActiveDay } = calcStats(plainActivity)
   const totalStudied = Object.values(activityMap).filter(v => v.count > 0).length
 
-  const svgW = LEFT_LABEL_W + rangeWeeks * (CELL + GAP) - GAP
+  const svgW = LEFT_LABEL_W + weeksCount * (CELL + GAP) - GAP
   const svgH = TOP_LABEL_H + 7 * (CELL + GAP) - GAP
+
+  // 应用自定义范围
+  function applyCustomRange() {
+    if (!pendingStart || !pendingEnd) return
+    const s = pendingStart <= pendingEnd ? pendingStart : pendingEnd
+    const e = pendingStart <= pendingEnd ? pendingEnd   : pendingStart
+    setCustomStart(s)
+    setCustomEnd(e)
+  }
 
   if (activityLoading && Object.keys(storeActivity).length === 0) {
     return (
@@ -187,29 +240,87 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Header：学习天数 + 范围选择器 */}
-      <div className="flex items-baseline justify-between">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-baseline gap-3">
           <span className="text-2xl font-bold text-text-primary">{totalStudied}</span>
           <span className="text-sm text-text-subtle">天学习记录</span>
         </div>
-        <div className="flex items-center gap-1">
-          {RANGE_OPTIONS.map(opt => (
+
+        {/* 范围选择器 */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {PRESET_OPTIONS.map(opt => (
             <button
               key={opt.weeks}
-              onClick={() => setRangeWeeks(opt.weeks as 13 | 26 | 52)}
+              onClick={() => { setMode('preset'); setPresetWeeks(opt.weeks) }}
               className={[
                 'px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors',
-                rangeWeeks === opt.weeks
+                mode === 'preset' && presetWeeks === opt.weeks
                   ? 'bg-indigo-600 text-white'
-                  : 'text-text-subtle hover:text-text-primary hover:bg-surface-hover',
+                  : 'text-text-subtle hover:text-text-primary hover:bg-[#27272a]',
               ].join(' ')}
             >
               {opt.label}
             </button>
           ))}
+          <button
+            onClick={() => setMode('custom')}
+            className={[
+              'px-2.5 py-0.5 rounded text-[11px] font-medium transition-colors',
+              mode === 'custom'
+                ? 'bg-indigo-600 text-white'
+                : 'text-text-subtle hover:text-text-primary hover:bg-[#27272a]',
+            ].join(' ')}
+          >
+            自定义
+          </button>
         </div>
       </div>
+
+      {/* 自定义范围日期选择器 */}
+      {mode === 'custom' && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-text-subtle">从</span>
+          <input
+            type="date"
+            value={pendingStart}
+            max={pendingEnd || todayKey}
+            onChange={e => setPendingStart(e.target.value)}
+            className="h-7 px-2 rounded-lg text-[11px] bg-[#27272a] border border-[#3f3f46] text-text-primary outline-none focus:border-indigo-500 transition-colors"
+            style={{ colorScheme: 'dark' }}
+          />
+          <span className="text-[11px] text-text-subtle">到</span>
+          <input
+            type="date"
+            value={pendingEnd}
+            min={pendingStart}
+            max={todayKey}
+            onChange={e => setPendingEnd(e.target.value)}
+            className="h-7 px-2 rounded-lg text-[11px] bg-[#27272a] border border-[#3f3f46] text-text-primary outline-none focus:border-indigo-500 transition-colors"
+            style={{ colorScheme: 'dark' }}
+          />
+          <button
+            onClick={applyCustomRange}
+            disabled={!pendingStart || !pendingEnd}
+            className="h-7 px-3 rounded-lg text-[11px] font-medium bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-40 transition-colors"
+          >
+            应用
+          </button>
+          {(customStart !== defaultCustomStart || customEnd !== todayKey) && (
+            <button
+              onClick={() => {
+                setPendingStart(defaultCustomStart)
+                setPendingEnd(todayKey)
+                setCustomStart(defaultCustomStart)
+                setCustomEnd(todayKey)
+              }}
+              className="h-7 px-2 rounded-lg text-[11px] text-text-subtle hover:text-text-muted transition-colors"
+            >
+              重置
+            </button>
+          )}
+        </div>
+      )}
 
       {/* SVG 热力图 */}
       <div ref={wrapRef} className="w-full relative">
