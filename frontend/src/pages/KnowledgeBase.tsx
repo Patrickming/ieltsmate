@@ -73,6 +73,12 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
   )
   const [writingSubFilter, setWritingSubFilter] = useState<'全部' | WritingType>('全部')
 
+  useEffect(() => {
+    const { groupFilter: gf, subFilter: sf } = kbFiltersFromSearchParams(searchParams)
+    setGroupFilter(gf)
+    setSubFilter(sf)
+  }, [searchParams])
+
   const filteredNotes = notes.filter((n) => {
     if (groupFilter === '写作' || groupFilter === '收藏夹') return false
     if (groupFilter === '杂笔记') {

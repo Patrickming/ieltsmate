@@ -1,3 +1,46 @@
-.worktrees/
+# Dependencies
 node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Environment files — never commit real secrets
+.env
+.env.local
+.env.*.local
 backend/.env
+frontend/.env
+# Keep example files
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/settings.json
+.idea/
+
+# Test coverage
+coverage/
+
+# Prisma generated client (can be regenerated with `prisma generate`)
+backend/node_modules/
+
+# Temporary
+.worktrees/
+*.tmp
+*.temp
