@@ -143,8 +143,9 @@ function clearContinueState() {
 export interface StartReviewParams {
   source: 'notes' | 'favorites'
   categories?: string[]
-  range: 'all' | 'wrong'
+  range: 'all' | 'wrong' | 'exclude_mastered'
   mode: 'random' | 'continue'
+  order?: 'random' | 'sequential'
 }
 
 interface CardAIContent {
@@ -827,16 +828,31 @@ export const useAppStore = create<AppState>((set, get) => {
 
   startReviewSession: async (params) => {
     try {
+      // Backend only accepts 'all' | 'wrong' for range; exclude_mastered is applied client-side
+      const backendParams = { ...params, range: params.range === 'exclude_mastered' ? 'all' : params.range }
       const res = await fetch(apiUrl('/review/sessions/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
+        body: JSON.stringify(backendParams),
       })
       if (!res.ok) return false
       const json = (await res.json()) as { data?: { sessionId: string; totalCards: number; cards: BackendNote[] } }
       const d = json.data
       if (!d?.sessionId) return false
       let cards = d.cards.map(mapBackendNote)
+
+      // Apply exclude_mastered filter for fresh sessions
+      if (params.mode !== 'continue' && params.range === 'exclude_mastered') {
+        cards = cards.filter(c => c.reviewStatus !== 'mastered')
+      }
+
+      // Apply order for fresh sessions
+      if (params.mode !== 'continue') {
+        if (!params.order || params.order === 'random') {
+          cards = [...cards].sort(() => Math.random() - 0.5)
+        }
+        // sequential: keep DB insertion order (default)
+      }
 
       let completedOffset = 0
       if (params.mode === 'continue') {

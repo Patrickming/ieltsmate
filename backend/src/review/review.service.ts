@@ -174,7 +174,10 @@ export class ReviewService {
         },
       })
 
-      const newCorrect = note.correctCount + (dto.rating === 'easy' ? 1 : 0)
+      // Reset correctCount when wrong so the user must re-accumulate MASTERY_THRESHOLD
+      // correct answers to regain mastered status
+      const MASTERY_THRESHOLD = 3
+      const newCorrect = dto.rating === 'again' ? 0 : note.correctCount + 1
       const newWrong = note.wrongCount + (dto.rating === 'again' ? 1 : 0)
 
       let newStatus = note.reviewStatus
@@ -183,7 +186,7 @@ export class ReviewService {
       }
       if (dto.rating === 'again') {
         newStatus = 'learning'
-      } else if (dto.rating === 'easy' && newCorrect >= 3) {
+      } else if (dto.rating === 'easy' && newCorrect >= MASTERY_THRESHOLD) {
         newStatus = 'mastered'
       }
 

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   NotebookPen, Heart, Play, Shuffle, RotateCcw,
-  AlertCircle, CheckCheck, XCircle, ChevronRight,
+  AlertCircle, CheckCheck, XCircle, ChevronRight, GraduationCap, ArrowDownUp,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
@@ -11,7 +11,8 @@ import { useAppStore, type StartReviewParams } from '../store/useAppStore'
 
 const SUB_CATS: Category[] = ['口语', '短语', '同义替换', '拼写', '单词']
 
-type Range = 'all' | 'wrong'
+type Range = 'all' | 'wrong' | 'exclude_mastered'
+type Order = 'random' | 'sequential'
 type Mode = 'random' | 'continue'
 
 const fadeUp = {
@@ -40,6 +41,7 @@ export default function ReviewSelection() {
   const [bigCat, setBigCat] = useState<'杂笔记' | '收藏夹'>('杂笔记')
   const [subCats, setSubCats] = useState<Set<Category | '全部'>>(new Set(['全部']))
   const [range, setRange] = useState<Range>('all')
+  const [order, setOrder] = useState<Order>('random')
   const [mode, setMode] = useState<Mode>('random')
   const [starting, setStarting] = useState(false)
 
@@ -68,7 +70,7 @@ export default function ReviewSelection() {
     if (bigCat === '杂笔记' && !subCats.has('全部'))
       pool = pool.filter((n) => subCats.has(n.category as Category))
     if (range === 'wrong') pool = pool.filter((n) => (n.wrongCount ?? 0) > 0)
-    if (mode === 'random') pool = [...pool].sort(() => Math.random() - 0.5)
+    if (range === 'exclude_mastered') pool = pool.filter((n) => n.reviewStatus !== 'mastered')
     return pool
   }
 
@@ -89,6 +91,7 @@ export default function ReviewSelection() {
         source: bigCat === '收藏夹' ? 'favorites' : 'notes',
         range,
         mode,
+        order,
       }
       if (bigCat === '杂笔记' && !subCats.has('全部')) {
         params.categories = Array.from(subCats).filter((c) => c !== '全部') as string[]
@@ -329,33 +332,53 @@ export default function ReviewSelection() {
                         <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-text-subtle">复习范围</span>
                         <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #27272a, transparent)' }} />
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         {([
-                          { key: 'all', icon: CheckCheck, label: '全部复习', desc: '复习所有内容', active: range === 'all', onSelect: () => setRange('all') },
-                          { key: 'wrong', icon: XCircle, label: '仅复习错题', desc: '上次标记错误的', active: range === 'wrong', onSelect: () => setRange('wrong') },
-                        ] as const).map(({ key, icon: Icon, label, desc, active, onSelect }) => (
+                          { key: 'all' as const, icon: CheckCheck, label: '全部复习', desc: '复习所有内容' },
+                          { key: 'wrong' as const, icon: XCircle, label: '仅复习错题', desc: '上次标记错误的' },
+                          { key: 'exclude_mastered' as const, icon: GraduationCap, label: '剔除已掌握', desc: '跳过已掌握内容' },
+                        ]).map(({ key, icon: Icon, label, desc }) => {
+                          const active = range === key
+                          return (
                           <motion.button
                             key={key} whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
-                            onClick={onSelect}
-                            className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
+                            onClick={() => setRange(key)}
+                            className="relative flex flex-col gap-2.5 p-3.5 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
                             style={{
                               background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
                               borderColor: active ? '#4f46e5' : '#27272a',
                               boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
                             }}
                           >
-                            <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
-                              style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
-                              <Icon size={14} className={active ? 'text-primary' : 'text-text-subtle'} />
+                            <div className="flex items-center justify-between">
+                              <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+                                style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
+                                <Icon size={13} className={active ? 'text-primary' : 'text-text-subtle'} />
+                              </div>
+                              {active && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
                             </div>
                             <div className="min-w-0">
-                              <div className="text-[13px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>{label}</div>
-                              <div className="text-[11px] mt-0.5" style={{ color: active ? '#818cf877' : '#3f3f46' }}>{desc}</div>
+                              <div className="text-[12px] font-semibold leading-tight" style={{ color: active ? '#e0e7ff' : '#71717a' }}>{label}</div>
+                              <div className="text-[10px] mt-0.5 leading-tight" style={{ color: active ? '#818cf877' : '#3f3f46' }}>{desc}</div>
                             </div>
-                            {active && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
                           </motion.button>
-                        ))}
+                        )})}
                       </div>
+
+                      {/* 剔除已掌握提示 */}
+                      {range === 'exclude_mastered' && (() => {
+                        const masteredCount = (bigCat === '收藏夹'
+                          ? notes.filter(n => favorites.includes(n.id))
+                          : notes.filter(n => n.subcategory === '杂笔记')
+                        ).filter(n => n.reviewStatus === 'mastered').length
+                        return masteredCount > 0 ? (
+                          <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px]"
+                            style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', color: '#4ade80' }}>
+                            <GraduationCap size={11} />
+                            <span>将跳过 <strong>{masteredCount}</strong> 张已掌握的笔记</span>
+                          </div>
+                        ) : null
+                      })()}
 
                       {/* 顺序 */}
                       <div className="flex items-center gap-2 mt-1 mb-0.5">
@@ -363,26 +386,34 @@ export default function ReviewSelection() {
                         <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #27272a, transparent)' }} />
                       </div>
                       <div className="grid grid-cols-2 gap-3">
-                        <motion.button
-                          whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
-                          onClick={() => setMode('random')}
-                          className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
-                          style={{
-                            background: 'linear-gradient(135deg, #1a1a3e, #1e1b4b)',
-                            borderColor: '#4f46e5',
-                            boxShadow: '0 0 16px rgba(79,70,229,0.2)',
-                          }}
-                        >
-                          <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
-                            style={{ background: '#4f46e522', border: '1px solid #818cf866' }}>
-                            <Shuffle size={14} className="text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="text-[13px] font-semibold" style={{ color: '#e0e7ff' }}>随机顺序</div>
-                            <div className="text-[11px] mt-0.5" style={{ color: '#818cf877' }}>打乱顺序复习</div>
-                          </div>
-                          <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />
-                        </motion.button>
+                        {([
+                          { key: 'random' as const, icon: Shuffle, label: '随机顺序', desc: '打乱顺序复习' },
+                          { key: 'sequential' as const, icon: ArrowDownUp, label: '按添加顺序', desc: '按笔记添加时间' },
+                        ]).map(({ key, icon: Icon, label, desc }) => {
+                          const active = order === key
+                          return (
+                            <motion.button
+                              key={key} whileHover={{ y: -1 }} whileTap={{ scale: 0.97 }}
+                              onClick={() => setOrder(key)}
+                              className="relative flex items-start gap-3 p-4 rounded-xl border text-left transition-colors duration-200 overflow-hidden"
+                              style={{
+                                background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
+                                borderColor: active ? '#4f46e5' : '#27272a',
+                                boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
+                              }}
+                            >
+                              <div className="w-8 h-8 rounded-lg shrink-0 flex items-center justify-center mt-0.5"
+                                style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
+                                <Icon size={14} className={active ? 'text-primary' : 'text-text-subtle'} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[13px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>{label}</div>
+                                <div className="text-[11px] mt-0.5" style={{ color: active ? '#818cf877' : '#3f3f46' }}>{desc}</div>
+                              </div>
+                              {active && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
+                            </motion.button>
+                          )
+                        })}
                       </div>
                     </div>
                   </motion.div>
