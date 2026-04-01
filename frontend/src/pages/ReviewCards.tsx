@@ -8,8 +8,6 @@ import { StrokeButton } from '../components/ui/StrokeButton'
 import { useAppStore } from '../store/useAppStore'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
-import { apiUrl } from '../lib/apiBase'
-
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
   if (category === '口语' || category === '单词') return 'word-speech'
   if (category === '短语') return 'phrase'
@@ -645,7 +643,7 @@ function ReviewFavButton({ noteId }: { noteId: string }) {
 
 export default function ReviewCards() {
   const navigate = useNavigate()
-  const { reviewSession, nextCard, rateCard, abortReviewSession, incrementSavedExtensions, retryAIContent } = useAppStore()
+  const { reviewSession, nextCard, rateCard, abortReviewSession, incrementSavedExtensions, retryAIContent, updateNote } = useAppStore()
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
@@ -706,18 +704,11 @@ export default function ReviewCards() {
     setSavedSyn(p => [...p, syn])
     // Include all previously saved synonyms + the new one to avoid overwriting
     const newSynonyms = [...(card.synonyms ?? []), ...savedSyn, syn]
-    try {
-      const res = await fetch(apiUrl(`/notes/${card.id}`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ synonyms: newSynonyms }),
-      })
-      if (res.ok) {
-        incrementSavedExtensions()
-      } else {
-        setSavedSyn(p => p.filter(s => s !== syn))
-      }
-    } catch {
+    // updateNote 同时调用接口并更新 store 里的 notes 数组，知识库详情页无需刷新
+    const ok = await updateNote(card.id, { synonyms: newSynonyms })
+    if (ok) {
+      incrementSavedExtensions()
+    } else {
       setSavedSyn(p => p.filter(s => s !== syn))
     }
   }
@@ -727,18 +718,10 @@ export default function ReviewCards() {
     setSavedAnt(p => [...p, ant])
     // Include all previously saved antonyms + the new one to avoid overwriting
     const newAntonyms = [...(card.antonyms ?? []), ...savedAnt, ant]
-    try {
-      const res = await fetch(apiUrl(`/notes/${card.id}`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ antonyms: newAntonyms }),
-      })
-      if (res.ok) {
-        incrementSavedExtensions()
-      } else {
-        setSavedAnt(p => p.filter(s => s !== ant))
-      }
-    } catch {
+    const ok = await updateNote(card.id, { antonyms: newAntonyms })
+    if (ok) {
+      incrementSavedExtensions()
+    } else {
       setSavedAnt(p => p.filter(s => s !== ant))
     }
   }

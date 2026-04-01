@@ -271,8 +271,10 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
                   stroke={stroke}
                   strokeWidth={isToday ? 1.5 : 0}
                   style={{ cursor: 'pointer' }}
-                  onMouseEnter={(e) => setTooltip({ x: e.clientX, y: e.clientY, day })}
-                  onMouseMove={(e)  => setTooltip({ x: e.clientX, y: e.clientY, day })}
+                  onMouseEnter={(e) => {
+                    const r = e.currentTarget.getBoundingClientRect()
+                    setTooltip({ x: r.left + r.width / 2, y: r.top, day })
+                  }}
                   onMouseLeave={() => setTooltip(null)}
                 />
               )
@@ -280,11 +282,11 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
           )}
         </svg>
 
-        {/* Tooltip */}
+        {/* Tooltip — 锚定在格子正上方，不随鼠标移动，避免频繁重渲 */}
         {tooltip && (
           <div
-            className="fixed z-50 pointer-events-none"
-            style={{ left: tooltip.x + 12, top: tooltip.y - 64 }}
+            className="fixed z-50 pointer-events-none -translate-x-1/2"
+            style={{ left: tooltip.x, top: tooltip.y - 8, transform: 'translate(-50%, -100%)' }}
           >
             <div className="bg-[#18181b] border border-[#3f3f46] rounded-lg px-3 py-2 shadow-xl min-w-[130px]">
               <div className="text-[11px] text-text-subtle mb-1 whitespace-nowrap">

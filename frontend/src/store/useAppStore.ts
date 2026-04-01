@@ -642,6 +642,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const res = await fetch(apiUrl(`/notes/${id}`), { method: 'DELETE' })
       if (!res.ok) return false
       set((s) => ({ notes: s.notes.filter((n) => n.id !== id) }))
+      void get().loadDashboardStats()
       return true
     } catch {
       return false
@@ -746,6 +747,7 @@ export const useAppStore = create<AppState>((set, get) => {
         wrongCount: n.wrongCount ?? 0,
       }
       set((s) => ({ notes: [created, ...s.notes], lastAddedNoteId: created.id }))
+      void get().loadDashboardStats()
       return { source: 'remote' as const }
     } catch {
       return applyLocal()
