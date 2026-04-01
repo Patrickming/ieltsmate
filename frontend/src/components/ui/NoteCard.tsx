@@ -87,12 +87,30 @@ export function NoteCard({ note }: NoteCardProps) {
             </div>
           </div>
 
-          {/* Bottom hint */}
-          <div
-            className="text-center pb-2.5"
-            style={{ fontSize: '10px', color: '#3f3f46', letterSpacing: '0.05em' }}
-          >
-            悬停查看详情
+          {/* Bottom: mastery status */}
+          <div className="flex items-center justify-center pb-2.5">
+            {note.reviewStatus === 'mastered' ? (
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                color: '#4ade80', background: 'rgba(74,222,128,0.1)',
+                border: '1px solid rgba(74,222,128,0.25)',
+                borderRadius: 20, padding: '2px 8px',
+              }}>已掌握</span>
+            ) : note.reviewStatus === 'learning' ? (
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                color: '#fbbf24', background: 'rgba(251,191,36,0.1)',
+                border: '1px solid rgba(251,191,36,0.25)',
+                borderRadius: 20, padding: '2px 8px',
+              }}>学习中</span>
+            ) : (
+              <span style={{
+                fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
+                color: '#71717a', background: 'rgba(113,113,122,0.1)',
+                border: '1px solid rgba(113,113,122,0.2)',
+                borderRadius: 20, padding: '2px 8px',
+              }}>新词</span>
+            )}
           </div>
         </div>
 

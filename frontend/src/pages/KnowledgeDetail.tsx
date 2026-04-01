@@ -78,7 +78,7 @@ export default function KnowledgeDetail() {
             title="笔记未找到"
             description="该内容可能已被删除，或链接无效。"
             action={
-              <Button type="button" variant="primary" size="md" onClick={() => navigate('/kb')}>
+              <Button type="button" variant="primary" size="md" onClick={() => navigate(-1)}>
                 返回知识库
               </Button>
             }
@@ -201,7 +201,7 @@ export default function KnowledgeDetail() {
           size="md"
           icon={<ArrowLeft size={14} />}
           className="h-auto min-h-0 w-fit px-0 py-1 text-sm text-text-dim hover:text-text-muted justify-start"
-          onClick={() => navigate('/kb')}
+          onClick={() => navigate(-1)}
         >
           返回知识库
         </Button>

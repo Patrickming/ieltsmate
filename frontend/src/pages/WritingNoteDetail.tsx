@@ -103,7 +103,7 @@ export default function WritingNoteDetail() {
         <div className="p-8 flex flex-col items-center gap-4 text-text-dim">
           <FileText size={40} className="opacity-30" />
           <p>写作笔记未找到</p>
-          <button onClick={() => navigate('/kb')} className="text-primary text-sm hover:underline">
+          <button onClick={() => navigate(-1)} className="text-primary text-sm hover:underline">
             返回知识库
           </button>
         </div>
@@ -129,7 +129,7 @@ export default function WritingNoteDetail() {
       <div className="px-8 py-8">
         {/* Back */}
         <button
-          onClick={() => navigate('/kb')}
+          onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-text-dim hover:text-text-muted text-sm transition-colors mb-6"
         >
           <ArrowLeft size={14} />
@@ -270,7 +270,7 @@ export default function WritingNoteDetail() {
 
         {/* Footer nav */}
         <div className="flex items-center justify-between mt-6 text-sm text-text-dim">
-          <button onClick={() => navigate('/kb')} className="flex items-center gap-1.5 hover:text-text-muted transition-colors">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1.5 hover:text-text-muted transition-colors">
             <ArrowLeft size={13} />
             返回知识库
           </button>
