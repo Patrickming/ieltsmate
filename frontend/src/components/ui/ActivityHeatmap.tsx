@@ -162,10 +162,36 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
-    setContainerW(el.clientWidth)
-    const ro = new ResizeObserver(([entry]) => setContainerW(entry.contentRect.width))
+
+    let raf1 = 0
+    let raf2 = 0
+
+    const commitWidth = (nextWidth: number) => {
+      if (nextWidth > 0) {
+        setContainerW(Math.round(nextWidth))
+      }
+    }
+
+    const measureNow = () => {
+      const rectW = el.getBoundingClientRect().width
+      commitWidth(rectW || el.clientWidth)
+    }
+
+    // 部分场景首帧宽度会读到 0（如路由切换/动画阶段），补两帧重测兜底。
+    measureNow()
+    raf1 = requestAnimationFrame(() => {
+      measureNow()
+      raf2 = requestAnimationFrame(measureNow)
+    })
+
+    const ro = new ResizeObserver(([entry]) => commitWidth(entry.contentRect.width))
     ro.observe(el)
-    return () => ro.disconnect()
+
+    return () => {
+      ro.disconnect()
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
   }, [])
 
   const availW = containerW - LEFT_LABEL_W - GAP
