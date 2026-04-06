@@ -287,6 +287,7 @@ interface AppState {
   loadNotes: () => Promise<void>
   deleteNote: (id: string) => Promise<boolean>
   updateNote: (id: string, patch: { content?: string; translation?: string; category?: Category; synonyms?: string[]; antonyms?: string[] }) => Promise<boolean>
+  markNoteMastered: (id: string) => Promise<boolean>
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void
   addQuickNote: (input: AddNoteInput) => Promise<AddQuickNoteResult>
@@ -700,6 +701,25 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!updated?.id) return false
       set((s) => ({
         notes: s.notes.map((n) => n.id === id ? mapBackendNote(updated) : n),
+      }))
+      return true
+    } catch {
+      return false
+    }
+  },
+  markNoteMastered: async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/notes/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewStatus: 'mastered' }),
+      })
+      if (!res.ok) return false
+      const json = (await res.json()) as { data?: BackendNote }
+      const updated = json.data
+      if (!updated?.id) return false
+      set((s) => ({
+        notes: s.notes.map((n) => (n.id === id ? mapBackendNote(updated) : n)),
       }))
       return true
     } catch {

@@ -203,6 +203,13 @@ interface SentenceAI extends AIContentBase { fallback: false; analysis: string; 
 interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string } }
 interface FallbackAI extends AIContentBase { fallback: true; phonetic: string | null; translation: string; synonyms: string[]; antonyms: string[]; example: string | null; memoryTip: string | null }
 type CardAIContent = WordSpeechAI | PhraseAI | SynonymAI | SentenceAI | SpellingAI | FallbackAI
+const SLASH_ANIMATION_MS = 1400
+const SLASH_PARTICLES = [
+  { left: '45%', top: '16%' }, { left: '52%', top: '20%' }, { left: '56%', top: '27%' },
+  { left: '43%', top: '32%' }, { left: '49%', top: '38%' }, { left: '55%', top: '45%' },
+  { left: '41%', top: '52%' }, { left: '47%', top: '58%' }, { left: '53%', top: '64%' },
+  { left: '58%', top: '69%' }, { left: '44%', top: '73%' }, { left: '50%', top: '79%' },
+]
 
 // ── AI loading animation ──────────────────────────────────────────────────────
 function AILoadingAnimation() {
@@ -648,12 +655,22 @@ function ReviewFavButton({ noteId }: { noteId: string }) {
 
 export default function ReviewCards() {
   const navigate = useNavigate()
-  const { reviewSession, nextCard, rateCard, abortReviewSession, incrementSavedExtensions, retryAIContent, updateNote } = useAppStore()
+  const {
+    reviewSession,
+    nextCard,
+    rateCard,
+    abortReviewSession,
+    incrementSavedExtensions,
+    retryAIContent,
+    updateNote,
+    markNoteMastered,
+  } = useAppStore()
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [flipped, setFlipped] = useState(false)
   const [savedSyn, setSavedSyn] = useState<string[]>([])
   const [savedAnt, setSavedAnt] = useState<string[]>([])
   const [spellingAnswer, setSpellingAnswer] = useState('')
+  const [slashState, setSlashState] = useState<'idle' | 'slashing'>('idle')
 
   const session = reviewSession
   const card = session?.cards[session.current]
@@ -690,8 +707,36 @@ export default function ReviewCards() {
   const aiIsRetrying = session.aiLoading[card.id] ?? false
 
   const handleRate = (rating: 'easy' | 'again') => {
+    if (slashState === 'slashing') return
     rateCard(card.id, rating, cardType === 'spelling' ? spellingAnswer : undefined)
     setFlipped(false)
+    setSlashState('idle')
+    setSavedSyn([])
+    setSavedAnt([])
+    setSpellingAnswer('')
+    setTimeout(() => {
+      if (current + 1 >= remaining) {
+        navigate('/review/summary')
+      } else {
+        nextCard()
+      }
+    }, 300)
+  }
+
+  const handleSlashMaster = async () => {
+    if (slashState === 'slashing') return
+    setSlashState('slashing')
+    const markPromise = markNoteMastered(card.id)
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, SLASH_ANIMATION_MS)
+    })
+    rateCard(card.id, 'easy', cardType === 'spelling' ? spellingAnswer : undefined)
+    const marked = await markPromise
+    if (!marked) {
+      alert('斩击已生效，但“已掌握”状态更新失败，请稍后重试')
+    }
+    setFlipped(false)
+    setSlashState('idle')
     setSavedSyn([])
     setSavedAnt([])
     setSpellingAnswer('')
@@ -817,12 +862,59 @@ export default function ReviewCards() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.97 }}
               transition={{ duration: 0.18 }}
-              className="w-full h-full"
+              className="relative w-full h-full overflow-hidden"
             >
+              {slashState === 'slashing' && (
+                <div className="absolute inset-0 z-30 pointer-events-none">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 0.22, 0] }}
+                    transition={{ duration: 0.45, ease: 'easeOut' }}
+                    className="absolute inset-0 bg-[#f43f5e]"
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, x: 0, y: 0, rotate: 0 }}
+                    animate={{ opacity: [0.95, 0.82, 0], x: -260, y: -120, rotate: -9 }}
+                    transition={{ duration: 1.2, ease: 'easeInOut' }}
+                    className="absolute inset-0 bg-gradient-to-br from-[#fb7185]/28 to-transparent border-r border-[#fb7185]/40"
+                    style={{
+                      clipPath: 'polygon(0 0, 68% 0, 46% 100%, 0 100%)',
+                    }}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, x: 0, y: 0, rotate: 0 }}
+                    animate={{ opacity: [0.95, 0.82, 0], x: 260, y: 120, rotate: 9 }}
+                    transition={{ duration: 1.2, ease: 'easeInOut' }}
+                    className="absolute inset-0 bg-gradient-to-tl from-[#f43f5e]/28 to-transparent border-l border-[#f43f5e]/40"
+                    style={{
+                      clipPath: 'polygon(54% 0, 100% 0, 100% 100%, 32% 100%)',
+                    }}
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, x: -240, y: -180, rotate: -35 }}
+                    animate={{ opacity: [0, 1, 0], x: 240, y: 180, rotate: -35 }}
+                    transition={{ duration: 0.6, ease: 'easeInOut' }}
+                    className="absolute left-1/2 top-1/2 w-[540px] h-[4px] -translate-x-1/2 -translate-y-1/2 bg-gradient-to-r from-transparent via-[#fb7185] to-transparent shadow-[0_0_20px_#f43f5e]"
+                  />
+                  {SLASH_PARTICLES.map((p, idx) => (
+                    <motion.div
+                      key={`${p.left}-${p.top}`}
+                      initial={{ opacity: 0, scale: 0.4, x: 0, y: 0 }}
+                      animate={{ opacity: [0, 1, 0], scale: [0.4, 1, 0.2], x: (idx % 2 === 0 ? -1 : 1) * (24 + idx * 2), y: 18 + idx * 5 }}
+                      transition={{ duration: 0.8, delay: 0.1 + idx * 0.03, ease: 'easeOut' }}
+                      className="absolute w-2 h-2 rounded-sm bg-[#fb7185]"
+                      style={{ left: p.left, top: p.top }}
+                    />
+                  ))}
+                </div>
+              )}
               {/* Flip container */}
               <div
-                className="perspective w-full h-full cursor-pointer"
-                onClick={() => setFlipped((f) => !f)}
+                className={`perspective w-full h-full ${slashState === 'slashing' ? 'cursor-default' : 'cursor-pointer'}`}
+                onClick={() => {
+                  if (slashState === 'slashing') return
+                  setFlipped((f) => !f)
+                }}
               >
                 <motion.div
                   className="preserve-3d relative w-full h-full"
@@ -870,6 +962,9 @@ export default function ReviewCards() {
 
         {/* Rating buttons + favorite */}
         <div className="shrink-0 pb-6 flex items-center justify-center gap-10">
+          {/* Favorite stroke toggle — always visible */}
+          <ReviewFavButton noteId={card.id} />
+
           <AnimatePresence>
             {flipped && (
               <motion.div
@@ -879,18 +974,29 @@ export default function ReviewCards() {
                 transition={{ duration: 0.18 }}
                 className="flex items-center gap-10"
               >
-                <StrokeButton color="#fb7185" onClick={() => handleRate('again')}>
+                <StrokeButton disabled={slashState === 'slashing'} color="#fb7185" onClick={() => handleRate('again')}>
                   😞 不记得
                 </StrokeButton>
-                <StrokeButton color="#34d399" onClick={() => handleRate('easy')}>
+                <StrokeButton disabled={slashState === 'slashing'} color="#34d399" onClick={() => handleRate('easy')}>
                   😊 记得
                 </StrokeButton>
+                <motion.button
+                  disabled={slashState === 'slashing'}
+                  onClick={() => { void handleSlashMaster() }}
+                  whileTap={{ scale: 0.96 }}
+                  className="h-11 px-6 rounded-full border text-[15px] font-semibold transition-all disabled:opacity-60"
+                  style={{
+                    color: '#fda4af',
+                    borderColor: '#fb7185aa',
+                    background: 'linear-gradient(135deg, #2e0f18, #3b111d)',
+                    boxShadow: '0 0 20px rgba(244,63,94,0.28)',
+                  }}
+                >
+                  {slashState === 'slashing' ? '🔪 斩击中...' : '🔪 斩！'}
+                </motion.button>
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Favorite stroke toggle — always visible */}
-          <ReviewFavButton noteId={card.id} />
         </div>
       </div>
     </Layout>

@@ -21,18 +21,23 @@ const WRITING_TYPE_COLORS: Record<WritingType, { color: string; bg: string; bord
 }
 
 function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
-  groupFilter: '全部' | '杂笔记' | '写作' | '收藏夹'
+  groupFilter: '全部' | '杂笔记' | '写作' | '收藏夹' | '已掌握'
   subFilter: Category | '全部'
+  statusFilter: '全部' | 'mastered' | 'unmastered'
 } {
   const group = searchParams.get('group')
   const cat = searchParams.get('cat')
-  if (group === '写作') return { groupFilter: '写作', subFilter: '全部' }
-  if (group === '收藏夹') return { groupFilter: '收藏夹', subFilter: '全部' }
+  const status = searchParams.get('status')
+  const statusFilter: '全部' | 'mastered' | 'unmastered' =
+    status === 'mastered' || status === 'unmastered' ? status : '全部'
+  if (group === '写作') return { groupFilter: '写作', subFilter: '全部', statusFilter: '全部' }
+  if (group === '收藏夹') return { groupFilter: '收藏夹', subFilter: '全部', statusFilter: '全部' }
+  if (group === '已掌握') return { groupFilter: '已掌握', subFilter: '全部', statusFilter: 'mastered' }
   if (group === '杂笔记') {
     const sub: Category | '全部' = cat ? (cat as Category) : '全部'
-    return { groupFilter: '杂笔记', subFilter: sub }
+    return { groupFilter: '杂笔记', subFilter: sub, statusFilter }
   }
-  return { groupFilter: '全部', subFilter: '全部' }
+  return { groupFilter: '全部', subFilter: '全部', statusFilter: '全部' }
 }
 
 
@@ -71,18 +76,25 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
   const [subFilter, setSubFilter] = useState(
     () => kbFiltersFromSearchParams(searchParams).subFilter
   )
+  const [statusFilter, setStatusFilter] = useState<'全部' | 'mastered' | 'unmastered'>(
+    () => kbFiltersFromSearchParams(searchParams).statusFilter
+  )
   const [writingSubFilter, setWritingSubFilter] = useState<'全部' | WritingType>('全部')
 
   useEffect(() => {
-    const { groupFilter: gf, subFilter: sf } = kbFiltersFromSearchParams(searchParams)
+    const { groupFilter: gf, subFilter: sf, statusFilter: st } = kbFiltersFromSearchParams(searchParams)
     setGroupFilter(gf)
     setSubFilter(sf)
+    setStatusFilter(st)
   }, [searchParams])
 
   const filteredNotes = notes.filter((n) => {
     if (groupFilter === '写作' || groupFilter === '收藏夹') return false
+    if (groupFilter === '已掌握' && n.reviewStatus !== 'mastered') return false
     if (groupFilter === '杂笔记') {
       if (subFilter !== '全部' && n.category !== subFilter) return false
+      if (statusFilter === 'mastered' && n.reviewStatus !== 'mastered') return false
+      if (statusFilter === 'unmastered' && n.reviewStatus === 'mastered') return false
     }
     const matchSearch = !search ||
       n.content.toLowerCase().includes(search.toLowerCase()) ||
@@ -105,7 +117,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
   })
 
   const showWriting = groupFilter === '全部' || groupFilter === '写作'
-  const showNotes = groupFilter === '全部' || groupFilter === '杂笔记'
+  const showNotes = groupFilter === '全部' || groupFilter === '杂笔记' || groupFilter === '已掌握'
   const showFavorites = groupFilter === '收藏夹'
 
   const allItems = showNotes ? filteredNotes : []
@@ -152,15 +164,20 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
             { g: '杂笔记' as const, icon: NotebookPen, count: notes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
             { g: '写作' as const, icon: FileText, count: writingNotes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
             { g: '收藏夹' as const, icon: Heart, count: favorites.length, activeClass: 'bg-[#2e1a1a] border-[#ef4444] text-[#fca5a5]', activeIcon: 'text-[#ef4444]', activeBadge: 'bg-[#ef4444]/20 text-[#ef4444]' },
+            { g: '已掌握' as const, icon: LayoutGrid, count: notes.filter((n) => n.reviewStatus === 'mastered').length, activeClass: 'bg-[#0e2a1f] border-[#34d399] text-[#86efac]', activeIcon: 'text-[#34d399]', activeBadge: 'bg-[#34d399]/20 text-[#34d399]' },
           ]).map(({ g, icon: Icon, count, activeClass, activeIcon, activeBadge }) => (
             <motion.button
               key={g}
               type="button"
               whileTap={{ scale: 0.97 }}
               onClick={() => {
-                setGroupFilter(g); setSubFilter('全部'); setWritingSubFilter('全部')
+                setGroupFilter(g)
+                setSubFilter('全部')
+                setWritingSubFilter('全部')
+                setStatusFilter(g === '已掌握' ? 'mastered' : '全部')
                 const p: Record<string, string> = {}
                 if (g !== '全部') p.group = g
+                if (g === '已掌握') p.status = 'mastered'
                 setSearchParams(p, { replace: true })
               }}
               className={`flex items-center gap-1.5 h-9 px-4 rounded-md text-[13px] font-medium border transition-all ${
@@ -217,47 +234,90 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
 
         {/* 杂笔记子分类 pills */}
         {groupFilter === '杂笔记' && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {SUB_CATS.map((cat) => {
-              const color = cat !== '全部' ? CATEGORY_COLORS[cat]?.color : undefined
-              const bg = cat !== '全部' ? CATEGORY_COLORS[cat]?.bg : undefined
-              const border = cat !== '全部' ? CATEGORY_COLORS[cat]?.border : undefined
-              const dotColor = cat !== '全部' ? CATEGORY_BAR[cat] : undefined
-              const catCount = cat === '全部'
-                ? notes.length
-                : notes.filter((n) => n.category === cat).length
-              const isActive = subFilter === cat
-              return (
-                <motion.button
-                  key={cat}
-                  type="button"
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => {
-                    setSubFilter(cat)
-                    const p: Record<string, string> = { group: '杂笔记' }
-                    if (cat !== '全部') p.cat = String(cat)
-                    setSearchParams(p, { replace: true })
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    isActive && cat !== '全部'
-                      ? ''
-                      : isActive
-                        ? 'bg-primary-btn text-white'
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {SUB_CATS.map((cat) => {
+                const color = cat !== '全部' ? CATEGORY_COLORS[cat]?.color : undefined
+                const bg = cat !== '全部' ? CATEGORY_COLORS[cat]?.bg : undefined
+                const border = cat !== '全部' ? CATEGORY_COLORS[cat]?.border : undefined
+                const dotColor = cat !== '全部' ? CATEGORY_BAR[cat] : undefined
+                const catCount = cat === '全部'
+                  ? notes.length
+                  : notes.filter((n) => n.category === cat).length
+                const isActive = subFilter === cat
+                return (
+                  <motion.button
+                    key={cat}
+                    type="button"
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setSubFilter(cat)
+                      const p: Record<string, string> = { group: '杂笔记' }
+                      if (cat !== '全部') p.cat = String(cat)
+                      if (statusFilter !== '全部') p.status = statusFilter
+                      setSearchParams(p, { replace: true })
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isActive && cat !== '全部'
+                        ? ''
+                        : isActive
+                          ? 'bg-primary-btn text-white'
+                          : 'border border-border text-text-dim hover:text-text-muted hover:border-border-strong'
+                    }`}
+                    style={isActive && cat !== '全部' ? { color, background: bg, border: `1px solid ${border}` } : {}}
+                  >
+                    {dotColor && (
+                      <div
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: dotColor }}
+                      />
+                    )}
+                    {cat}
+                    <span className={`text-[10px] opacity-50 ml-0.5`}>{catCount}</span>
+                  </motion.button>
+                )
+              })}
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {([
+                { key: '全部', label: '全部' },
+                { key: 'mastered', label: '已掌握' },
+                { key: 'unmastered', label: '未掌握' },
+              ] as const).map((item) => {
+                const isActive = statusFilter === item.key
+                const count = item.key === '全部'
+                  ? notes.filter((n) => subFilter === '全部' || n.category === subFilter).length
+                  : item.key === 'mastered'
+                    ? notes.filter((n) => (subFilter === '全部' || n.category === subFilter) && n.reviewStatus === 'mastered').length
+                    : notes.filter((n) => (subFilter === '全部' || n.category === subFilter) && n.reviewStatus !== 'mastered').length
+                return (
+                  <motion.button
+                    key={item.key}
+                    type="button"
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      setStatusFilter(item.key)
+                      const p: Record<string, string> = { group: '杂笔记' }
+                      if (subFilter !== '全部') p.cat = String(subFilter)
+                      if (item.key !== '全部') p.status = item.key
+                      setSearchParams(p, { replace: true })
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isActive
+                        ? item.key === 'mastered'
+                          ? 'bg-[#0e2a1f] border border-[#34d399] text-[#86efac]'
+                          : item.key === 'unmastered'
+                            ? 'bg-[#2e1212] border border-[#f87171] text-[#fca5a5]'
+                            : 'bg-primary-btn text-white'
                         : 'border border-border text-text-dim hover:text-text-muted hover:border-border-strong'
-                  }`}
-                  style={isActive && cat !== '全部' ? { color, background: bg, border: `1px solid ${border}` } : {}}
-                >
-                  {dotColor && (
-                    <div
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: dotColor }}
-                    />
-                  )}
-                  {cat}
-                  <span className={`text-[10px] opacity-50 ml-0.5`}>{catCount}</span>
-                </motion.button>
-              )
-            })}
+                    }`}
+                  >
+                    {item.label}
+                    <span className="text-[10px] opacity-50 ml-0.5">{count}</span>
+                  </motion.button>
+                )
+              })}
+            </div>
           </div>
         )}
 

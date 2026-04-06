@@ -1,16 +1,22 @@
 inhabitant = habitant - 居民 
 
+dispense分发分配-- indispensable不可或缺的 extinguish熄灭扑灭---区别distinguish costume(s)服装--区分--Customer顾客
 
 
- linguistic语言  propose提议  assumption假设
 
-meditation冥想沉思 dispense分发分配-- indispensable不可或缺的 extinguish熄灭扑灭---区别distinguish
+cooperation tunnel vehicles  
 
-tunnel  manifest显示表明   cooperation   laundry洗衣店 nightmare噩梦  canyon峡谷 Mighty强大的 
+linguistic语言  propose提议  assumption假设
 
-absurd荒诞的  resume简历/恢复 vehicles  rehearsal彩排排练 costume(s)服装--区分--Customer顾客
+meditation冥想沉思 manifest显示表明   laundry洗衣店 nightmare噩梦  canyon峡谷 Mighty强大的 
 
-ferry van渡轮 货车  lodge小屋  forest   scent=odour  irritable暴躁敏感的(重音在前)  spices香料 
+
+
+
+
+absurd荒诞的  resume简历/恢复 rehearsal彩排排练 
+
+ferry渡轮 van货车  lodge小屋  forest   scent=odour  irritable暴躁敏感的(重音在前)  spices香料 
 
 subtle细微的(会读)  pollution  inaccuracy  bright-feathers明亮羽毛  compassion同情  attendees参与者
 
