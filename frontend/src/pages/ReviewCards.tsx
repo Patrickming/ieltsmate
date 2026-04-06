@@ -51,11 +51,12 @@ function AITip({ label, tip }: { label: string; tip: string }) {
   )
 }
 
-function CardFront({ note, cardType, answer, onAnswerChange }: {
+function CardFront({ note, cardType, answer, onAnswerChange, onReveal }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   answer?: string
   onAnswerChange?: (v: string) => void
+  onReveal?: () => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
@@ -155,7 +156,10 @@ function CardFront({ note, cardType, answer, onAnswerChange }: {
               onClick={e => e.stopPropagation()}
               onKeyDown={e => {
                 e.stopPropagation()
-                // allow Space in input without flipping card
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  onReveal?.()
+                }
               }}
               className="w-full h-14 rounded-2xl px-5 text-[20px] text-center font-mono outline-none transition-all duration-200 tracking-[6px]"
               style={{
@@ -170,7 +174,8 @@ function CardFront({ note, cardType, answer, onAnswerChange }: {
             />
 
             <p className="text-[11px] text-text-subtle">
-              输入后按 <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-text-dim font-mono">Space</kbd> 或点击卡片翻转查看
+              输入后按 <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-text-dim font-mono">Enter</kbd> /
+              <kbd className="ml-1 px-1.5 py-0.5 rounded bg-[#27272a] border border-[#3f3f46] text-[10px] text-text-dim font-mono">Space</kbd> 或点击卡片翻转查看
             </p>
           </div>
         </div>
@@ -835,6 +840,7 @@ export default function ReviewCards() {
                       cardType={cardType}
                       answer={spellingAnswer}
                       onAnswerChange={setSpellingAnswer}
+                      onReveal={() => setFlipped(true)}
                     />
                   </div>
 
