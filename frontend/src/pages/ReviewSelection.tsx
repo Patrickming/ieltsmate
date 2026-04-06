@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
+import { ReviewPreparingOverlay } from '../components/review/ReviewPreparingOverlay'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import { useAppStore, type StartReviewParams } from '../store/useAppStore'
 
@@ -37,13 +38,24 @@ function loadContinueProgress() {
 
 export default function ReviewSelection() {
   const navigate = useNavigate()
-  const { notes, favorites, startReviewSession } = useAppStore()
+  const {
+    notes,
+    favorites,
+    startReviewSession,
+    prepareInitialAIBatch,
+    reviewPrepareBatchSize,
+    reviewPrepareTimeoutMs,
+    reviewPreparing,
+    reviewPreparingProgress,
+    resetReviewPreparing,
+  } = useAppStore()
   const [bigCat, setBigCat] = useState<'杂笔记' | '收藏夹'>('杂笔记')
   const [subCats, setSubCats] = useState<Set<Category | '全部'>>(new Set(['全部']))
   const [range, setRange] = useState<Range>('all')
   const [order, setOrder] = useState<Order>('random')
   const [mode, setMode] = useState<Mode>('random')
   const [starting, setStarting] = useState(false)
+  const [prepareHint, setPrepareHint] = useState<string | null>(null)
 
   const continueProgress = loadContinueProgress()
   const continueRemaining = continueProgress
@@ -79,8 +91,10 @@ export default function ReviewSelection() {
   const handleStart = async () => {
     const isContinue = mode === 'continue'
     const canStart = isContinue ? continueRemaining > 0 : reviewCards.length > 0
-    if (!canStart || starting) return
+    if (!canStart || starting || reviewPreparing) return
     setStarting(true)
+    setPrepareHint(null)
+    resetReviewPreparing()
 
     let params: StartReviewParams
     if (isContinue && continueProgress?.sessionParams) {
@@ -99,12 +113,24 @@ export default function ReviewSelection() {
     }
 
     const ok = await startReviewSession(params)
-    setStarting(false)
-    if (ok) {
-      navigate('/review/cards')
-    } else {
+    if (!ok) {
+      setStarting(false)
       alert('当前筛选条件下暂无可复习内容，请调整筛选条件')
+      return
     }
+
+    const warmup = await prepareInitialAIBatch({
+      batchSize: reviewPrepareBatchSize,
+      timeoutMs: reviewPrepareTimeoutMs,
+      pollIntervalMs: 120,
+    })
+
+    if (warmup.timedOut) {
+      setPrepareHint('AI 生成较慢，已进入复习页，联想内容会在卡片内继续补全')
+    }
+
+    setStarting(false)
+    navigate('/review/cards')
   }
 
   return (
@@ -471,6 +497,8 @@ export default function ReviewSelection() {
                         <p className="text-[11px] text-[#fbbf24]">
                           {isContinue ? '暂无上次记录' : '当前筛选条件下暂无内容'}
                         </p>
+                      ) : prepareHint ? (
+                        <p className="text-[11px] text-[#fbbf24]">{prepareHint}</p>
                       ) : (
                         <p className="text-[11px] text-text-subtle">
                           {isContinue ? '继续上次 · 断点续复' : `${bigCat} · ${range === 'all' ? '全部' : '仅错题'} · 随机`}
@@ -483,10 +511,10 @@ export default function ReviewSelection() {
 
               {/* Start button */}
               <motion.button
-                whileHover={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting ? { scale: 1.02 } : {}}
-                whileTap={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting ? { scale: 0.97 } : {}}
+                whileHover={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting && !reviewPreparing ? { scale: 1.02 } : {}}
+                whileTap={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting && !reviewPreparing ? { scale: 0.97 } : {}}
                 onClick={() => { void handleStart() }}
-                disabled={(mode === 'continue' ? continueRemaining === 0 : reviewCards.length === 0) || starting}
+                disabled={(mode === 'continue' ? continueRemaining === 0 : reviewCards.length === 0) || starting || reviewPreparing}
                 className="flex items-center gap-2.5 h-11 px-7 rounded-xl font-semibold text-[15px] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={(() => {
                   const hasContent = mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0
@@ -498,13 +526,19 @@ export default function ReviewSelection() {
                 })()}
               >
                 <Play size={15} fill="currentColor" />
-                {starting ? '加载中...' : '开始复习'}
-                {!starting && <ChevronRight size={15} strokeWidth={2.5} />}
+                {starting || reviewPreparing ? 'AI 生成中...' : '开始复习'}
+                {!starting && !reviewPreparing && <ChevronRight size={15} strokeWidth={2.5} />}
               </motion.button>
             </motion.div>
           </div>
         </div>
       </div>
+      <ReviewPreparingOverlay
+        open={starting || reviewPreparing}
+        phase={reviewPreparing ? 'preparing' : 'starting'}
+        done={reviewPreparingProgress.done}
+        total={reviewPreparingProgress.total}
+      />
     </Layout>
   )
 }

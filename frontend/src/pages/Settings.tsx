@@ -14,7 +14,21 @@ const MODEL_SLOTS = [
 ]
 
 export default function Settings() {
-  const { openAIConfig, openImport, theme, setTheme, providers, classifyModel, reviewModel, chatModel, setModelSlot } =
+  const {
+    openAIConfig,
+    openImport,
+    theme,
+    setTheme,
+    providers,
+    classifyModel,
+    reviewModel,
+    chatModel,
+    setModelSlot,
+    reviewPrepareBatchSize,
+    reviewPrepareTimeoutMs,
+    setReviewPrepareBatchSize,
+    setReviewPrepareTimeoutMs,
+  } =
     useAppStore()
 
   const handleExport = async (format: 'json' | 'csv') => {
@@ -176,7 +190,46 @@ export default function Settings() {
 
         <div className="h-px bg-border" />
 
-        {/* Section 3: 数据管理 */}
+        {/* Section 3: 复习启动预热 */}
+        <section className="flex flex-col gap-4">
+          <SectionTitle>复习启动预热</SectionTitle>
+          <div className="bg-surface-card border border-border rounded-xl p-5">
+            <div className="text-sm font-medium text-text-secondary">启动阶段 AI 预热参数</div>
+            <div className="text-xs text-text-dim mt-0.5 mb-4">
+              点击“开始复习”后，预热完成再进入第一张卡片
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-text-dim">预热数量</span>
+                <select
+                  value={String(reviewPrepareBatchSize)}
+                  onChange={(e) => { void setReviewPrepareBatchSize(Number(e.target.value)) }}
+                  className="h-9 bg-[#232328] border border-border rounded-sm px-2 text-xs text-text-muted hover:border-border-strong transition-colors outline-none appearance-none cursor-pointer"
+                >
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>{n} 张</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-text-dim">超时时间</span>
+                <select
+                  value={String(reviewPrepareTimeoutMs)}
+                  onChange={(e) => { void setReviewPrepareTimeoutMs(Number(e.target.value)) }}
+                  className="h-9 bg-[#232328] border border-border rounded-sm px-2 text-xs text-text-muted hover:border-border-strong transition-colors outline-none appearance-none cursor-pointer"
+                >
+                  {[5000, 8000, 10000, 12000, 15000].map((ms) => (
+                    <option key={ms} value={ms}>{Math.round(ms / 1000)} 秒</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <div className="h-px bg-border" />
+
+        {/* Section 4: 数据管理 */}
         <section className="flex flex-col gap-5">
           <div className="flex items-center gap-2">
             <Database size={18} className="text-text-dim" />

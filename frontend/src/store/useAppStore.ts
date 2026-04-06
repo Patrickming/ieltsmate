@@ -166,6 +166,11 @@ interface ReviewSession {
   completedOffset: number
 }
 
+interface ReviewPreparingProgress {
+  done: number
+  total: number
+}
+
 type AddNoteInput = {
   content: string
   translation: string
@@ -177,6 +182,24 @@ type AddQuickNoteResult = {
 }
 
 const QUICK_NOTE_REQUEST_TIMEOUT_MS = 4000
+export const REVIEW_PREPARE_DEFAULT_BATCH_SIZE = 3
+export const REVIEW_PREPARE_DEFAULT_TIMEOUT_MS = 10000
+const REVIEW_PREPARE_DEFAULT_POLL_MS = 120
+
+function mapReviewCardType(category: string): string {
+  if (category === '口语' || category === '单词') return 'word-speech'
+  if (category === '短语') return 'phrase'
+  if (category === '同义替换') return 'synonym'
+  if (category === '句子') return 'sentence'
+  if (category === '拼写') return 'spelling'
+  return 'word-speech'
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
 
 export interface ProviderConfig {
   id: string
@@ -252,7 +275,11 @@ interface AppState {
   classifyModel: string
   reviewModel: string
   chatModel: string
+  reviewPrepareBatchSize: number
+  reviewPrepareTimeoutMs: number
   setModelSlot: (slot: 'classify' | 'review' | 'chat', model: string) => Promise<void>
+  setReviewPrepareBatchSize: (batchSize: number) => Promise<void>
+  setReviewPrepareTimeoutMs: (timeoutMs: number) => Promise<void>
 
   // Notes
   notes: Note[]
@@ -299,7 +326,15 @@ interface AppState {
 
   // Review session
   reviewSession: ReviewSession | null
+  reviewPreparing: boolean
+  reviewPreparingProgress: ReviewPreparingProgress
   startReviewSession: (params: StartReviewParams) => Promise<boolean>
+  prepareInitialAIBatch: (opts?: { batchSize?: number; timeoutMs?: number; pollIntervalMs?: number }) => Promise<{
+    timedOut: boolean
+    done: number
+    total: number
+  }>
+  resetReviewPreparing: () => void
   nextCard: () => void
   rateCard: (noteId: string, rating: 'easy' | 'again', spellingAnswer?: string) => void
   endReviewSession: () => Promise<{
@@ -553,6 +588,8 @@ export const useAppStore = create<AppState>((set, get) => {
   classifyModel: '',
   reviewModel: '',
   chatModel: '',
+  reviewPrepareBatchSize: REVIEW_PREPARE_DEFAULT_BATCH_SIZE,
+  reviewPrepareTimeoutMs: REVIEW_PREPARE_DEFAULT_TIMEOUT_MS,
 
   loadSettings: async () => {
     try {
@@ -566,6 +603,12 @@ export const useAppStore = create<AppState>((set, get) => {
         classifyModel: s['classifyModel'] ?? '',
         reviewModel: s['reviewModel'] ?? '',
         chatModel: s['chatModel'] ?? '',
+        reviewPrepareBatchSize: Number(s['reviewPrepareBatchSize']) > 0
+          ? Number(s['reviewPrepareBatchSize'])
+          : REVIEW_PREPARE_DEFAULT_BATCH_SIZE,
+        reviewPrepareTimeoutMs: Number(s['reviewPrepareTimeoutMs']) > 0
+          ? Number(s['reviewPrepareTimeoutMs'])
+          : REVIEW_PREPARE_DEFAULT_TIMEOUT_MS,
       })
       if (s['theme']) {
         document.documentElement.classList.toggle('light', s['theme'] === 'light')
@@ -591,6 +634,30 @@ export const useAppStore = create<AppState>((set, get) => {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: { [`${slot}Model`]: model } }),
+      })
+    } catch { /* 静默 */ }
+  },
+
+  setReviewPrepareBatchSize: async (batchSize) => {
+    const safe = Math.max(1, Math.floor(batchSize))
+    set({ reviewPrepareBatchSize: safe })
+    try {
+      await fetch(apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { reviewPrepareBatchSize: String(safe) } }),
+      })
+    } catch { /* 静默 */ }
+  },
+
+  setReviewPrepareTimeoutMs: async (timeoutMs) => {
+    const safe = Math.max(1000, Math.floor(timeoutMs))
+    set({ reviewPrepareTimeoutMs: safe })
+    try {
+      await fetch(apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: { reviewPrepareTimeoutMs: String(safe) } }),
       })
     } catch { /* 静默 */ }
   },
@@ -825,6 +892,8 @@ export const useAppStore = create<AppState>((set, get) => {
   setFilter: (cat) => set({ activeFilter: cat }),
 
   reviewSession: null,
+  reviewPreparing: false,
+  reviewPreparingProgress: { done: 0, total: 0 },
 
   startReviewSession: async (params) => {
     try {
@@ -893,6 +962,8 @@ export const useAppStore = create<AppState>((set, get) => {
       }
 
       set({
+        reviewPreparing: false,
+        reviewPreparingProgress: { done: 0, total: 0 },
         reviewSession: {
           sessionId: d.sessionId,
           cards,
@@ -911,6 +982,61 @@ export const useAppStore = create<AppState>((set, get) => {
       return false
     }
   },
+
+  prepareInitialAIBatch: async (opts) => {
+    const batchSize = Math.max(1, opts?.batchSize ?? REVIEW_PREPARE_DEFAULT_BATCH_SIZE)
+    const timeoutMs = Math.max(500, opts?.timeoutMs ?? REVIEW_PREPARE_DEFAULT_TIMEOUT_MS)
+    const pollIntervalMs = Math.max(50, opts?.pollIntervalMs ?? REVIEW_PREPARE_DEFAULT_POLL_MS)
+
+    const session = get().reviewSession
+    if (!session) {
+      set({ reviewPreparing: false, reviewPreparingProgress: { done: 0, total: 0 } })
+      return { timedOut: false, done: 0, total: 0 }
+    }
+
+    const targetCards = session.cards.slice(0, batchSize)
+    const total = targetCards.length
+    set({ reviewPreparing: true, reviewPreparingProgress: { done: 0, total } })
+
+    if (total === 0) {
+      set({ reviewPreparing: false, reviewPreparingProgress: { done: 0, total: 0 } })
+      return { timedOut: false, done: 0, total: 0 }
+    }
+
+    for (const card of targetCards) {
+      const latest = get().reviewSession
+      if (!latest) break
+      if (latest.aiContent[card.id] !== undefined || latest.aiLoading[card.id]) continue
+      void get().fetchAIContent(card.id, mapReviewCardType(card.category))
+    }
+
+    const start = Date.now()
+    let done = 0
+
+    while (Date.now() - start < timeoutMs) {
+      const latest = get().reviewSession
+      if (!latest) break
+      done = targetCards.filter((card) => latest.aiContent[card.id] !== undefined).length
+      set({ reviewPreparingProgress: { done, total } })
+      if (done >= total) {
+        set({ reviewPreparing: false, reviewPreparingProgress: { done, total } })
+        return { timedOut: false, done, total }
+      }
+      await waitMs(pollIntervalMs)
+    }
+
+    const latest = get().reviewSession
+    if (latest) {
+      done = targetCards.filter((card) => latest.aiContent[card.id] !== undefined).length
+    }
+    set({ reviewPreparing: false, reviewPreparingProgress: { done, total } })
+    return { timedOut: done < total, done, total }
+  },
+
+  resetReviewPreparing: () => set({
+    reviewPreparing: false,
+    reviewPreparingProgress: { done: 0, total: 0 },
+  }),
 
   nextCard: () => set((s) => {
     if (!s.reviewSession) return s
@@ -1015,7 +1141,11 @@ export const useAppStore = create<AppState>((set, get) => {
         method: 'POST',
       }).catch(() => {})
     }
-    set({ reviewSession: null })
+    set({
+      reviewSession: null,
+      reviewPreparing: false,
+      reviewPreparingProgress: { done: 0, total: 0 },
+    })
   },
 
   fetchAIContent: async (noteId, cardType) => {
@@ -1076,21 +1206,12 @@ export const useAppStore = create<AppState>((set, get) => {
     if (!session) return
     const { cards, aiContent, aiLoading } = session
 
-    const getCardType = (cat: string) => {
-      if (cat === '口语' || cat === '单词') return 'word-speech'
-      if (cat === '短语') return 'phrase'
-      if (cat === '同义替换') return 'synonym'
-      if (cat === '句子') return 'sentence'
-      if (cat === '拼写') return 'spelling'
-      return 'word-speech'
-    }
-
     for (let i = currentIdx; i < Math.min(currentIdx + 3, cards.length); i++) {
       const card = cards[i]
       if (!card) continue
       if (aiContent[card.id] !== undefined) continue
       if (aiLoading[card.id]) continue
-      void get().fetchAIContent(card.id, getCardType(card.category))
+      void get().fetchAIContent(card.id, mapReviewCardType(card.category))
     }
   },
 
@@ -1104,7 +1225,11 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }),
 
-  endReview: () => set({ reviewSession: null }),
+  endReview: () => set({
+    reviewSession: null,
+    reviewPreparing: false,
+    reviewPreparingProgress: { done: 0, total: 0 },
+  }),
 
   // ── Todos ─────────────────────────────────────────────────────────
   todos: [],
