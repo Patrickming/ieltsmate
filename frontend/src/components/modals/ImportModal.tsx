@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useMemo, useState, useRef, useCallback } from 'react'
 import {
   X, Upload, FileText, Sparkles, CheckCircle2, AlertTriangle,
   ChevronDown, RotateCcw, Loader2, TableProperties, Trash2, Pencil,
@@ -6,6 +6,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
 import { apiUrl } from '../../lib/apiBase'
+import type { Category } from '../../data/mockData'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -38,6 +39,36 @@ interface PreviewResult {
 }
 
 type Step = 'select' | 'review' | 'done'
+type EditableColumn = 'content' | 'translation' | 'category'
+
+const IMPORT_BUILTIN_CATEGORIES: Array<Category | '未分类'> = [
+  '未分类',
+  '口语',
+  '短语',
+  '句子',
+  '同义替换',
+  '拼写',
+  '单词',
+  '写作',
+]
+
+export function deriveImportCategoryOptions(rows: Array<Pick<ParsedNote, 'category'>>): string[] {
+  const customCategories = rows
+    .map((r) => r.category?.trim())
+    .filter((cat): cat is string => Boolean(cat))
+
+  return Array.from(new Set([...IMPORT_BUILTIN_CATEGORIES, ...customCategories]))
+}
+
+export function applyBatchCategoryToRows(
+  rows: ParsedNote[],
+  targetIndexes: number[],
+  category: string,
+): ParsedNote[] {
+  if (!category.trim()) return rows
+  const target = new Set(targetIndexes)
+  return rows.map((row, idx) => (target.has(idx) ? { ...row, category } : row))
+}
 
 // ── Notes Table Modal ─────────────────────────────────────────────────────────
 
@@ -49,9 +80,11 @@ interface NotesTableProps {
 
 function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTableProps) {
   const [rows, setRows] = useState<ParsedNote[]>(() => initialNotes.map((n) => ({ ...n })))
-  const [editingCell, setEditingCell] = useState<{ row: number; col: 'content' | 'translation' | 'category' } | null>(null)
+  const [editingCell, setEditingCell] = useState<{ row: number; col: EditableColumn } | null>(null)
   const [editValue, setEditValue] = useState('')
   const [search, setSearch] = useState('')
+  const categoryOptions = useMemo(() => deriveImportCategoryOptions(rows), [rows])
+  const [batchCategory, setBatchCategory] = useState<string>('未分类')
 
   const filtered = search
     ? rows.map((r, i) => ({ r, i })).filter(({ r }) =>
@@ -61,7 +94,7 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
       )
     : rows.map((r, i) => ({ r, i }))
 
-  const startEdit = (rowIdx: number, col: 'content' | 'translation' | 'category') => {
+  const startEdit = (rowIdx: number, col: EditableColumn) => {
     setEditingCell({ row: rowIdx, col })
     setEditValue(rows[rowIdx][col] ?? '')
   }
@@ -78,6 +111,12 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
 
   const deleteRow = (idx: number) => {
     setRows((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  const applyBatchCategory = () => {
+    const targetIndexes = filtered.map(({ i }) => i)
+    if (targetIndexes.length === 0 || !batchCategory.trim()) return
+    setRows((prev) => applyBatchCategoryToRows(prev, targetIndexes, batchCategory.trim()))
   }
 
   return (
@@ -104,6 +143,22 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
           onChange={(e) => setSearch(e.target.value)}
           className="h-8 px-3 bg-[#18181b] border border-[#27272a] rounded-md text-xs text-text-primary placeholder:text-text-subtle focus:outline-none focus:border-primary/50 w-44"
         />
+        <select
+          value={batchCategory}
+          onChange={(e) => setBatchCategory(e.target.value)}
+          className="h-8 px-2 bg-[#18181b] border border-[#27272a] rounded-md text-xs text-text-primary focus:outline-none focus:border-primary/50"
+        >
+          {categoryOptions.map((cat) => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
+        <button
+          onClick={applyBatchCategory}
+          disabled={filtered.length === 0}
+          className="h-8 px-3 rounded-md text-[12px] font-medium border border-primary/30 text-primary hover:bg-primary/10 disabled:opacity-40 disabled:hover:bg-transparent transition-all"
+        >
+          批量改分类
+        </button>
         <button
           onClick={() => { onSave(rows); onClose() }}
           className="h-8 px-4 rounded-md text-[13px] font-medium bg-primary-btn hover:bg-[#4338ca] text-white transition-all"
@@ -141,14 +196,37 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
                 {(['content', 'translation', 'category'] as const).map((col) => (
                   <td key={col} className="py-2 px-3 relative">
                     {editingCell?.row === i && editingCell.col === col ? (
-                      <input
-                        autoFocus
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onBlur={commitEdit}
-                        onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingCell(null) }}
-                        className="w-full bg-[#1e1b4b] border border-primary/50 rounded px-2 py-1 text-sm text-text-primary focus:outline-none"
-                      />
+                      col === 'category' ? (
+                        <select
+                          autoFocus
+                          value={editValue || '未分类'}
+                          onChange={(e) => {
+                            const nextValue = e.target.value
+                            setEditValue(nextValue)
+                            setRows((prev) =>
+                              prev.map((row, rowIdx) =>
+                                rowIdx === i ? { ...row, category: nextValue } : row,
+                              ),
+                            )
+                            setEditingCell(null)
+                          }}
+                          onBlur={() => setEditingCell(null)}
+                          className="w-full bg-[#1e1b4b] border border-primary/50 rounded px-2 py-1 text-sm text-text-primary focus:outline-none"
+                        >
+                          {categoryOptions.map((cat) => (
+                            <option key={cat} value={cat}>{cat}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          autoFocus
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={commitEdit}
+                          onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingCell(null) }}
+                          className="w-full bg-[#1e1b4b] border border-primary/50 rounded px-2 py-1 text-sm text-text-primary focus:outline-none"
+                        />
+                      )
                     ) : (
                       <div
                         onClick={() => startEdit(i, col)}

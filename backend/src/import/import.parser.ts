@@ -9,8 +9,11 @@ export interface RawEntry {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseCategory(line: string): string | null {
-  const m = line.match(/^###\s+(.+)/)
-  return m ? m[1].trim() : null
+  // 兼容 "## 分类"、"### 分类"、"##分类" 这类常见 markdown 写法
+  const m = line.match(/^#{2,3}\s*(.+)$/)
+  if (!m) return null
+  const parsed = m[1].trim()
+  return parsed.length > 0 ? parsed : null
 }
 
 /**
@@ -148,15 +151,15 @@ export function parseMarkdown(markdown: string): RawEntry[] {
     if (!line) continue
     if (line.startsWith('<img')) continue
 
-    // h1 / h2 标题跳过
-    if (/^#{1,2}\s/.test(line)) continue
-
-    // ### 分类标题（在列表剥离前检测，避免误剥离）
+    // 分类标题（在标题跳过前检测，避免将 ## 分类误跳过）
     const cat = parseCategory(line)
     if (cat) {
       currentCategory = cat
       continue
     }
+
+    // h1 标题跳过（## / ### 已在上方当作分类处理）
+    if (/^#\s/.test(line)) continue
 
     let processedLine = line
 
