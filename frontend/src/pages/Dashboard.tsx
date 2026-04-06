@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { CirclePlay, Plus } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
@@ -9,9 +9,19 @@ import { TodoList } from '../components/ui/TodoList'
 import { Button } from '../components/ui/Button'
 import { useAppStore } from '../store/useAppStore'
 
+function getCSTDateString(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { notes, openQuickNote, dashboardStats, dashboardStatsLoading, loadDashboardStats } = useAppStore()
+  const [selectedTodoDate, setSelectedTodoDate] = useState(() => getCSTDateString())
 
   useEffect(() => {
     void loadDashboardStats()
@@ -99,10 +109,17 @@ export default function Dashboard() {
         <div className="grid grid-cols-[1fr_260px] gap-5 items-start">
           <div className="flex flex-col gap-5">
             <div className="bg-surface-card border border-border rounded-xl p-5 min-w-0">
-              <ActivityHeatmap />
+              <ActivityHeatmap
+                selectedDate={selectedTodoDate}
+                onDateSelect={setSelectedTodoDate}
+              />
             </div>
             <div className="bg-surface-card border border-border rounded-xl p-5">
-              <TodoList onAllDone={handleAllDone} />
+              <TodoList
+                onAllDone={handleAllDone}
+                selectedDate={selectedTodoDate}
+                onSelectedDateChange={setSelectedTodoDate}
+              />
             </div>
           </div>
           <div className="bg-surface-card border border-border rounded-xl p-5">

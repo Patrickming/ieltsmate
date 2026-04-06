@@ -28,9 +28,11 @@ function formatDateLabel(dateStr: string, todayStr: string): string {
 
 interface TodoListProps {
   onAllDone: (done: boolean) => void
+  selectedDate?: string
+  onSelectedDateChange?: (date: string) => void
 }
 
-export function TodoList({ onAllDone }: TodoListProps) {
+export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelectedDateChange }: TodoListProps) {
   const { todos, todosLoading, loadTodos, addTodo, toggleTodo, deleteTodo } = useAppStore()
   const [modalOpen, setModalOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -38,8 +40,16 @@ export function TodoList({ onAllDone }: TodoListProps) {
   const dateInputRef = useRef<HTMLInputElement>(null)
 
   const today = getCSTDateString(0)
-  const [selectedDate, setSelectedDate] = useState(today)
+  const [internalSelectedDate, setInternalSelectedDate] = useState(today)
+  const selectedDate = selectedDateProp ?? internalSelectedDate
   const isToday = selectedDate === today
+
+  function updateSelectedDate(date: string) {
+    if (selectedDateProp === undefined) {
+      setInternalSelectedDate(date)
+    }
+    onSelectedDateChange?.(date)
+  }
 
   // 切换日期时加载对应任务
   useEffect(() => {
@@ -68,24 +78,20 @@ export function TodoList({ onAllDone }: TodoListProps) {
   }, [modalOpen])
 
   function prevDay() {
-    setSelectedDate((d) => {
-      const dt = new Date(d + 'T12:00:00+08:00')
-      dt.setDate(dt.getDate() - 1)
-      return dt.toISOString().slice(0, 10)
-    })
+    const dt = new Date(selectedDate + 'T12:00:00+08:00')
+    dt.setDate(dt.getDate() - 1)
+    updateSelectedDate(dt.toISOString().slice(0, 10))
   }
 
   function nextDay() {
     if (isToday) return
-    setSelectedDate((d) => {
-      const dt = new Date(d + 'T12:00:00+08:00')
-      dt.setDate(dt.getDate() + 1)
-      return dt.toISOString().slice(0, 10)
-    })
+    const dt = new Date(selectedDate + 'T12:00:00+08:00')
+    dt.setDate(dt.getDate() + 1)
+    updateSelectedDate(dt.toISOString().slice(0, 10))
   }
 
   function goToday() {
-    setSelectedDate(today)
+    updateSelectedDate(today)
   }
 
   function confirmAdd() {
@@ -145,7 +151,7 @@ export function TodoList({ onAllDone }: TodoListProps) {
                   type="date"
                   value={selectedDate}
                   max={today}
-                  onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value) }}
+                  onChange={(e) => { if (e.target.value) updateSelectedDate(e.target.value) }}
                   className="absolute inset-0 opacity-0 w-full h-full cursor-pointer pointer-events-none"
                   style={{ colorScheme: 'dark' }}
                   tabIndex={-1}

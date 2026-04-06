@@ -32,6 +32,8 @@ interface TooltipState {
 
 interface ActivityHeatmapProps {
   todayAllDone?: boolean
+  selectedDate?: string
+  onDateSelect?: (date: string) => void
 }
 
 function getCSTDateString(d: Date): string {
@@ -91,7 +93,11 @@ function formatTooltipDate(key: string): string {
   return `${key}  周${weekNames[d.getDay()]}`
 }
 
-export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: ActivityHeatmapProps) {
+export function ActivityHeatmap({
+  todayAllDone: todayAllDoneProp = false,
+  selectedDate,
+  onDateSelect,
+}: ActivityHeatmapProps) {
   const todayKey = getCSTDateString(new Date())
   const { activity: storeActivity, loadActivity, activityLoading } = useAppStore()
 
@@ -395,12 +401,16 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
               const y = TOP_LABEL_H + di * (CELL + GAP)
               const isToday = day.key === todayKey
               const fill   = getCellColor(day.count, day.allDone)
+              const isSelected = day.key === selectedDate
               const stroke = isToday
                 ? (day.allDone ? '#f59e0b' : '#a5b4fc')
+                : isSelected
+                  ? '#818cf8'
                 : 'none'
               return (
                 <rect
                   key={day.key}
+                  data-date={day.key}
                   x={x} y={y}
                   width={CELL} height={CELL}
                   rx={Math.max(1, CELL * 0.2)}
@@ -413,6 +423,7 @@ export function ActivityHeatmap({ todayAllDone: todayAllDoneProp = false }: Acti
                     setTooltip({ x: r.left + r.width / 2, y: r.top, day })
                   }}
                   onMouseLeave={() => setTooltip(null)}
+                  onClick={() => onDateSelect?.(day.key)}
                 />
               )
             })
