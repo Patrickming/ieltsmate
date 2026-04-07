@@ -44,3 +44,6 @@ backend/node_modules/
 .worktrees/
 *.tmp
 *.temp
+
+# Local database backups
+backend/backups/
