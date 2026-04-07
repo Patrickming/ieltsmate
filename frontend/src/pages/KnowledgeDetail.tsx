@@ -45,6 +45,10 @@ export default function KnowledgeDetail() {
   const [editAnts, setEditAnts] = useState<string[]>([])
   const [newSyn, setNewSyn] = useState('')
   const [newAnt, setNewAnt] = useState('')
+  const [editingSynIdx, setEditingSynIdx] = useState<number | null>(null)
+  const [editingSynVal, setEditingSynVal] = useState('')
+  const [editingAntIdx, setEditingAntIdx] = useState<number | null>(null)
+  const [editingAntVal, setEditingAntVal] = useState('')
 
   const noteIdx = notes.findIndex((n) => n.id === id)
   const note = notes[noteIdx]
@@ -152,6 +156,10 @@ export default function KnowledgeDetail() {
     setEditAnts([...(note.antonyms ?? [])])
     setNewSyn('')
     setNewAnt('')
+    setEditingSynIdx(null)
+    setEditingSynVal('')
+    setEditingAntIdx(null)
+    setEditingAntVal('')
     setEditingExt(true)
   }
 
@@ -159,6 +167,10 @@ export default function KnowledgeDetail() {
     setEditingExt(false)
     setNewSyn('')
     setNewAnt('')
+    setEditingSynIdx(null)
+    setEditingSynVal('')
+    setEditingAntIdx(null)
+    setEditingAntVal('')
   }
 
   const handleSaveEditExt = async () => {
@@ -181,6 +193,32 @@ export default function KnowledgeDetail() {
     if (!v || editAnts.includes(v)) { setNewAnt(''); return }
     setEditAnts(p => [...p, v])
     setNewAnt('')
+  }
+
+  const startEditSynItem = (idx: number) => {
+    setEditingSynIdx(idx)
+    setEditingSynVal(editSyns[idx] ?? '')
+  }
+
+  const commitEditSynItem = () => {
+    if (editingSynIdx === null) return
+    const val = editingSynVal.trim()
+    setEditSyns((prev) => prev.map((item, idx) => (idx === editingSynIdx ? val || item : item)))
+    setEditingSynIdx(null)
+    setEditingSynVal('')
+  }
+
+  const startEditAntItem = (idx: number) => {
+    setEditingAntIdx(idx)
+    setEditingAntVal(editAnts[idx] ?? '')
+  }
+
+  const commitEditAntItem = () => {
+    if (editingAntIdx === null) return
+    const val = editingAntVal.trim()
+    setEditAnts((prev) => prev.map((item, idx) => (idx === editingAntIdx ? val || item : item)))
+    setEditingAntIdx(null)
+    setEditingAntVal('')
   }
 
   const handleDelete = async () => {
@@ -336,15 +374,42 @@ export default function KnowledgeDetail() {
                   <div>
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🔄 同义短语</div>
                     <div className="flex flex-wrap gap-2 mb-2">
-                      {editSyns.map((syn) => (
+                      {editSyns.map((syn, idx) => (
                         <div
-                          key={syn}
+                          key={`${syn}-${idx}`}
                           className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-md border"
                           style={{ background: '#1a1a28', borderColor: '#3f3f46' }}
                         >
-                          <span className="text-[14px] text-text-primary">{syn}</span>
+                          {editingSynIdx === idx ? (
+                            <input
+                              autoFocus
+                              value={editingSynVal}
+                              onChange={(e) => setEditingSynVal(e.target.value)}
+                              onBlur={commitEditSynItem}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitEditSynItem()
+                                if (e.key === 'Escape') { setEditingSynIdx(null); setEditingSynVal('') }
+                              }}
+                              className="min-w-[140px] bg-[#141420] border border-[#4b5563] rounded px-2 py-0.5 text-[13px] text-text-primary outline-none"
+                            />
+                          ) : (
+                            <span
+                              onDoubleClick={() => startEditSynItem(idx)}
+                              className="text-[14px] text-text-primary cursor-text"
+                              title="双击编辑"
+                            >
+                              {syn}
+                            </span>
+                          )}
                           <button
-                            onClick={() => setEditSyns(p => p.filter(s => s !== syn))}
+                            onClick={() => startEditSynItem(idx)}
+                            className="text-text-subtle hover:text-primary transition-colors ml-0.5"
+                            title="编辑"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => setEditSyns(p => p.filter((_, i) => i !== idx))}
                             className="text-text-subtle hover:text-red-400 transition-colors ml-0.5"
                           >
                             <X size={12} />
@@ -392,15 +457,42 @@ export default function KnowledgeDetail() {
                   <div>
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🔀 反义短语</div>
                     <div className="flex flex-wrap gap-2 mb-2">
-                      {editAnts.map((ant) => (
+                      {editAnts.map((ant, idx) => (
                         <div
-                          key={ant}
+                          key={`${ant}-${idx}`}
                           className="flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-md border"
                           style={{ background: '#1a1a28', borderColor: '#3f3f46' }}
                         >
-                          <span className="text-[14px] text-text-primary">{ant}</span>
+                          {editingAntIdx === idx ? (
+                            <input
+                              autoFocus
+                              value={editingAntVal}
+                              onChange={(e) => setEditingAntVal(e.target.value)}
+                              onBlur={commitEditAntItem}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') commitEditAntItem()
+                                if (e.key === 'Escape') { setEditingAntIdx(null); setEditingAntVal('') }
+                              }}
+                              className="min-w-[140px] bg-[#141420] border border-[#4b5563] rounded px-2 py-0.5 text-[13px] text-text-primary outline-none"
+                            />
+                          ) : (
+                            <span
+                              onDoubleClick={() => startEditAntItem(idx)}
+                              className="text-[14px] text-text-primary cursor-text"
+                              title="双击编辑"
+                            >
+                              {ant}
+                            </span>
+                          )}
                           <button
-                            onClick={() => setEditAnts(p => p.filter(s => s !== ant))}
+                            onClick={() => startEditAntItem(idx)}
+                            className="text-text-subtle hover:text-primary transition-colors ml-0.5"
+                            title="编辑"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => setEditAnts(p => p.filter((_, i) => i !== idx))}
                             className="text-text-subtle hover:text-red-400 transition-colors ml-0.5"
                           >
                             <X size={12} />

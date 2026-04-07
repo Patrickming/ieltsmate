@@ -1,4 +1,4 @@
-inhabitant = habitant - 居民 
+inhabitant = habitant - 居民  
 
 dispense分发分配-- indispensable不可或缺的 extinguish熄灭扑灭---区别distinguish costume(s)服装--区分--Customer顾客
 
@@ -16,7 +16,7 @@ meditation冥想沉思 manifest显示表明   laundry洗衣店 nightmare噩梦  
 
 absurd荒诞的  resume简历/恢复 rehearsal彩排排练 
 
-ferry渡轮 van货车  lodge小屋  forest   scent=odour  irritable暴躁敏感的(重音在前)  spices香料 
+ferry渡轮 van货车  lodge小屋  forest    irritable暴躁敏感的(重音在前)  spices香料 
 
 subtle细微的(会读)  pollution  inaccuracy  bright-feathers明亮羽毛  compassion同情  attendees参与者
 
