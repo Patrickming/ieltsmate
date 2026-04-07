@@ -6,6 +6,7 @@ import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
 import { StrokeButton } from '../components/ui/StrokeButton'
 import { useAppStore } from '../store/useAppStore'
+import { apiUrl } from '../lib/apiBase'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
@@ -203,6 +204,20 @@ interface SentenceAI extends AIContentBase { fallback: false; analysis: string; 
 interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string } }
 interface FallbackAI extends AIContentBase { fallback: true; phonetic: string | null; translation: string; synonyms: string[]; antonyms: string[]; example: string | null; memoryTip: string | null }
 type CardAIContent = WordSpeechAI | PhraseAI | SynonymAI | SentenceAI | SpellingAI | FallbackAI
+
+interface UserNoteItem {
+  id: string
+  content: string
+}
+
+interface UserNoteListResponse {
+  data?: {
+    items?: UserNoteItem[]
+  }
+}
+
+type UserNotesFetchStatus = 'idle' | 'loading' | 'success' | 'error'
+
 const SLASH_ANIMATION_MS = 1400
 const SLASH_PARTICLES = [
   { left: '45%', top: '16%' }, { left: '52%', top: '20%' }, { left: '56%', top: '27%' },
@@ -244,10 +259,29 @@ function SaveChip({ word, saved, onSave }: { word: string; saved: boolean; onSav
   )
 }
 
+function UserNotesSection({ userNotes, withTopDivider = false }: { userNotes: string[]; withTopDivider?: boolean }) {
+  if (userNotes.length === 0) return null
+
+  return (
+    <div>
+      {withTopDivider && <div className="h-px bg-border mb-4" />}
+      <div className="text-sm font-semibold text-text-muted mb-2">我的备注</div>
+      <div className="flex flex-col gap-2">
+        {userNotes.map((content, idx) => (
+          <div key={`${content}-${idx}`} className="pl-3 border-l-2 border-primary/35">
+            <p className="text-[13px] text-text-muted leading-relaxed">{content}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── CardBack sub-components ───────────────────────────────────────────────────
-function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
+function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes }: {
   note: Note; ai: WordSpeechAI | PhraseAI
   savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+  userNotes: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   return (
@@ -256,6 +290,7 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
+      <UserNotesSection userNotes={userNotes} />
       {ai.phonetic && (
         <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
           <Volume2 size={16} className="text-primary" />
@@ -305,9 +340,10 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   )
 }
 
-function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt }: {
+function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes }: {
   note: Note; ai: SynonymAI
   savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+  userNotes: string[]
 }) {
   // Format a word-meaning pair for saving: "word (briefMeaning)"
   const formatWmKey = (wm: { word: string; meaning: string }) => {
@@ -321,6 +357,7 @@ function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt }:
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
+      <UserNotesSection userNotes={userNotes} />
       <div>
         <AITip label="各词细微差别" tip="点击「存入」可将该词（含中文释义）保存到知识库同义词" />
         <div className="flex flex-col gap-3 mt-2.5">
@@ -370,13 +407,14 @@ function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt }:
   )
 }
 
-function CardBackSentence({ note, ai }: { note: Note; ai: SentenceAI }) {
+function CardBackSentence({ note, ai, userNotes }: { note: Note; ai: SentenceAI; userNotes: string[] }) {
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
+      <UserNotesSection userNotes={userNotes} />
       <div>
         <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
         <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
@@ -405,10 +443,11 @@ function CardBackSentence({ note, ai }: { note: Note; ai: SentenceAI }) {
   )
 }
 
-function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer }: {
+function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, userNotes }: {
   note: Note; ai: SpellingAI
   savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
   spellingAnswer?: string
+  userNotes: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = spellingAnswer
@@ -440,6 +479,7 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
           )}
         </div>
       )}
+      <UserNotesSection userNotes={userNotes} />
       {ai.phonetic && (
         <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
           <Volume2 size={16} className="text-primary" />
@@ -488,12 +528,13 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   )
 }
 
-function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying }: {
+function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying, userNotes }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   spellingAnswer?: string
   onRetry?: () => void
   isRetrying?: boolean
+  userNotes: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = cardType === 'spelling' && spellingAnswer
@@ -523,6 +564,7 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying 
           </button>
         )}
       </div>
+      <UserNotesSection userNotes={userNotes} />
       {spellingAnswer && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
           style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
@@ -552,7 +594,7 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying 
         <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
         <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
       </div>
-      {(note.synonyms?.length > 0 || note.antonyms?.length > 0) && <div className="h-px bg-border" />}
+      {(((note.synonyms?.length ?? 0) > 0) || ((note.antonyms?.length ?? 0) > 0)) && <div className="h-px bg-border" />}
       {note.synonyms && note.synonyms.length > 0 && (
         <div>
           <div className="text-sm font-semibold text-text-dim mb-2">🔄 同义词/短语</div>
@@ -589,7 +631,7 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying 
 }
 
 // ── Main CardBack dispatcher ──────────────────────────────────────────────────
-function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, onRetry, isRetrying }: {
+function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, onRetry, isRetrying, userNotes }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   aiContent: CardAIContent | null | undefined
@@ -600,6 +642,7 @@ function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, on
   spellingAnswer?: string
   onRetry?: () => void
   isRetrying?: boolean
+  userNotes: string[]
 }) {
   if (aiContent === undefined || aiContent === null) {
     return <AILoadingAnimation />
@@ -613,6 +656,7 @@ function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, on
         spellingAnswer={spellingAnswer}
         onRetry={onRetry}
         isRetrying={isRetrying}
+        userNotes={userNotes}
       />
     )
   }
@@ -620,15 +664,15 @@ function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, on
   switch (cardType) {
     case 'word-speech':
     case 'phrase':
-      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} />
+      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
     case 'synonym':
-      return <CardBackSynonym note={note} ai={aiContent as SynonymAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} />
+      return <CardBackSynonym note={note} ai={aiContent as SynonymAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
     case 'sentence':
-      return <CardBackSentence note={note} ai={aiContent as SentenceAI} />
+      return <CardBackSentence note={note} ai={aiContent as SentenceAI} userNotes={userNotes} />
     case 'spelling':
-      return <CardBackSpelling note={note} ai={aiContent as SpellingAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} spellingAnswer={spellingAnswer} />
+      return <CardBackSpelling note={note} ai={aiContent as SpellingAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} spellingAnswer={spellingAnswer} userNotes={userNotes} />
     default:
-      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} />
+      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
   }
 }
 
@@ -671,6 +715,8 @@ export default function ReviewCards() {
   const [savedAnt, setSavedAnt] = useState<string[]>([])
   const [spellingAnswer, setSpellingAnswer] = useState('')
   const [slashState, setSlashState] = useState<'idle' | 'slashing'>('idle')
+  const [userNotesByCard, setUserNotesByCard] = useState<Record<string, string[]>>({})
+  const [userNotesStatusByCard, setUserNotesStatusByCard] = useState<Record<string, UserNotesFetchStatus>>({})
 
   const session = reviewSession
   const card = session?.cards[session.current]
@@ -686,6 +732,45 @@ export default function ReviewCards() {
   useEffect(() => {
     if (!session) navigate('/review')
   }, [session, navigate])
+
+  useEffect(() => {
+    if (!card?.id) return
+    // Fetch on back-side reveal so we can retry on subsequent flips if needed.
+    if (!flipped) return
+    const noteId = card.id
+    const fetchStatus = userNotesStatusByCard[noteId] ?? 'idle'
+    if (fetchStatus === 'loading' || fetchStatus === 'success') return
+
+    let cancelled = false
+
+    setUserNotesStatusByCard((prev) => ({ ...prev, [noteId]: 'loading' }))
+
+    void fetch(apiUrl(`/notes/${encodeURIComponent(noteId)}/user-notes`))
+      .then((res) => {
+        if (!res.ok) return null
+        return res.json() as Promise<UserNoteListResponse>
+      })
+      .then((json) => {
+        if (cancelled) return
+        const items = json?.data?.items
+        const contents = Array.isArray(items)
+          ? items
+              .map((item) => (typeof item.content === 'string' ? item.content.trim() : ''))
+              .filter(Boolean)
+          : []
+
+        setUserNotesByCard((prev) => ({ ...prev, [noteId]: contents }))
+        setUserNotesStatusByCard((prev) => ({ ...prev, [noteId]: 'success' }))
+      })
+      .catch(() => {
+        if (cancelled) return
+        setUserNotesStatusByCard((prev) => ({ ...prev, [noteId]: 'error' }))
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [card?.id, flipped])
 
   // Spacebar flip
   useEffect(() => {
@@ -945,6 +1030,7 @@ export default function ReviewCards() {
                       note={card}
                       cardType={cardType}
                       aiContent={aiContent}
+                      userNotes={userNotesByCard[card.id] ?? []}
                       savedSyn={savedSyn}
                       savedAnt={savedAnt}
                       onSaveSyn={(s) => { void handleSaveSyn(s) }}
