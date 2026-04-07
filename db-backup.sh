@@ -12,11 +12,13 @@ usage() {
 数据库备份与恢复脚本（PostgreSQL）
 
 用法:
+  ./db-backup.sh
   ./db-backup.sh backup [name]
   ./db-backup.sh restore [file]
   ./db-backup.sh list
 
 说明:
+  - 不带参数运行时，会进入 1~6 交互菜单
   - 备份文件保存在 backend/backups
   - backup 不传 name 时，自动使用时间戳
   - restore 不传 file 时，默认恢复最新备份
@@ -163,8 +165,76 @@ restore_db() {
   echo "恢复完成: ${backup_file}"
 }
 
+pause() {
+  read -r -p "按回车继续..."
+}
+
+print_menu() {
+  echo ""
+  echo "========== 数据库备份菜单 =========="
+  echo "1) 备份数据库（自动命名）"
+  echo "2) 备份数据库（自定义名称）"
+  echo "3) 查看备份列表"
+  echo "4) 恢复最新备份"
+  echo "5) 恢复指定备份文件"
+  echo "6) 退出"
+  echo "===================================="
+}
+
+interactive_menu() {
+  while true; do
+    print_menu
+    read -r -p "请输入序号 [1-6]: " choice
+    case "${choice}" in
+      1)
+        backup_db
+        pause
+        ;;
+      2)
+        local custom_name=""
+        read -r -p "请输入备份名称(不含 .dump): " custom_name
+        if [ -z "${custom_name}" ]; then
+          echo "名称不能为空。"
+        else
+          backup_db "${custom_name}"
+        fi
+        pause
+        ;;
+      3)
+        list_backups
+        pause
+        ;;
+      4)
+        restore_db
+        pause
+        ;;
+      5)
+        local filename=""
+        read -r -p "请输入备份文件名(如 db_20260407_120000.dump): " filename
+        if [ -z "${filename}" ]; then
+          echo "文件名不能为空。"
+        else
+          restore_db "${filename}"
+        fi
+        pause
+        ;;
+      6)
+        echo "已退出。"
+        return 0
+        ;;
+      *)
+        echo "无效输入，请输入 1~6。"
+        ;;
+    esac
+  done
+}
+
 main() {
   local action="${1:-}"
+  if [ -z "${action}" ]; then
+    interactive_menu
+    return 0
+  fi
   case "${action}" in
     backup)
       backup_db "${2:-}"
