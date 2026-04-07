@@ -16,8 +16,10 @@ FRONTEND_LOG="/tmp/ieltsmate-frontend.log"
 
 DB_HOST="127.0.0.1"
 DB_PORT="5432"
-BACKEND_PORT="3000"
-FRONTEND_PORT="5173"
+BASE_BACKEND_PORT="3000"
+BASE_FRONTEND_PORT="5173"
+BACKEND_PORT="$BASE_BACKEND_PORT"
+FRONTEND_PORT="$BASE_FRONTEND_PORT"
 
 REFRESH_INTERVAL=4   # 监控面板刷新间隔（秒）
 LOG_LINES=10         # 面板内每侧日志行数
@@ -42,6 +44,41 @@ info() { echo -e "${C}  →  $1${NC}"; }
 
 port_is_open() {
   ss -tln 2>/dev/null | grep -q ":${1} "
+}
+
+pids_by_port() {
+  lsof -ti :"$1" 2>/dev/null || true
+}
+
+kill_port_processes() {
+  local port="$1" name="$2"
+  local pids
+  pids=$(pids_by_port "$port")
+  [ -z "$pids" ] && return 0
+
+  info "停止${name}进程 (port ${port}, pid: ${pids//$'\n'/, })"
+  echo "$pids" | xargs kill 2>/dev/null || true
+  sleep 1
+
+  # 兜底：仍存活则强制结束
+  local left
+  left=$(pids_by_port "$port")
+  if [ -n "$left" ]; then
+    echo "$left" | xargs kill -9 2>/dev/null || true
+  fi
+}
+
+find_available_port() {
+  local start="$1" max_tries="${2:-50}" port="$1" i=0
+  while [ "$i" -lt "$max_tries" ]; do
+    if ! port_is_open "$port"; then
+      echo "$port"
+      return 0
+    fi
+    port=$((port + 1))
+    i=$((i + 1))
+  done
+  return 1
 }
 
 backend_healthy() {
@@ -88,21 +125,22 @@ run_startup() {
   if backend_healthy; then
     ok "后端已在运行 (http://127.0.0.1:${BACKEND_PORT})"
   else
-    # 端口被占用但健康检查失败 → 杀掉旧进程
+    # 端口占用则自动切换到可用端口
     if port_is_open "$BACKEND_PORT"; then
-      warn "端口 ${BACKEND_PORT} 被占用但健康检查失败，正在清理旧进程..."
-      local old_pids
-      old_pids=$(lsof -ti :"$BACKEND_PORT" 2>/dev/null || true)
-      if [ -n "$old_pids" ]; then
-        echo "$old_pids" | xargs kill -9 2>/dev/null || true
-        sleep 1
-        info "旧进程已清理 (PID: $old_pids)"
+      local next_backend_port
+      next_backend_port=$(find_available_port "$BACKEND_PORT" 100) || {
+        err "后端未找到可用端口（从 ${BACKEND_PORT} 开始）"
+        return 1
+      }
+      if [ "$next_backend_port" != "$BACKEND_PORT" ]; then
+        warn "端口 ${BACKEND_PORT} 已被占用，后端自动切换到 ${next_backend_port}"
+        BACKEND_PORT="$next_backend_port"
       fi
     fi
     cd "$BACKEND_DIR" || exit 1
     : > "$BACKEND_LOG"
-    info "启动后端进程 (pnpm dev)..."
-    nohup pnpm dev >"$BACKEND_LOG" 2>&1 &
+    info "启动后端进程 (pnpm dev, PORT=${BACKEND_PORT})..."
+    nohup env PORT="$BACKEND_PORT" pnpm dev >"$BACKEND_LOG" 2>&1 &
     if wait_for_port "$BACKEND_PORT" 20; then
       backend_healthy \
         && ok "后端启动成功 (http://127.0.0.1:${BACKEND_PORT})" \
@@ -120,21 +158,23 @@ run_startup() {
      curl -fsS --noproxy '*' "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1; then
     ok "前端已在运行 (http://127.0.0.1:${FRONTEND_PORT})"
   else
-    # 端口被占但服务异常 → 清理
+    # 端口占用则自动切换到可用端口
     if port_is_open "$FRONTEND_PORT"; then
-      warn "端口 ${FRONTEND_PORT} 被占用但前端无响应，正在清理旧进程..."
-      local fe_pids
-      fe_pids=$(lsof -ti :"$FRONTEND_PORT" 2>/dev/null || true)
-      if [ -n "$fe_pids" ]; then
-        echo "$fe_pids" | xargs kill -9 2>/dev/null || true
-        sleep 1
-        info "旧进程已清理 (PID: $fe_pids)"
+      local next_frontend_port
+      next_frontend_port=$(find_available_port "$FRONTEND_PORT" 100) || {
+        err "前端未找到可用端口（从 ${FRONTEND_PORT} 开始）"
+        return 1
+      }
+      if [ "$next_frontend_port" != "$FRONTEND_PORT" ]; then
+        warn "端口 ${FRONTEND_PORT} 已被占用，前端自动切换到 ${next_frontend_port}"
+        FRONTEND_PORT="$next_frontend_port"
       fi
     fi
     cd "$FRONTEND_DIR" || exit 1
     : > "$FRONTEND_LOG"
-    info "启动前端进程 (pnpm dev)..."
-    nohup pnpm dev --host 127.0.0.1 --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
+    info "启动前端进程 (pnpm dev, PORT=${FRONTEND_PORT}, API=${BACKEND_PORT})..."
+    nohup env VITE_API_BASE_URL="http://127.0.0.1:${BACKEND_PORT}" \
+      pnpm dev --host 127.0.0.1 --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
     if wait_for_port "$FRONTEND_PORT" 15; then
       ok "前端启动成功 (http://127.0.0.1:${FRONTEND_PORT})"
     else
@@ -303,9 +343,10 @@ render_dashboard() {
 # ── 退出处理 ──────────────────────────────────────────────────────
 on_exit() {
   echo ""
-  echo -e "${Y}  已退出监控面板。后台服务仍在运行。${NC}"
-  echo -e "${DIM}  停止后端: kill \$(lsof -ti :${BACKEND_PORT})${NC}"
-  echo -e "${DIM}  停止前端: kill \$(lsof -ti :${FRONTEND_PORT})${NC}"
+  echo -e "${Y}  正在退出监控并清理前后端进程...${NC}"
+  kill_port_processes "$BACKEND_PORT" "后端"
+  kill_port_processes "$FRONTEND_PORT" "前端"
+  echo -e "${G}  已清理：后端 ${BACKEND_PORT} / 前端 ${FRONTEND_PORT}${NC}"
   echo ""
   exit 0
 }

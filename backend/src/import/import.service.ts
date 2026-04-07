@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { AiService } from '../ai/ai.service'
 import { parseMarkdown } from './import.parser'
@@ -34,13 +34,40 @@ export interface PreviewResult {
 @Injectable()
 export class ImportService {
   private readonly logger = new Logger(ImportService.name)
+  private static readonly AI_BATCH_SIZE = 20
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
   ) {}
 
-  async preview(fileBuffer: Buffer, modelId?: string): Promise<PreviewResult> {
+  private parseJsonArray(raw: string): unknown[] | null {
+    const trimmed = raw.trim()
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
+    const source = fenceMatch?.[1]?.trim() || trimmed
+
+    if (source.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(source)
+        if (Array.isArray(parsed)) return parsed
+      } catch {
+        // ignore and continue with fallback matcher
+      }
+    }
+
+    const candidates = source.match(/\[[\s\S]*?\]/g) ?? []
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate)
+        if (Array.isArray(parsed)) return parsed
+      } catch {
+        // ignore invalid candidate
+      }
+    }
+    return null
+  }
+
+  async preview(fileBuffer: Buffer, modelId?: string, forceAi = false): Promise<PreviewResult> {
     const markdown = fileBuffer.toString('utf-8')
     const rawEntries = parseMarkdown(markdown)
 
@@ -52,23 +79,33 @@ export class ImportService {
     }))
 
     const aiNeededIndices = rawEntries
-      .map((e, i) => (e.needsAI || !e.translation ? i : -1))
+      .map((e, i) => {
+        if (forceAi && /[a-zA-Z]/.test(e.content)) return i
+        return e.needsAI || !e.translation ? i : -1
+      })
       .filter((i) => i >= 0)
 
     const rulesParsed = rawEntries.filter((e) => !e.needsAI && e.translation).length
     const aiAssistedIndices = new Set<number>()
+    const stage2Errors: string[] = []
 
     // ── Stage 2: AI 补充缺失翻译（支持多词条行拆分） ──────────────────────────
     if (aiNeededIndices.length > 0) {
-      try {
-        const items = aiNeededIndices.map((i) => ({
-          globalIndex: i,
-          content: notes[i].content,
-          category: notes[i].category,
-          existingSynonyms: notes[i].synonyms,
-        }))
+      const chunks: number[][] = []
+      for (let i = 0; i < aiNeededIndices.length; i += ImportService.AI_BATCH_SIZE) {
+        chunks.push(aiNeededIndices.slice(i, i + ImportService.AI_BATCH_SIZE))
+      }
 
-        const prompt = `你是一个英语学习笔记整理助手。处理下面每个词条，规则如下：
+      for (const indexChunk of chunks) {
+        try {
+          const items = indexChunk.map((i) => ({
+            globalIndex: i,
+            content: notes[i].content,
+            category: notes[i].category,
+            existingSynonyms: notes[i].synonyms,
+          }))
+
+          const prompt = `你是一个英语学习笔记整理助手。处理下面每个词条，规则如下：
 
 **规则1 - 单词或短语**（content 是单个英文词/短语，无中文）：
   提供中文释义。返回: { globalIndex, content(保持原样), translation(中文释义), category }
@@ -88,15 +125,20 @@ export class ImportService {
 词条列表:
 ${JSON.stringify(items, null, 2)}`
 
-        const raw = await this.aiService.complete({
-          messages: [{ role: 'user', content: prompt }],
-          model: modelId,
-          slot: 'classify',
-        })
+          const raw = await this.aiService.complete({
+            messages: [{ role: 'user', content: prompt }],
+            model: modelId,
+            slot: 'classify',
+            timeoutMs: 120_000,
+          })
 
-        const jsonMatch = raw.match(/\[[\s\S]*\]/)
-        if (jsonMatch) {
-          const filled = JSON.parse(jsonMatch[0]) as Array<{
+          const parsed = this.parseJsonArray(raw)
+          if (!parsed) {
+            stage2Errors.push('模型返回内容不是可解析的 JSON 数组')
+            continue
+          }
+
+          const filled = parsed as Array<{
             globalIndex: number
             split?: boolean
             entries?: Array<{ content: string; translation: string; synonyms?: string[] }>
@@ -130,7 +172,7 @@ ${JSON.stringify(items, null, 2)}`
               // 普通单词条补全
               if (item.translation) notes[idx].translation = item.translation
               if (item.category) notes[idx].category = item.category
-              aiAssistedIndices.add(idx)
+              if (item.translation || item.category) aiAssistedIndices.add(idx)
             }
           }
 
@@ -139,9 +181,20 @@ ${JSON.stringify(items, null, 2)}`
           for (const { idx, entries } of splitsToApply) {
             notes.splice(idx, 1, ...entries)
           }
+        } catch (err) {
+          stage2Errors.push(err instanceof Error ? err.message : String(err))
+          this.logger.warn(
+            `Stage 2 AI 补充失败（chunk=${indexChunk.length}），降级跳过: ${err instanceof Error ? err.message : String(err)}`,
+          )
         }
-      } catch (err) {
-        this.logger.warn(`Stage 2 AI 补充失败，降级处理: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    }
+
+    if (forceAi && aiNeededIndices.length > 0) {
+      const unresolvedCount = notes.filter((n) => !n.translation?.trim()).length
+      if (aiAssistedIndices.size === 0 && unresolvedCount > 0) {
+        const reason = stage2Errors[0] ?? '未获取到有效 AI 返回'
+        throw new BadRequestException(`强制 AI 补全失败：${reason}`)
       }
     }
 
@@ -161,11 +214,12 @@ ${JSON.stringify(notes.map((n, i) => ({ index: i, ...n })), null, 2)}`
           messages: [{ role: 'user', content: reviewPrompt }],
           model: modelId,
           slot: 'classify',
+          timeoutMs: 60_000,
         })
 
-        const jsonMatch = raw.match(/\[[\s\S]*\]/)
-        if (jsonMatch) {
-          const reviewed = JSON.parse(jsonMatch[0]) as Array<{
+        const parsed = this.parseJsonArray(raw)
+        if (parsed) {
+          const reviewed = parsed as Array<{
             noteIndex: number
             issue: string
             suggestion: Partial<ParsedNote>

@@ -20,11 +20,13 @@ export class ImportController {
   async preview(
     @UploadedFile() file: Express.Multer.File,
     @Query('modelId') modelId?: string,
+    @Query('forceAi') forceAi?: string,
   ) {
     if (!file) throw new BadRequestException('请上传文件')
     const ext = file.originalname.split('.').pop()?.toLowerCase()
     if (ext !== 'md') throw new BadRequestException('仅支持 .md 文件')
-    return this.importService.preview(file.buffer, modelId)
+    const forceAiEnabled = ['1', 'true', 'yes', 'on'].includes((forceAi ?? '').toLowerCase())
+    return this.importService.preview(file.buffer, modelId, forceAiEnabled)
   }
 
   @Post('notes/save')

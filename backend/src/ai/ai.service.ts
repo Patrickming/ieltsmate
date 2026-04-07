@@ -367,7 +367,12 @@ export class AiService {
 
   // ── Simple completion (no function calling) ──────────────────────────────
 
-  async complete(dto: { messages: Array<{ role: string; content: string }>; model?: string; slot?: string }): Promise<string> {
+  async complete(dto: {
+    messages: Array<{ role: string; content: string }>
+    model?: string
+    slot?: string
+    timeoutMs?: number
+  }): Promise<string> {
     const { provider, model } = await this.resolveProviderAndModel({
       messages: dto.messages,
       model: dto.model,
@@ -382,6 +387,7 @@ export class AiService {
 
     const baseUrl = provider.baseUrl.replace(/\/$/, '')
     const url = `${baseUrl}/chat/completions`
+    const timeoutMs = Math.max(5_000, Math.min(dto.timeoutMs ?? 30_000, 180_000))
 
     let res: Response
     try {
@@ -396,7 +402,7 @@ export class AiService {
           messages: dto.messages,
           stream: false,
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(timeoutMs),
       })
     } catch (err) {
       throw new BadRequestException(`Network error: ${String(err)}`)

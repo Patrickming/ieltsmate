@@ -322,6 +322,7 @@ export function ImportModal() {
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [notes, setNotes] = useState<ParsedNote[]>([])
+  const [forceAiFill, setForceAiFill] = useState(false)
   const [dismissedFlags, setDismissedFlags] = useState<Set<number>>(new Set())
   const [doneCount, setDoneCount] = useState(0)
   const [tableOpen, setTableOpen] = useState(false)
@@ -344,6 +345,7 @@ export function ImportModal() {
     setError(null)
     setPreview(null)
     setNotes([])
+    setForceAiFill(false)
     setDismissedFlags(new Set())
     setDoneCount(0)
     setTableOpen(false)
@@ -356,6 +358,7 @@ export function ImportModal() {
     setError(null)
     setPreview(null)
     setNotes([])
+    setForceAiFill(false)
     setDismissedFlags(new Set())
   }
 
@@ -387,9 +390,11 @@ export function ImportModal() {
     try {
       const form = new FormData()
       form.append('file', file)
-      const url = selectedModel
-        ? apiUrl(`/import/notes/preview?modelId=${encodeURIComponent(selectedModel)}`)
-        : apiUrl('/import/notes/preview')
+      const params = new URLSearchParams()
+      if (selectedModel) params.set('modelId', selectedModel)
+      if (forceAiFill) params.set('forceAi', '1')
+      const qs = params.toString()
+      const url = qs ? apiUrl(`/import/notes/preview?${qs}`) : apiUrl('/import/notes/preview')
       const res = await fetch(url, { method: 'POST', body: form })
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string }
@@ -615,6 +620,17 @@ export function ImportModal() {
                       AI 将自动识别并补全词条释义，支持乱序、混合格式的笔记文件，并对异常条目进行质量审核。
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setForceAiFill((v) => !v)}
+                    className={`h-8 w-full rounded-md border text-xs transition-colors ${
+                      forceAiFill
+                        ? 'border-primary/40 bg-primary/10 text-primary'
+                        : 'border-[#2f2f36] bg-[#16161a] text-text-dim hover:bg-[#1b1b20]'
+                    }`}
+                  >
+                    {forceAiFill ? '已开启：强制 AI 补全释义' : '开启强制 AI 补全释义'}
+                  </button>
 
                   {/* Error */}
                   {error && (
