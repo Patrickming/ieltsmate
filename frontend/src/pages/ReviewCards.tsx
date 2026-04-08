@@ -4,7 +4,12 @@ import { Volume2, Plus, Check, Sparkles, HelpCircle, LogOut, BookOpen, Keyboard,
 import { motion, AnimatePresence } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
+import { ModalShell } from '../components/ui/ModalShell'
 import { StrokeButton } from '../components/ui/StrokeButton'
+import {
+  findConflictingAssociationEntries,
+  mergeAssociationListsUnique,
+} from '../lib/associationDedup'
 import { useAppStore } from '../store/useAppStore'
 import { apiUrl } from '../lib/apiBase'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
@@ -708,6 +713,7 @@ export default function ReviewCards() {
     retryAIContent,
     updateNote,
     markNoteMastered,
+    notes,
   } = useAppStore()
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [flipped, setFlipped] = useState(false)
@@ -717,6 +723,12 @@ export default function ReviewCards() {
   const [slashState, setSlashState] = useState<'idle' | 'slashing'>('idle')
   const [userNotesByCard, setUserNotesByCard] = useState<Record<string, string[]>>({})
   const [userNotesStatusByCard, setUserNotesStatusByCard] = useState<Record<string, UserNotesFetchStatus>>({})
+  const [assocDedup, setAssocDedup] = useState<null | {
+    kind: 'synonyms' | 'antonyms'
+    candidate: string
+    conflicts: string[]
+  }>(null)
+  const [assocDedupSaving, setAssocDedupSaving] = useState(false)
 
   const session = reviewSession
   const card = session?.cards[session.current]
@@ -834,35 +846,137 @@ export default function ReviewCards() {
     }, 300)
   }
 
-  const handleSaveSyn = async (syn: string) => {
+  const noteRow = notes.find((n) => n.id === card.id)
+
+  const performSaveSyn = async (syn: string) => {
     if (savedSyn.includes(syn)) return
-    setSavedSyn(p => [...p, syn])
-    // Include all previously saved synonyms + the new one to avoid overwriting
-    const newSynonyms = [...(card.synonyms ?? []), ...savedSyn, syn]
-    // updateNote 同时调用接口并更新 store 里的 notes 数组，知识库详情页无需刷新
+    const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
+    const base = latest?.synonyms ?? card.synonyms ?? []
+    const newSynonyms = mergeAssociationListsUnique(base, [...savedSyn, syn])
+    setSavedSyn((p) => [...p, syn])
     const ok = await updateNote(card.id, { synonyms: newSynonyms })
     if (ok) {
       incrementSavedExtensions()
     } else {
-      setSavedSyn(p => p.filter(s => s !== syn))
+      setSavedSyn((p) => p.filter((s) => s !== syn))
     }
   }
 
-  const handleSaveAnt = async (ant: string) => {
+  const performSaveAnt = async (ant: string) => {
     if (savedAnt.includes(ant)) return
-    setSavedAnt(p => [...p, ant])
-    // Include all previously saved antonyms + the new one to avoid overwriting
-    const newAntonyms = [...(card.antonyms ?? []), ...savedAnt, ant]
+    const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
+    const base = latest?.antonyms ?? card.antonyms ?? []
+    const newAntonyms = mergeAssociationListsUnique(base, [...savedAnt, ant])
+    setSavedAnt((p) => [...p, ant])
     const ok = await updateNote(card.id, { antonyms: newAntonyms })
     if (ok) {
       incrementSavedExtensions()
     } else {
-      setSavedAnt(p => p.filter(s => s !== ant))
+      setSavedAnt((p) => p.filter((s) => s !== ant))
+    }
+  }
+
+  const handleSaveSyn = async (syn: string) => {
+    if (savedSyn.includes(syn)) return
+    const existing = noteRow?.synonyms ?? card.synonyms ?? []
+    if (existing.some((e) => e.trim() === syn.trim())) return
+    const conflicts = findConflictingAssociationEntries(syn, existing)
+    if (conflicts.length > 0) {
+      setAssocDedup({ kind: 'synonyms', candidate: syn, conflicts })
+      return
+    }
+    await performSaveSyn(syn)
+  }
+
+  const handleSaveAnt = async (ant: string) => {
+    if (savedAnt.includes(ant)) return
+    const existing = noteRow?.antonyms ?? card.antonyms ?? []
+    if (existing.some((e) => e.trim() === ant.trim())) return
+    const conflicts = findConflictingAssociationEntries(ant, existing)
+    if (conflicts.length > 0) {
+      setAssocDedup({ kind: 'antonyms', candidate: ant, conflicts })
+      return
+    }
+    await performSaveAnt(ant)
+  }
+
+  const closeAssocDedup = () => {
+    if (assocDedupSaving) return
+    setAssocDedup(null)
+  }
+
+  const confirmAssocDedup = async () => {
+    if (!assocDedup) return
+    setAssocDedupSaving(true)
+    try {
+      if (assocDedup.kind === 'synonyms') {
+        await performSaveSyn(assocDedup.candidate)
+      } else {
+        await performSaveAnt(assocDedup.candidate)
+      }
+      setAssocDedup(null)
+    } finally {
+      setAssocDedupSaving(false)
     }
   }
 
   return (
     <Layout title="复习">
+      <ModalShell open={assocDedup !== null} onClose={closeAssocDedup}>
+        {assocDedup && (
+          <div
+            role="document"
+            className="w-[min(100vw-2rem,420px)] rounded-2xl border p-6 flex flex-col gap-4"
+            style={{ background: '#1c1c20', borderColor: '#3f3f46', boxShadow: '0 24px 48px rgba(0,0,0,0.6)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <div className="text-base font-bold text-text-primary mb-1">
+                {assocDedup.kind === 'synonyms' ? '可能与已有同义关联重复' : '可能与已有反义关联重复'}
+              </div>
+              <p className="text-sm text-text-dim">
+                知识库中已有以下条目与当前词头相同但表述不同。若仍要添加，将保留两条独立关联。
+              </p>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">已有</div>
+              <ul className="text-sm text-text-secondary space-y-2 max-h-40 overflow-y-auto pl-1">
+                {assocDedup.conflicts.map((line) => (
+                  <li key={line} className="border-l-2 border-amber-500/50 pl-2.5 leading-snug">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">待添加</div>
+              <p className="text-sm text-primary leading-snug border border-border rounded-lg px-3 py-2 bg-[#141420]">
+                {assocDedup.candidate}
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                disabled={assocDedupSaving}
+                onClick={closeAssocDedup}
+                className="h-9 px-4 rounded-lg border border-border text-sm text-text-muted hover:border-border-strong hover:bg-[#27272a]/60 transition-all disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={assocDedupSaving}
+                onClick={() => { void confirmAssocDedup() }}
+                className="h-9 px-4 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}
+              >
+                {assocDedupSaving ? '保存中...' : '仍要添加'}
+              </button>
+            </div>
+          </div>
+        )}
+      </ModalShell>
+
       {/* Progress topbar */}
       <div className="h-14 border-b border-border flex items-center justify-between px-6 bg-surface-bg shrink-0 gap-4">
         {/* Left: exit + progress */}
