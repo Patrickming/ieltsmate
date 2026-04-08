@@ -185,6 +185,9 @@ const QUICK_NOTE_REQUEST_TIMEOUT_MS = 4000
 export const REVIEW_PREPARE_DEFAULT_BATCH_SIZE = 3
 export const REVIEW_PREPARE_DEFAULT_TIMEOUT_MS = 10000
 const REVIEW_PREPARE_DEFAULT_POLL_MS = 120
+/** Extra automatic /review/ai/generate attempts after the first failure (fallback or network). */
+const AI_GENERATE_AUTO_RETRIES = 3
+const AI_GENERATE_RETRY_BACKOFF_MS = 400
 
 function mapReviewCardType(category: string): string {
   if (category === '口语' || category === '单词') return 'word-speech'
@@ -1178,36 +1181,48 @@ export const useAppStore = create<AppState>((set, get) => {
         },
       }
     })
-    try {
-      const res = await fetch(apiUrl('/review/ai/generate'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ noteId, cardType }),
-      })
-      const json = (await res.json()) as { data?: CardAIContent }
-      const content = json.data ?? { fallback: true }
-      set((s) => {
-        if (!s.reviewSession) return s
-        return {
-          reviewSession: {
-            ...s.reviewSession,
-            aiContent: { ...s.reviewSession.aiContent, [noteId]: content as CardAIContent },
-            aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
-          },
+
+    const maxAttempts = 1 + AI_GENERATE_AUTO_RETRIES
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const res = await fetch(apiUrl('/review/ai/generate'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ noteId, cardType }),
+        })
+        const json = (await res.json()) as { data?: CardAIContent }
+        const content = json.data ?? { fallback: true }
+        if (content.fallback !== true) {
+          set((s) => {
+            if (!s.reviewSession) return s
+            return {
+              reviewSession: {
+                ...s.reviewSession,
+                aiContent: { ...s.reviewSession.aiContent, [noteId]: content as CardAIContent },
+                aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
+              },
+            }
+          })
+          return
         }
-      })
-    } catch {
-      set((s) => {
-        if (!s.reviewSession) return s
-        return {
-          reviewSession: {
-            ...s.reviewSession,
-            aiContent: { ...s.reviewSession.aiContent, [noteId]: { fallback: true } as CardAIContent },
-            aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
-          },
-        }
-      })
+      } catch {
+        /* retry below */
+      }
+      if (attempt < maxAttempts - 1) {
+        await waitMs(AI_GENERATE_RETRY_BACKOFF_MS)
+      }
     }
+
+    set((s) => {
+      if (!s.reviewSession) return s
+      return {
+        reviewSession: {
+          ...s.reviewSession,
+          aiContent: { ...s.reviewSession.aiContent, [noteId]: { fallback: true } as CardAIContent },
+          aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
+        },
+      }
+    })
   },
 
   retryAIContent: (noteId, cardType) => {
