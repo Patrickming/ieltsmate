@@ -350,10 +350,10 @@ function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, u
   savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
   userNotes: string[]
 }) {
-  // Format a word-meaning pair for saving: "word (briefMeaning)"
+  // Format a word-meaning pair for saving: full meaning text (no truncation)
   const formatWmKey = (wm: { word: string; meaning: string }) => {
-    const brief = wm.meaning.split(/[。，]/)[0].trim().slice(0, 20)
-    return brief ? `${wm.word} (${brief})` : wm.word
+    const m = wm.meaning.trim()
+    return m ? `${wm.word} (${m})` : wm.word
   }
 
   return (
