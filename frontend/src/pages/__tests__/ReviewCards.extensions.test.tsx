@@ -164,6 +164,47 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     expect(screen.getByText('effect')).toBeInTheDocument()
   })
 
+  it('同词组同时命中形近和义近时，两个分区都显示「形近+义近」标识', async () => {
+    seedReviewState(updateNoteMock, {
+      aiContent: {
+        fallback: false,
+        phonetic: '/əˈfekt/',
+        synonyms: [],
+        antonyms: [],
+        example: 'The policy will affect prices.',
+        memoryTip: '区分词性和语义',
+        partsOfSpeech: [],
+        confusables: [
+          {
+            kind: 'form',
+            words: [
+              { word: 'affect', meaning: '影响' },
+              { word: 'effect', meaning: '效果' },
+            ],
+          },
+          {
+            kind: 'meaning',
+            difference: 'affect 常作动词；effect 常作名词',
+            words: [
+              { word: 'affect', meaning: '影响' },
+              { word: 'effect', meaning: '效果' },
+            ],
+          },
+        ],
+      },
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('hostel'))
+    await user.click(screen.getByTestId('review-back-tab-pos-confusable'))
+
+    expect(screen.getByText('形近 / 拼写易混')).toBeInTheDocument()
+    expect(screen.getByText('义近易混')).toBeInTheDocument()
+    expect(screen.getAllByText('形近+义近')).toHaveLength(2)
+  })
+
   it('切换到扩展视图后评分按钮仍可见', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       createFetchResponse({ data: { items: [] } }),

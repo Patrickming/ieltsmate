@@ -542,12 +542,11 @@ export default function KnowledgeDetail() {
                     <div className="text-sm font-semibold text-text-muted mb-2.5">🧩 词性派生</div>
                     <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 flex flex-col gap-3">
                       <div>
-                        <div className="text-[11px] font-bold text-text-subtle mb-1">当前词</div>
+                        <div className="text-[11px] font-bold text-text-subtle mb-1">原始词</div>
                         <div className="flex flex-wrap items-baseline gap-2">
                           <span className="text-[16px] font-semibold text-text-primary">{note.wordFamily.base.word}</span>
-                          <span className="text-[11px] text-primary">
-                            {note.wordFamily.base.pos === 'other' ? '当前词性' : (posLabel[note.wordFamily.base.pos as Pos4] ?? note.wordFamily.base.pos)}
-                          </span>
+                          <span className="text-[11px] text-primary">原始词</span>
+                          <span className="text-[11px] text-text-subtle">{posLabel[note.wordFamily.base.pos as Pos4] ?? note.wordFamily.base.pos}</span>
                           {note.wordFamily.base.phonetic && (
                             <span className="text-[12px] text-[#a5b4fc] font-mono">{note.wordFamily.base.phonetic}</span>
                           )}

@@ -223,6 +223,8 @@ describe('ReviewCards 词性派生', () => {
     await user.click(screen.getByText('popular'))
     await user.click(screen.getByTestId('review-back-tab-word-family'))
 
+    expect(screen.getAllByText('原始词').length).toBeGreaterThan(0)
+    expect(screen.queryByText('当前词')).not.toBeInTheDocument()
     expect(screen.getByTestId('review-wf-empty-adjective')).toHaveTextContent('无')
     expect(screen.getByTestId('review-wf-empty-adverb')).toHaveTextContent('无')
   })

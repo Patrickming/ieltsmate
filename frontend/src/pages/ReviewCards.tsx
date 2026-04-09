@@ -11,6 +11,7 @@ import {
   mergeAssociationListsUnique,
 } from '../lib/associationDedup'
 import {
+  confusableWordsSurfaceKey,
   confusableDedupKey,
   mergeUniqueConfusables,
   mergeUniquePos,
@@ -287,12 +288,13 @@ const POS4_LABEL: Record<Pos4, string> = {
   adverb: '副词',
 }
 
-function basePosLabel(pos: string): string {
+function posLabel(pos: string): string {
   const t = pos.trim().toLowerCase()
-  if (t === 'noun' || t === 'other' || t === '其它' || t === '其他') return '当前词性'
+  if (t === 'noun') return '名词'
   if (t === 'verb') return '动词'
   if (t === 'adjective') return '形容词'
   if (t === 'adverb') return '副词'
+  if (t === 'other' || t === '其它' || t === '其他') return '其他'
   return pos
 }
 
@@ -373,6 +375,11 @@ function PosConfusablePanel({
 }) {
   const mergedPos = mergeUniquePos(storedNote.partsOfSpeech ?? [], aiPos ?? [])
   const mergedConf = mergeUniqueConfusables(storedNote.confusables ?? [], aiConf ?? [])
+  const confSurfaceCount = mergedConf.reduce<Record<string, number>>((acc, g) => {
+    const key = confusableWordsSurfaceKey(g)
+    acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
   const barColor = CATEGORY_BAR[storedNote.category] ?? '#818cf8'
 
   return (
@@ -432,15 +439,23 @@ function PosConfusablePanel({
           <div className="flex flex-col gap-4">
             {mergedConf.map((group, gi) => {
               const saved = isConfusableSaved(group, storedNote, savedConfKeys)
+              const isCrossKindDuplicate = (confSurfaceCount[confusableWordsSurfaceKey(group)] ?? 0) > 1
               return (
                 <div
                   key={`${confusableDedupKey(group)}-${gi}`}
                   className="rounded-xl border border-[#27272a] bg-[#12121a] px-4 py-3.5"
                 >
                   <div className="flex items-start justify-between gap-2 mb-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-subtle">
-                      {group.kind === 'form' ? '形近 / 拼写易混' : '义近易混'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                        {group.kind === 'form' ? '形近 / 拼写易混' : '义近易混'}
+                      </span>
+                      {isCrossKindDuplicate && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-md border border-primary/40 text-primary bg-primary/10">
+                          形近+义近
+                        </span>
+                      )}
+                    </div>
                     <button
                       type="button"
                       data-testid={`review-conf-save-${gi}`}
@@ -534,15 +549,16 @@ function WordFamilyPanel({
   return (
     <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
       <div className="rounded-xl border border-[#27272a] bg-[#12121a] px-4 py-3.5">
-        <div className="text-[10px] font-bold uppercase tracking-wider text-text-subtle mb-2">当前词</div>
+        <div className="text-[10px] font-bold uppercase tracking-wider text-text-subtle mb-2">原始词</div>
         <div className="flex flex-wrap items-baseline gap-2 mb-1">
           <span className="text-[18px] font-bold text-text-primary">{baseShow.word}</span>
           <span
             className="text-[11px] font-bold px-2 py-0.5 rounded-md border"
             style={{ borderColor: barColor + '66', color: barColor }}
           >
-            {basePosLabel(String(baseShow.pos))}
+            原始词
           </span>
+          <span className="text-[11px] text-text-subtle">{posLabel(String(baseShow.pos))}</span>
         </div>
         <p className="text-[15px] text-text-secondary leading-relaxed">{baseShow.meaning}</p>
         {baseShow.phonetic && (

@@ -9,9 +9,14 @@ function normWordSurface(word: string): string {
   return word.trim().toLowerCase()
 }
 
+/** 忽略 kind，仅按词面集合判断是否同一组 */
+export function confusableWordsSurfaceKey(group: ConfusableGroup): string {
+  return group.words.map((w) => normWordSurface(w.word)).sort().join('\u0001')
+}
+
 /** 与后端 normalizeConfusableGroups 的组键一致 */
 export function confusableDedupKey(group: ConfusableGroup): string {
-  const sorted = group.words.map((w) => normWordSurface(w.word)).sort().join('\u0001')
+  const sorted = confusableWordsSurfaceKey(group)
   if (group.kind === 'meaning') {
     return `meaning|${sorted}|${group.difference.trim().toLowerCase()}`
   }
