@@ -4,23 +4,39 @@ import { PrismaService } from '../prisma/prisma.service'
 import { CreateNoteDto } from './dto/create-note.dto'
 import { CreateUserNoteDto } from './dto/create-user-note.dto'
 import { UpdateNoteDto } from './dto/update-note.dto'
+import { normalizeConfusableGroups, normalizePartOfSpeechList } from './types/note-extensions'
 
 @Injectable()
 export class NotesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateNoteDto) {
+    const normalizedSynonyms =
+      dto.synonyms !== undefined ? [...new Set(dto.synonyms.map((s) => s.trim()).filter(Boolean))] : []
+    const normalizedAntonyms =
+      dto.antonyms !== undefined ? [...new Set(dto.antonyms.map((s) => s.trim()).filter(Boolean))] : []
+
     return this.prisma.note.create({
       data: {
         content: dto.content,
         translation: dto.translation,
         category: dto.category,
         phonetic: dto.phonetic,
-        synonyms: dto.synonyms ?? [],
-        antonyms: dto.antonyms ?? [],
+        synonyms: normalizedSynonyms,
+        antonyms: normalizedAntonyms,
         example: dto.example,
         memoryTip: dto.memoryTip,
         ...(dto.reviewStatus !== undefined ? { reviewStatus: dto.reviewStatus } : {}),
+        ...(dto.partsOfSpeech !== undefined && Array.isArray(dto.partsOfSpeech)
+          ? {
+              partsOfSpeech: normalizePartOfSpeechList(dto.partsOfSpeech) as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
+        ...(dto.confusables !== undefined && Array.isArray(dto.confusables)
+          ? {
+              confusables: normalizeConfusableGroups(dto.confusables) as unknown as Prisma.InputJsonValue,
+            }
+          : {}),
       },
     })
   }
@@ -70,6 +86,12 @@ export class NotesService {
     if (dto.example !== undefined) data.example = dto.example
     if (dto.memoryTip !== undefined) data.memoryTip = dto.memoryTip
     if (dto.reviewStatus !== undefined) data.reviewStatus = dto.reviewStatus
+    if (dto.partsOfSpeech !== undefined && Array.isArray(dto.partsOfSpeech)) {
+      data.partsOfSpeech = normalizePartOfSpeechList(dto.partsOfSpeech) as unknown as Prisma.InputJsonValue
+    }
+    if (dto.confusables !== undefined && Array.isArray(dto.confusables)) {
+      data.confusables = normalizeConfusableGroups(dto.confusables) as unknown as Prisma.InputJsonValue
+    }
 
     if (Object.keys(data).length === 0) {
       return this.detail(id)

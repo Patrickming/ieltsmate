@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Note, Category } from '../data/mockData'
+import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
 import { apiUrl } from '../lib/apiBase'
 
 // ── 上海当日 YYYY-MM-DD ───────────────────────────────────────────
@@ -47,6 +48,8 @@ interface BackendNote {
   phonetic: string | null
   synonyms: string[]
   antonyms: string[]
+  partsOfSpeech?: unknown
+  confusables?: unknown
   example: string | null
   memoryTip: string | null
   reviewStatus: 'new' | 'learning' | 'mastered'
@@ -80,6 +83,8 @@ function mapBackendNote(n: BackendNote): Note {
     phonetic: n.phonetic ?? undefined,
     synonyms: n.synonyms ?? [],
     antonyms: n.antonyms ?? [],
+    ...(Array.isArray(n.partsOfSpeech) ? { partsOfSpeech: n.partsOfSpeech as PartOfSpeechItem[] } : {}),
+    ...(Array.isArray(n.confusables) ? { confusables: n.confusables as ConfusableGroup[] } : {}),
     example: n.example ?? undefined,
     memoryTip: n.memoryTip ?? undefined,
     createdAt: formatNoteDate(n.createdAt),
@@ -289,7 +294,15 @@ interface AppState {
   notesLoaded: boolean
   loadNotes: () => Promise<void>
   deleteNote: (id: string) => Promise<boolean>
-  updateNote: (id: string, patch: { content?: string; translation?: string; category?: Category; synonyms?: string[]; antonyms?: string[] }) => Promise<boolean>
+  updateNote: (id: string, patch: {
+    content?: string
+    translation?: string
+    category?: Category
+    synonyms?: string[]
+    antonyms?: string[]
+    partsOfSpeech?: PartOfSpeechItem[]
+    confusables?: ConfusableGroup[]
+  }) => Promise<boolean>
   markNoteMastered: (id: string) => Promise<boolean>
   selectedNote: Note | null
   setSelectedNote: (note: Note | null) => void

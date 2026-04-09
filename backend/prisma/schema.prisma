@@ -23,6 +23,8 @@ model Note {
   antonyms       String[]     @default([])
   example        String?
   memoryTip      String?
+  partsOfSpeech  Json?
+  confusables    Json?
   reviewStatus   ReviewStatus @default(new)
   reviewCount    Int          @default(0)
   correctCount   Int          @default(0)

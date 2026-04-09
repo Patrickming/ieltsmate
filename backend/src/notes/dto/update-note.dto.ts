@@ -1,4 +1,5 @@
 import { ReviewStatus } from '@prisma/client'
+import { Type } from 'class-transformer'
 import {
   IsArray,
   IsEnum,
@@ -6,7 +7,10 @@ import {
   IsOptional,
   IsString,
   MaxLength,
+  ValidateIf,
+  ValidateNested,
 } from 'class-validator'
+import { ConfusableGroupDto, PartOfSpeechItemDto } from './note-extension-fields.dto'
 
 export class UpdateNoteDto {
   @IsOptional()
@@ -55,4 +59,16 @@ export class UpdateNoteDto {
   @IsOptional()
   @IsEnum(ReviewStatus)
   reviewStatus?: ReviewStatus
+
+  @ValidateIf((_, value) => value !== undefined)
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PartOfSpeechItemDto)
+  partsOfSpeech?: PartOfSpeechItemDto[]
+
+  @ValidateIf((_, value) => value !== undefined)
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ConfusableGroupDto)
+  confusables?: ConfusableGroupDto[]
 }

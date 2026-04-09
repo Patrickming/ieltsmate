@@ -75,6 +75,93 @@ describe('Notes API', () => {
     expect(list.body.data.items.some((n: { id: string }) => n.id === id)).toBe(false)
   })
 
+  it('POST /notes 与 PATCH /notes/:id 支持 partsOfSpeech/confusables 且服务端去重归一化', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'eligible',
+        translation: '合格的',
+        category: '单词',
+        synonyms: [' good ', 'good', ' fit '],
+        antonyms: [' bad ', 'bad'],
+        partsOfSpeech: [
+          { pos: 'adj.', label: '形容词', meaning: '义1' },
+          { pos: 'ADJ.', label: '形', meaning: '义1' },
+        ],
+        confusables: [
+          {
+            kind: 'form',
+            words: [
+              { word: 'eligible', meaning: 'm1' },
+              { word: 'illegible', meaning: 'm2' },
+            ],
+          },
+          {
+            kind: 'form',
+            words: [
+              { word: 'illegible', meaning: 'm2' },
+              { word: 'eligible', meaning: 'm1' },
+            ],
+          },
+        ],
+      })
+      .expect(201)
+
+    const id = created.body.data.id as string
+    const pos = created.body.data.partsOfSpeech as Array<{ pos: string; meaning: string }>
+    const conf = created.body.data.confusables as Array<{ kind: string; words: Array<{ word: string }> }>
+    expect(Array.isArray(pos)).toBe(true)
+    expect(pos).toHaveLength(1)
+    expect(created.body.data.synonyms).toEqual(['good', 'fit'])
+    expect(created.body.data.antonyms).toEqual(['bad'])
+    expect(Array.isArray(conf)).toBe(true)
+    expect(conf).toHaveLength(1)
+    expect(conf[0].kind).toBe('form')
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/notes/${id}`)
+      .send({
+        partsOfSpeech: [
+          { pos: 'n.', label: '名', meaning: '新' },
+          { pos: 'n.', label: '名', meaning: '新' },
+        ],
+      })
+      .expect(200)
+
+    const pos2 = patched.body.data.partsOfSpeech as unknown[]
+    expect(pos2).toHaveLength(1)
+  })
+
+  it('POST/PATCH 传 partsOfSpeech 或 confusables 为 null 返回 400', async () => {
+    await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'null-case-create',
+        translation: '测试',
+        category: '单词',
+        partsOfSpeech: null,
+      })
+      .expect(400)
+
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'null-case-patch',
+        translation: '测试',
+        category: '单词',
+      })
+      .expect(201)
+
+    const id = created.body.data.id as string
+
+    await request(app.getHttpServer())
+      .patch(`/notes/${id}`)
+      .send({
+        confusables: null,
+      })
+      .expect(400)
+  })
+
   it('user-notes: POST list DELETE flow; list excludes soft-deleted; note deleted => 404', async () => {
     const created = await request(app.getHttpServer())
       .post('/notes')

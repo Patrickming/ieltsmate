@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { AiService } from '../ai/ai.service'
 import { PrismaService } from '../prisma/prisma.service'
+import { parseReviewAiPayload } from './review-ai-content.util'
 import {
   CardAIContent,
   CardType,
@@ -15,6 +16,84 @@ export class ReviewAiService {
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
   ) {}
+
+  private extractFencedJson(content: string): string | null {
+    const fenceMatch = content.match(/```json\s*([\s\S]*?)```/i) ?? content.match(/```\s*([\s\S]*?)```/)
+    if (!fenceMatch) {
+      return null
+    }
+    const jsonText = fenceMatch[1].trim()
+    return jsonText ? jsonText : null
+  }
+
+  /**
+   * 扫描文本中首个“平衡”的 JSON 对象，能正确跳过字符串内花括号与转义字符。
+   */
+  private extractFirstBalancedJsonObject(content: string): string | null {
+    let start = -1
+    let depth = 0
+    let inString = false
+    let escaped = false
+
+    for (let i = 0; i < content.length; i += 1) {
+      const ch = content[i]
+
+      if (start === -1) {
+        if (ch === '{') {
+          start = i
+          depth = 1
+          inString = false
+          escaped = false
+        }
+        continue
+      }
+
+      if (escaped) {
+        escaped = false
+        continue
+      }
+
+      if (ch === '\\') {
+        escaped = true
+        continue
+      }
+
+      if (ch === '"') {
+        inString = !inString
+        continue
+      }
+
+      if (inString) {
+        continue
+      }
+
+      if (ch === '{') {
+        depth += 1
+        continue
+      }
+
+      if (ch === '}') {
+        depth -= 1
+        if (depth === 0) {
+          return content.slice(start, i + 1)
+        }
+      }
+    }
+
+    return null
+  }
+
+  private extractJsonCandidate(content: string): string {
+    const fenced = this.extractFencedJson(content)
+    if (fenced) {
+      return fenced
+    }
+    const balanced = this.extractFirstBalancedJsonObject(content)
+    if (balanced) {
+      return balanced
+    }
+    return content
+  }
 
   async generate(noteId: string, cardType: CardType): Promise<CardAIContent> {
     const note = await this.prisma.note.findUnique({ where: { id: noteId } })
@@ -66,8 +145,29 @@ export class ReviewAiService {
   "antonyms": ["反义词1", "反义词2"],
   "example": "一个地道的例句",
   "exampleTranslation": "例句的中文翻译",
-  "memoryTip": "帮助记忆的技巧或联想"
+  "memoryTip": "帮助记忆的技巧或联想",
+  "partsOfSpeech": [
+    { "pos": "词性缩写如 n./v.", "label": "词性中文如 名词", "meaning": "该词性下的义项（中文）" }
+  ],
+  "confusables": [
+    {
+      "kind": "form",
+      "words": [
+        { "word": "易混词A", "meaning": "义项（中文）" },
+        { "word": "易混词B", "meaning": "义项（中文）" }
+      ]
+    },
+    {
+      "kind": "meaning",
+      "difference": "易混点核心区别说明（中文，必填）",
+      "words": [
+        { "word": "词1", "meaning": "义项" },
+        { "word": "词2", "meaning": "义项" }
+      ]
+    }
+  ]
 }
+partsOfSpeech/confusables 可选；confusables 中 kind 为 form（形近/拼写易混）或 meaning（义近易混），kind 为 meaning 时必须提供非空 difference；每组至少两个 words。
 只返回JSON，不要其他内容。`
     }
 
@@ -130,8 +230,29 @@ export class ReviewAiService {
     "sentence": "包含该单词的例句",
     "translation": "例句的中文翻译",
     "analysis": "例句结构分析和理解要点"
-  }
+  },
+  "partsOfSpeech": [
+    { "pos": "词性缩写", "label": "词性中文", "meaning": "义项（中文）" }
+  ],
+  "confusables": [
+    {
+      "kind": "form",
+      "words": [
+        { "word": "易混词A", "meaning": "义项" },
+        { "word": "易混词B", "meaning": "义项" }
+      ]
+    },
+    {
+      "kind": "meaning",
+      "difference": "核心区别说明（必填）",
+      "words": [
+        { "word": "词1", "meaning": "义项" },
+        { "word": "词2", "meaning": "义项" }
+      ]
+    }
+  ]
 }
+partsOfSpeech/confusables 可选；confusables 规则同 word-speech 卡片说明。
 只返回JSON，不要其他内容。`
     }
 
@@ -140,7 +261,7 @@ export class ReviewAiService {
 
   private parseAIResponse(
     content: string,
-    _cardType: CardType,
+    cardType: CardType,
     note: {
       content: string
       translation: string
@@ -152,14 +273,18 @@ export class ReviewAiService {
     },
   ): CardAIContent {
     try {
-      const jsonMatch =
-        content.match(/```(?:json)?\s*([\s\S]*?)```/) ??
-        content.match(/(\{[\s\S]*\})/)
-      const jsonStr = jsonMatch ? jsonMatch[1] : content
-      const parsed = JSON.parse(jsonStr.trim()) as { fallback?: boolean }
+      const jsonStr = this.extractJsonCandidate(content)
+      const parsed = JSON.parse(jsonStr.trim()) as unknown
 
-      if (parsed.fallback === false) {
-        return parsed as CardAIContent
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        (parsed as { fallback?: boolean }).fallback === false
+      ) {
+        const contentParsed = parseReviewAiPayload(parsed, cardType)
+        if (contentParsed !== null) {
+          return contentParsed
+        }
       }
 
       return this.buildFallback(note, 'AI returned unexpected format')

@@ -1,4 +1,6 @@
 // ── 类型定义 ──────────────────────────────────────────────────────
+import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
+
 export type Category = '口语' | '短语' | '句子' | '同义替换' | '拼写' | '单词' | '写作'
 
 export interface Note {
@@ -10,6 +12,8 @@ export interface Note {
   phonetic?: string
   synonyms?: string[]
   antonyms?: string[]
+  partsOfSpeech?: PartOfSpeechItem[]
+  confusables?: ConfusableGroup[]
   example?: string
   memoryTip?: string
   tags?: string[]

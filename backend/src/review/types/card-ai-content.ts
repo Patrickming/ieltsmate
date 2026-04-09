@@ -1,3 +1,5 @@
+import type { ConfusableGroup, PartOfSpeechItem } from '../../notes/types/note-extensions'
+
 export type CardType = 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling'
 
 const CATEGORY_TO_CARD_TYPE: Record<string, CardType> = {
@@ -19,7 +21,10 @@ export interface WordSpeechAI {
   synonyms: string[]
   antonyms: string[]
   example: string
+  exampleTranslation?: string
   memoryTip: string
+  partsOfSpeech?: PartOfSpeechItem[]
+  confusables?: ConfusableGroup[]
 }
 
 export interface PhraseAI {
@@ -28,6 +33,7 @@ export interface PhraseAI {
   synonyms: string[]
   antonyms: string[]
   example: string
+  exampleTranslation?: string
   memoryTip: string
 }
 
@@ -50,7 +56,9 @@ export interface SpellingAI {
   synonyms: string[]
   antonyms: string[]
   memoryTip: string
-  contextExample: { sentence: string; analysis: string }
+  contextExample: { sentence: string; analysis: string; translation?: string }
+  partsOfSpeech?: PartOfSpeechItem[]
+  confusables?: ConfusableGroup[]
 }
 
 export interface FallbackResponse {

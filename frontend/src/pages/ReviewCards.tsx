@@ -10,10 +10,17 @@ import {
   findConflictingAssociationEntries,
   mergeAssociationListsUnique,
 } from '../lib/associationDedup'
+import {
+  confusableDedupKey,
+  mergeUniqueConfusables,
+  mergeUniquePos,
+  posDedupKey,
+} from '../lib/noteExtensionsDedup'
 import { useAppStore } from '../store/useAppStore'
 import { apiUrl } from '../lib/apiBase'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
+import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
   if (category === '口语' || category === '单词') return 'word-speech'
   if (category === '短语') return 'phrase'
@@ -202,11 +209,11 @@ function CardFront({ note, cardType, answer, onAnswerChange, onReveal }: {
 
 // ── AI types (mirroring backend) ────────────────────────────────────────────
 interface AIContentBase { fallback: boolean }
-interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string }
+interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[] }
 interface PhraseAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string }
 interface SynonymAI extends AIContentBase { fallback: false; wordMeanings: Array<{ word: string; phonetic: string; meaning: string }>; antonymGroup: string[]; moreSynonyms: string[] }
 interface SentenceAI extends AIContentBase { fallback: false; analysis: string; paraphrases: Array<{ sentence: string; dimension: string }> }
-interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string } }
+interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string }; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[] }
 interface FallbackAI extends AIContentBase { fallback: true; phonetic: string | null; translation: string; synonyms: string[]; antonyms: string[]; example: string | null; memoryTip: string | null }
 type CardAIContent = WordSpeechAI | PhraseAI | SynonymAI | SentenceAI | SpellingAI | FallbackAI
 
@@ -264,6 +271,182 @@ function SaveChip({ word, saved, onSave }: { word: string; saved: boolean; onSav
   )
 }
 
+type BackFaceTab = 'learning' | 'posConfusable'
+
+function PosBackTabBar({ active, onChange }: { active: BackFaceTab; onChange: (t: BackFaceTab) => void }) {
+  return (
+    <div className="flex gap-2 mb-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        data-testid="review-back-tab-learning"
+        onClick={(e) => {
+          e.stopPropagation()
+          onChange('learning')
+        }}
+        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
+          active === 'learning' ? 'border-primary text-primary bg-primary/10' : 'border-border text-text-dim hover:border-border-strong'
+        }`}
+      >
+        学习内容
+      </button>
+      <button
+        type="button"
+        data-testid="review-back-tab-pos-confusable"
+        onClick={(e) => {
+          e.stopPropagation()
+          onChange('posConfusable')
+        }}
+        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
+          active === 'posConfusable' ? 'border-primary text-primary bg-primary/10' : 'border-border text-text-dim hover:border-border-strong'
+        }`}
+      >
+        词性&易混淆
+      </button>
+    </div>
+  )
+}
+
+function isPosSaved(item: PartOfSpeechItem, stored: Note | undefined, sessionKeys: string[]): boolean {
+  const k = posDedupKey(item)
+  if (sessionKeys.includes(k)) return true
+  return (stored?.partsOfSpeech ?? []).some((p) => posDedupKey(p) === k)
+}
+
+function isConfusableSaved(group: ConfusableGroup, stored: Note | undefined, sessionKeys: string[]): boolean {
+  const k = confusableDedupKey(group)
+  if (sessionKeys.includes(k)) return true
+  return (stored?.confusables ?? []).some((g) => confusableDedupKey(g) === k)
+}
+
+function PosConfusablePanel({
+  aiPos,
+  aiConf,
+  storedNote,
+  savedPosKeys,
+  savedConfKeys,
+  onSavePos,
+  onSaveConf,
+}: {
+  aiPos?: PartOfSpeechItem[]
+  aiConf?: ConfusableGroup[]
+  storedNote: Note
+  savedPosKeys: string[]
+  savedConfKeys: string[]
+  onSavePos: (item: PartOfSpeechItem) => void
+  onSaveConf: (g: ConfusableGroup) => void
+}) {
+  const mergedPos = mergeUniquePos(storedNote.partsOfSpeech ?? [], aiPos ?? [])
+  const mergedConf = mergeUniqueConfusables(storedNote.confusables ?? [], aiConf ?? [])
+  const barColor = CATEGORY_BAR[storedNote.category] ?? '#818cf8'
+
+  return (
+    <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+      {mergedPos.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold text-text-muted mb-2">词性</div>
+          <div className="flex flex-col gap-3">
+            {mergedPos.map((item, idx) => {
+              const saved = isPosSaved(item, storedNote, savedPosKeys)
+              return (
+                <div
+                  key={`${posDedupKey(item)}-${idx}`}
+                  className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-md border"
+                        style={{ borderColor: barColor + '66', color: barColor }}
+                      >
+                        {item.label}
+                      </span>
+                      <span className="text-[12px] text-text-subtle font-mono">{item.pos}</span>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid={`review-pos-save-${idx}`}
+                      onClick={() => onSavePos(item)}
+                      className="flex items-center gap-1 shrink-0"
+                      style={{ color: saved ? '#34d399' : '#818cf8' }}
+                    >
+                      {saved ? <Check size={10} /> : <Plus size={10} />}
+                      <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+                    </button>
+                  </div>
+                  <p className="text-[15px] text-text-primary leading-relaxed">{item.meaning}</p>
+                  {item.phonetic && (
+                    <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">{item.phonetic}</p>
+                  )}
+                  {item.example && (
+                    <p className="text-[13px] text-text-secondary italic mt-2 leading-relaxed">"{item.example}"</p>
+                  )}
+                  {item.exampleTranslation && (
+                    <p className="text-[12px] text-text-dim mt-1 leading-relaxed">{item.exampleTranslation}</p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {mergedConf.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold text-text-muted mb-2">易混淆</div>
+          <div className="flex flex-col gap-4">
+            {mergedConf.map((group, gi) => {
+              const saved = isConfusableSaved(group, storedNote, savedConfKeys)
+              return (
+                <div
+                  key={`${confusableDedupKey(group)}-${gi}`}
+                  className="rounded-xl border border-[#27272a] bg-[#12121a] px-4 py-3.5"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-text-subtle">
+                      {group.kind === 'form' ? '形近 / 拼写易混' : '义近易混'}
+                    </span>
+                    <button
+                      type="button"
+                      data-testid={`review-conf-save-${gi}`}
+                      onClick={() => onSaveConf(group)}
+                      className="flex items-center gap-1 shrink-0"
+                      style={{ color: saved ? '#34d399' : '#818cf8' }}
+                    >
+                      {saved ? <Check size={10} /> : <Plus size={10} />}
+                      <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+                    </button>
+                  </div>
+                  {group.kind === 'meaning' && (
+                    <p className="text-[13px] text-text-secondary leading-relaxed mb-3 border-b border-[#27272a] pb-3">
+                      <span className="text-text-dim">区别：</span>
+                      {group.difference}
+                    </p>
+                  )}
+                  <div className="flex flex-col gap-3">
+                    {group.words.map((w, wi) => (
+                      <div key={`${w.word}-${wi}`} className="border-l-2 border-primary/35 pl-3">
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-[16px] font-semibold text-text-primary">{w.word}</span>
+                          {w.phonetic && <span className="text-[13px] text-[#a5b4fc] font-mono">{w.phonetic}</span>}
+                        </div>
+                        <p className="text-[14px] text-text-secondary mt-1 leading-relaxed">{w.meaning}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {mergedPos.length === 0 && mergedConf.length === 0 && (
+        <p className="text-sm text-text-dim">暂无词性或易混淆内容</p>
+      )}
+    </div>
+  )
+}
+
 function UserNotesSection({ userNotes, withTopDivider = false }: { userNotes: string[]; withTopDivider?: boolean }) {
   if (userNotes.length === 0) return null
 
@@ -283,63 +466,111 @@ function UserNotesSection({ userNotes, withTopDivider = false }: { userNotes: st
 }
 
 // ── CardBack sub-components ───────────────────────────────────────────────────
-function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes }: {
-  note: Note; ai: WordSpeechAI | PhraseAI
-  savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes,
+  showPosConfusableTabs = false,
+  backFaceTab = 'learning',
+  onBackFaceTabChange,
+  storedNote,
+  onSavePos,
+  onSaveConf,
+  savedPosKeys = [],
+  savedConfKeys = [],
+}: {
+  note: Note
+  ai: WordSpeechAI | PhraseAI
+  savedSyn: string[]
+  savedAnt: string[]
+  onSaveSyn: (s: string) => void
+  onSaveAnt: (s: string) => void
   userNotes: string[]
+  showPosConfusableTabs?: boolean
+  backFaceTab?: BackFaceTab
+  onBackFaceTabChange?: (t: BackFaceTab) => void
+  storedNote?: Note
+  onSavePos?: (item: PartOfSpeechItem) => void
+  onSaveConf?: (g: ConfusableGroup) => void
+  savedPosKeys?: string[]
+  savedConfKeys?: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
+  const speechAi = ai as WordSpeechAI
+  const extPos = showPosConfusableTabs ? speechAi.partsOfSpeech : undefined
+  const extConf = showPosConfusableTabs ? speechAi.confusables : undefined
+  const hasPosConfusableData = showPosConfusableTabs && (
+    (storedNote?.partsOfSpeech?.length ?? 0) > 0 ||
+    (storedNote?.confusables?.length ?? 0) > 0 ||
+    (extPos?.length ?? 0) > 0 ||
+    (extConf?.length ?? 0) > 0
+  )
+
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
-      <UserNotesSection userNotes={userNotes} />
-      {ai.phonetic && (
-        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-          <Volume2 size={16} className="text-primary" />
-          <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
-        </div>
+      {hasPosConfusableData && onBackFaceTabChange && (
+        <PosBackTabBar active={backFaceTab} onChange={onBackFaceTabChange} />
       )}
-      <div>
-        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
-        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
-      </div>
-      <div className="h-px bg-border" />
-      {ai.synonyms.length > 0 && (
-        <div>
-          <AITip label="🔄 同义词/短语" tip="AI 实时生成，点击「存入」可保存到知识库" />
-          <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+      {hasPosConfusableData && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
+        <PosConfusablePanel
+          aiPos={extPos}
+          aiConf={extConf}
+          storedNote={storedNote}
+          savedPosKeys={savedPosKeys}
+          savedConfKeys={savedConfKeys}
+          onSavePos={onSavePos}
+          onSaveConf={onSaveConf}
+        />
+      ) : (
+        <>
+          <UserNotesSection userNotes={userNotes} />
+          {ai.phonetic && (
+            <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+              <Volume2 size={16} className="text-primary" />
+              <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
+            </div>
+          )}
+          <div>
+            <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+            <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
           </div>
-        </div>
-      )}
-      {ai.antonyms.length > 0 && (
-        <div>
-          <AITip label="🔀 反义词/短语" tip="AI 生成的语义对立词，点击「存入」可关联到知识库" />
-          <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
-          </div>
-        </div>
-      )}
-      {ai.memoryTip && (
-        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
-          <AITip label="✨ 记忆技巧" tip="AI 基于词源/联想生成，帮助加深印象" />
-          <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{ai.memoryTip}</p>
-        </div>
-      )}
-      {ai.example && (
-        <div>
-          <div className="h-px bg-border mb-4" />
-          <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
-          <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5 flex flex-col gap-2">
-            <p className="text-[14px] text-text-secondary italic leading-relaxed">"{ai.example}"</p>
-            {ai.exampleTranslation && (
-              <p className="text-[13px] text-text-dim leading-relaxed">{ai.exampleTranslation}</p>
-            )}
-          </div>
-        </div>
+          <div className="h-px bg-border" />
+          {ai.synonyms.length > 0 && (
+            <div>
+              <AITip label="🔄 同义词/短语" tip="AI 实时生成，点击「存入」可保存到知识库" />
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+              </div>
+            </div>
+          )}
+          {ai.antonyms.length > 0 && (
+            <div>
+              <AITip label="🔀 反义词/短语" tip="AI 生成的语义对立词，点击「存入」可关联到知识库" />
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
+              </div>
+            </div>
+          )}
+          {ai.memoryTip && (
+            <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+              <AITip label="✨ 记忆技巧" tip="AI 基于词源/联想生成，帮助加深印象" />
+              <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{ai.memoryTip}</p>
+            </div>
+          )}
+          {ai.example && (
+            <div>
+              <div className="h-px bg-border mb-4" />
+              <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
+              <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5 flex flex-col gap-2">
+                <p className="text-[14px] text-text-secondary italic leading-relaxed">"{ai.example}"</p>
+                {ai.exampleTranslation && (
+                  <p className="text-[13px] text-text-dim leading-relaxed">{ai.exampleTranslation}</p>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -448,16 +679,43 @@ function CardBackSentence({ note, ai, userNotes }: { note: Note; ai: SentenceAI;
   )
 }
 
-function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, userNotes }: {
-  note: Note; ai: SpellingAI
-  savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, userNotes,
+  showPosConfusableTabs = false,
+  backFaceTab = 'learning',
+  onBackFaceTabChange,
+  storedNote,
+  onSavePos,
+  onSaveConf,
+  savedPosKeys = [],
+  savedConfKeys = [],
+}: {
+  note: Note
+  ai: SpellingAI
+  savedSyn: string[]
+  savedAnt: string[]
+  onSaveSyn: (s: string) => void
+  onSaveAnt: (s: string) => void
   spellingAnswer?: string
   userNotes: string[]
+  showPosConfusableTabs?: boolean
+  backFaceTab?: BackFaceTab
+  onBackFaceTabChange?: (t: BackFaceTab) => void
+  storedNote?: Note
+  onSavePos?: (item: PartOfSpeechItem) => void
+  onSaveConf?: (g: ConfusableGroup) => void
+  savedPosKeys?: string[]
+  savedConfKeys?: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = spellingAnswer
     ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
     : null
+  const hasPosConfusableData = showPosConfusableTabs && (
+    (storedNote?.partsOfSpeech?.length ?? 0) > 0 ||
+    (storedNote?.confusables?.length ?? 0) > 0 ||
+    (ai.partsOfSpeech?.length ?? 0) > 0 ||
+    (ai.confusables?.length ?? 0) > 0
+  )
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -465,86 +723,121 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
-      {spellingAnswer && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
-          style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
-          <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
-          <div>
-            <p className="text-sm text-text-dim mb-0.5">你的答案</p>
-            <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>{spellingAnswer}</p>
-          </div>
-          {!spellingCorrect && (
-            <>
-              <div className="w-px h-10 bg-border mx-1" />
+      {hasPosConfusableData && onBackFaceTabChange && (
+        <PosBackTabBar active={backFaceTab} onChange={onBackFaceTabChange} />
+      )}
+      {hasPosConfusableData && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
+        <PosConfusablePanel
+          aiPos={ai.partsOfSpeech}
+          aiConf={ai.confusables}
+          storedNote={storedNote}
+          savedPosKeys={savedPosKeys}
+          savedConfKeys={savedConfKeys}
+          onSavePos={onSavePos}
+          onSaveConf={onSaveConf}
+        />
+      ) : (
+        <>
+          {spellingAnswer && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+              style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
+              <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
               <div>
-                <p className="text-sm text-text-dim mb-0.5">正确答案</p>
-                <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+                <p className="text-sm text-text-dim mb-0.5">你的答案</p>
+                <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>{spellingAnswer}</p>
               </div>
-            </>
+              {!spellingCorrect && (
+                <>
+                  <div className="w-px h-10 bg-border mx-1" />
+                  <div>
+                    <p className="text-sm text-text-dim mb-0.5">正确答案</p>
+                    <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+                  </div>
+                </>
+              )}
+            </div>
           )}
-        </div>
-      )}
-      <UserNotesSection userNotes={userNotes} />
-      {ai.phonetic && (
-        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-          <Volume2 size={16} className="text-primary" />
-          <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
-        </div>
-      )}
-      <div>
-        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
-        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
-      </div>
-      <div className="h-px bg-border" />
-      {ai.synonyms.length > 0 && (
-        <div>
-          <AITip label="🔄 同义词" tip="点击「存入」可保存到知识库" />
-          <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
-          </div>
-        </div>
-      )}
-      {ai.antonyms.length > 0 && (
-        <div>
-          <AITip label="🔀 反义词" tip="点击「存入」可关联到知识库" />
-          <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
-          </div>
-        </div>
-      )}
-      {ai.memoryTip && (
-        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
-          <AITip label="✨ 拼写记忆技巧" tip="词根词缀拆解，帮助记忆拼写" />
-          <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{ai.memoryTip}</p>
-        </div>
-      )}
-      <div>
-        <div className="h-px bg-border mb-4" />
-        <AITip label="💬 例句与分析" tip="AI 生成的语境例句及用法解析" />
-        <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 mt-2.5 flex flex-col gap-2">
-          <p className="text-[14px] text-text-secondary italic leading-relaxed">"{ai.contextExample.sentence}"</p>
-          {ai.contextExample.translation && (
-            <p className="text-[13px] text-text-dim leading-relaxed">{ai.contextExample.translation}</p>
+          <UserNotesSection userNotes={userNotes} />
+          {ai.phonetic && (
+            <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+              <Volume2 size={16} className="text-primary" />
+              <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
+            </div>
           )}
-          <p className="text-[12px] text-text-subtle leading-relaxed border-t border-[#27272a] pt-2 mt-1">{ai.contextExample.analysis}</p>
-        </div>
-      </div>
+          <div>
+            <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+            <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
+          </div>
+          <div className="h-px bg-border" />
+          {ai.synonyms.length > 0 && (
+            <div>
+              <AITip label="🔄 同义词" tip="点击「存入」可保存到知识库" />
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+              </div>
+            </div>
+          )}
+          {ai.antonyms.length > 0 && (
+            <div>
+              <AITip label="🔀 反义词" tip="点击「存入」可关联到知识库" />
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
+              </div>
+            </div>
+          )}
+          {ai.memoryTip && (
+            <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+              <AITip label="✨ 拼写记忆技巧" tip="词根词缀拆解，帮助记忆拼写" />
+              <p className="text-[13px] text-[#c4b5fd] leading-relaxed mt-2">{ai.memoryTip}</p>
+            </div>
+          )}
+          <div>
+            <div className="h-px bg-border mb-4" />
+            <AITip label="💬 例句与分析" tip="AI 生成的语境例句及用法解析" />
+            <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 mt-2.5 flex flex-col gap-2">
+              <p className="text-[14px] text-text-secondary italic leading-relaxed">"{ai.contextExample.sentence}"</p>
+              {ai.contextExample.translation && (
+                <p className="text-[13px] text-text-dim leading-relaxed">{ai.contextExample.translation}</p>
+              )}
+              <p className="text-[12px] text-text-subtle leading-relaxed border-t border-[#27272a] pt-2 mt-1">{ai.contextExample.analysis}</p>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
 
-function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying, userNotes }: {
+function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying, userNotes,
+  backFaceTab = 'learning',
+  onBackFaceTabChange,
+  storedNote,
+  onSavePos,
+  onSaveConf,
+  savedPosKeys = [],
+  savedConfKeys = [],
+}: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   spellingAnswer?: string
   onRetry?: () => void
   isRetrying?: boolean
   userNotes: string[]
+  backFaceTab?: BackFaceTab
+  onBackFaceTabChange?: (t: BackFaceTab) => void
+  storedNote?: Note
+  onSavePos?: (item: PartOfSpeechItem) => void
+  onSaveConf?: (g: ConfusableGroup) => void
+  savedPosKeys?: string[]
+  savedConfKeys?: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = cardType === 'spelling' && spellingAnswer
     ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
     : null
+  const showExtTabs = (cardType === 'word-speech' || cardType === 'spelling') && (
+    (storedNote?.partsOfSpeech?.length ?? 0) > 0 || (storedNote?.confusables?.length ?? 0) > 0
+  )
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -569,74 +862,110 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying,
           </button>
         )}
       </div>
-      <UserNotesSection userNotes={userNotes} />
-      {spellingAnswer && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
-          style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
-          <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
-          <div>
-            <p className="text-sm text-text-dim mb-0.5">你的答案</p>
-            <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>{spellingAnswer}</p>
-          </div>
-          {!spellingCorrect && (
-            <>
-              <div className="w-px h-10 bg-border mx-1" />
+      {showExtTabs && onBackFaceTabChange && (
+        <PosBackTabBar active={backFaceTab} onChange={onBackFaceTabChange} />
+      )}
+      {showExtTabs && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
+        <PosConfusablePanel
+          aiPos={undefined}
+          aiConf={undefined}
+          storedNote={storedNote}
+          savedPosKeys={savedPosKeys}
+          savedConfKeys={savedConfKeys}
+          onSavePos={onSavePos}
+          onSaveConf={onSaveConf}
+        />
+      ) : (
+        <>
+          <UserNotesSection userNotes={userNotes} />
+          {spellingAnswer && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+              style={{ background: spellingCorrect ? '#0d2b1f' : '#2e0f0f', borderColor: spellingCorrect ? '#34d399' : '#fb7185' }}>
+              <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
               <div>
-                <p className="text-sm text-text-dim mb-0.5">正确答案</p>
-                <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+                <p className="text-sm text-text-dim mb-0.5">你的答案</p>
+                <p className="text-[17px] font-mono font-semibold" style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}>{spellingAnswer}</p>
               </div>
-            </>
+              {!spellingCorrect && (
+                <>
+                  <div className="w-px h-10 bg-border mx-1" />
+                  <div>
+                    <p className="text-sm text-text-dim mb-0.5">正确答案</p>
+                    <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+                  </div>
+                </>
+              )}
+            </div>
           )}
-        </div>
-      )}
-      {note.phonetic && (
-        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-          <Volume2 size={16} className="text-primary" />
-          <span className="text-[16px] text-[#a5b4fc]">{note.phonetic}</span>
-        </div>
-      )}
-      <div>
-        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
-        <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
-      </div>
-      {(((note.synonyms?.length ?? 0) > 0) || ((note.antonyms?.length ?? 0) > 0)) && <div className="h-px bg-border" />}
-      {note.synonyms && note.synonyms.length > 0 && (
-        <div>
-          <div className="text-sm font-semibold text-text-dim mb-2">🔄 同义词/短语</div>
-          <div className="flex flex-wrap gap-2">{note.synonyms.map(s => (
-            <span key={s} className="px-3 py-1.5 rounded-full text-[13px] border" style={{ background: '#1a1a28', borderColor: '#27272a', color: '#a5b4fc' }}>{s}</span>
-          ))}</div>
-        </div>
-      )}
-      {note.antonyms && note.antonyms.length > 0 && (
-        <div>
-          <div className="text-sm font-semibold text-text-dim mb-2">🔀 反义词/短语</div>
-          <div className="flex flex-wrap gap-2">{note.antonyms.map(s => (
-            <span key={s} className="px-3 py-1.5 rounded-full text-[13px] border" style={{ background: '#1a1a28', borderColor: '#27272a', color: '#fca5a5' }}>{s}</span>
-          ))}</div>
-        </div>
-      )}
-      {note.memoryTip && (
-        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
-          <div className="text-sm font-semibold text-text-dim mb-1">✨ 记忆技巧</div>
-          <p className="text-[13px] text-[#c4b5fd] leading-relaxed">{note.memoryTip}</p>
-        </div>
-      )}
-      {note.example && (
-        <div>
-          <div className="h-px bg-border mb-4" />
-          <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
-          <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5">
-            <p className="text-[14px] text-text-secondary italic leading-relaxed">"{note.example}"</p>
+          {note.phonetic && (
+            <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+              <Volume2 size={16} className="text-primary" />
+              <span className="text-[16px] text-[#a5b4fc]">{note.phonetic}</span>
+            </div>
+          )}
+          <div>
+            <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+            <p className="text-[17px] text-text-primary leading-snug">{note.translation}</p>
           </div>
-        </div>
+          {(((note.synonyms?.length ?? 0) > 0) || ((note.antonyms?.length ?? 0) > 0)) && <div className="h-px bg-border" />}
+          {note.synonyms && note.synonyms.length > 0 && (
+            <div>
+              <div className="text-sm font-semibold text-text-dim mb-2">🔄 同义词/短语</div>
+              <div className="flex flex-wrap gap-2">{note.synonyms.map(s => (
+                <span key={s} className="px-3 py-1.5 rounded-full text-[13px] border" style={{ background: '#1a1a28', borderColor: '#27272a', color: '#a5b4fc' }}>{s}</span>
+              ))}</div>
+            </div>
+          )}
+          {note.antonyms && note.antonyms.length > 0 && (
+            <div>
+              <div className="text-sm font-semibold text-text-dim mb-2">🔀 反义词/短语</div>
+              <div className="flex flex-wrap gap-2">{note.antonyms.map(s => (
+                <span key={s} className="px-3 py-1.5 rounded-full text-[13px] border" style={{ background: '#1a1a28', borderColor: '#27272a', color: '#fca5a5' }}>{s}</span>
+              ))}</div>
+            </div>
+          )}
+          {note.memoryTip && (
+            <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+              <div className="text-sm font-semibold text-text-dim mb-1">✨ 记忆技巧</div>
+              <p className="text-[13px] text-[#c4b5fd] leading-relaxed">{note.memoryTip}</p>
+            </div>
+          )}
+          {note.example && (
+            <div>
+              <div className="h-px bg-border mb-4" />
+              <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
+              <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5">
+                <p className="text-[14px] text-text-secondary italic leading-relaxed">"{note.example}"</p>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
 }
 
 // ── Main CardBack dispatcher ──────────────────────────────────────────────────
-function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, onRetry, isRetrying, userNotes }: {
+function CardBack({
+  note,
+  cardType,
+  aiContent,
+  savedSyn,
+  savedAnt,
+  onSaveSyn,
+  onSaveAnt,
+  spellingAnswer,
+  onRetry,
+  isRetrying,
+  userNotes,
+  storedNote,
+  backFaceTab,
+  onBackFaceTabChange,
+  onSavePos,
+  onSaveConf,
+  savedPosKeys,
+  savedConfKeys,
+}: {
   note: Note
   cardType: ReturnType<typeof getCardType>
   aiContent: CardAIContent | null | undefined
@@ -648,6 +977,13 @@ function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, on
   onRetry?: () => void
   isRetrying?: boolean
   userNotes: string[]
+  storedNote: Note
+  backFaceTab: BackFaceTab
+  onBackFaceTabChange: (t: BackFaceTab) => void
+  onSavePos: (item: PartOfSpeechItem) => void
+  onSaveConf: (g: ConfusableGroup) => void
+  savedPosKeys: string[]
+  savedConfKeys: string[]
 }) {
   if (aiContent === undefined || aiContent === null) {
     return <AILoadingAnimation />
@@ -662,22 +998,95 @@ function CardBack({ note, cardType, aiContent, savedSyn, savedAnt, onSaveSyn, on
         onRetry={onRetry}
         isRetrying={isRetrying}
         userNotes={userNotes}
+        backFaceTab={backFaceTab}
+        onBackFaceTabChange={onBackFaceTabChange}
+        storedNote={storedNote}
+        onSavePos={onSavePos}
+        onSaveConf={onSaveConf}
+        savedPosKeys={savedPosKeys}
+        savedConfKeys={savedConfKeys}
       />
     )
   }
 
   switch (cardType) {
     case 'word-speech':
+      return (
+        <CardBackWordPhrase
+          note={note}
+          ai={aiContent as WordSpeechAI}
+          savedSyn={savedSyn}
+          savedAnt={savedAnt}
+          onSaveSyn={onSaveSyn}
+          onSaveAnt={onSaveAnt}
+          userNotes={userNotes}
+          showPosConfusableTabs
+          backFaceTab={backFaceTab}
+          onBackFaceTabChange={onBackFaceTabChange}
+          storedNote={storedNote}
+          onSavePos={onSavePos}
+          onSaveConf={onSaveConf}
+          savedPosKeys={savedPosKeys}
+          savedConfKeys={savedConfKeys}
+        />
+      )
     case 'phrase':
-      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
+      return (
+        <CardBackWordPhrase
+          note={note}
+          ai={aiContent as PhraseAI}
+          savedSyn={savedSyn}
+          savedAnt={savedAnt}
+          onSaveSyn={onSaveSyn}
+          onSaveAnt={onSaveAnt}
+          userNotes={userNotes}
+        />
+      )
     case 'synonym':
       return <CardBackSynonym note={note} ai={aiContent as SynonymAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
     case 'sentence':
       return <CardBackSentence note={note} ai={aiContent as SentenceAI} userNotes={userNotes} />
     case 'spelling':
-      return <CardBackSpelling note={note} ai={aiContent as SpellingAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} spellingAnswer={spellingAnswer} userNotes={userNotes} />
+      return (
+        <CardBackSpelling
+          note={note}
+          ai={aiContent as SpellingAI}
+          savedSyn={savedSyn}
+          savedAnt={savedAnt}
+          onSaveSyn={onSaveSyn}
+          onSaveAnt={onSaveAnt}
+          spellingAnswer={spellingAnswer}
+          userNotes={userNotes}
+          showPosConfusableTabs
+          backFaceTab={backFaceTab}
+          onBackFaceTabChange={onBackFaceTabChange}
+          storedNote={storedNote}
+          onSavePos={onSavePos}
+          onSaveConf={onSaveConf}
+          savedPosKeys={savedPosKeys}
+          savedConfKeys={savedConfKeys}
+        />
+      )
     default:
-      return <CardBackWordPhrase note={note} ai={aiContent as WordSpeechAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
+      return (
+        <CardBackWordPhrase
+          note={note}
+          ai={aiContent as WordSpeechAI}
+          savedSyn={savedSyn}
+          savedAnt={savedAnt}
+          onSaveSyn={onSaveSyn}
+          onSaveAnt={onSaveAnt}
+          userNotes={userNotes}
+          showPosConfusableTabs
+          backFaceTab={backFaceTab}
+          onBackFaceTabChange={onBackFaceTabChange}
+          storedNote={storedNote}
+          onSavePos={onSavePos}
+          onSaveConf={onSaveConf}
+          savedPosKeys={savedPosKeys}
+          savedConfKeys={savedConfKeys}
+        />
+      )
   }
 }
 
@@ -729,6 +1138,10 @@ export default function ReviewCards() {
     conflicts: string[]
   }>(null)
   const [assocDedupSaving, setAssocDedupSaving] = useState(false)
+  const [backFaceTab, setBackFaceTab] = useState<BackFaceTab>('learning')
+  const [savedPosKeys, setSavedPosKeys] = useState<string[]>([])
+  const [savedConfKeys, setSavedConfKeys] = useState<string[]>([])
+  const [saveNotice, setSaveNotice] = useState<string | null>(null)
 
   const session = reviewSession
   const card = session?.cards[session.current]
@@ -784,6 +1197,17 @@ export default function ReviewCards() {
     }
   }, [card?.id, flipped])
 
+  useEffect(() => {
+    setBackFaceTab('learning')
+    setSaveNotice(null)
+  }, [card?.id])
+
+  useEffect(() => {
+    if (!saveNotice) return
+    const timer = window.setTimeout(() => setSaveNotice(null), 2200)
+    return () => window.clearTimeout(timer)
+  }, [saveNotice])
+
   // Spacebar flip
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -810,6 +1234,8 @@ export default function ReviewCards() {
     setSlashState('idle')
     setSavedSyn([])
     setSavedAnt([])
+    setSavedPosKeys([])
+    setSavedConfKeys([])
     setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= remaining) {
@@ -823,19 +1249,20 @@ export default function ReviewCards() {
   const handleSlashMaster = async () => {
     if (slashState === 'slashing') return
     setSlashState('slashing')
-    const markPromise = markNoteMastered(card.id)
     await new Promise<void>((resolve) => {
       window.setTimeout(resolve, SLASH_ANIMATION_MS)
     })
+    const marked = await markNoteMastered(card.id)
     rateCard(card.id, 'easy', cardType === 'spelling' ? spellingAnswer : undefined)
-    const marked = await markPromise
     if (!marked) {
-      alert('斩击已生效，但“已掌握”状态更新失败，请稍后重试')
+      alert('已按记得评分，但未标记为已掌握，请稍后重试')
     }
     setFlipped(false)
     setSlashState('idle')
     setSavedSyn([])
     setSavedAnt([])
+    setSavedPosKeys([])
+    setSavedConfKeys([])
     setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= remaining) {
@@ -873,6 +1300,40 @@ export default function ReviewCards() {
       incrementSavedExtensions()
     } else {
       setSavedAnt((p) => p.filter((s) => s !== ant))
+    }
+  }
+
+  const performSavePos = async (item: PartOfSpeechItem) => {
+    const k = posDedupKey(item)
+    if (savedPosKeys.includes(k)) return
+    const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
+    if (latest?.partsOfSpeech?.some((p) => posDedupKey(p) === k)) return
+    const base = latest?.partsOfSpeech ?? card.partsOfSpeech ?? []
+    const merged = mergeUniquePos(base, [item])
+    setSavedPosKeys((p) => [...p, k])
+    const ok = await updateNote(card.id, { partsOfSpeech: merged })
+    if (ok) {
+      incrementSavedExtensions()
+    } else {
+      setSavedPosKeys((p) => p.filter((x) => x !== k))
+      setSaveNotice('保存失败，可重试')
+    }
+  }
+
+  const performSaveConf = async (group: ConfusableGroup) => {
+    const k = confusableDedupKey(group)
+    if (savedConfKeys.includes(k)) return
+    const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
+    if (latest?.confusables?.some((g) => confusableDedupKey(g) === k)) return
+    const base = latest?.confusables ?? card.confusables ?? []
+    const merged = mergeUniqueConfusables(base, [group])
+    setSavedConfKeys((p) => [...p, k])
+    const ok = await updateNote(card.id, { confusables: merged })
+    if (ok) {
+      incrementSavedExtensions()
+    } else {
+      setSavedConfKeys((p) => p.filter((x) => x !== k))
+      setSaveNotice('保存失败，可重试')
     }
   }
 
@@ -922,6 +1383,22 @@ export default function ReviewCards() {
 
   return (
     <Layout title="复习">
+      <AnimatePresence>
+        {saveNotice && (
+          <motion.div
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="fixed top-4 right-4 z-50 px-3.5 py-2 rounded-lg border text-sm font-medium"
+            style={{ background: '#2e1418', borderColor: '#fb718599', color: '#fecdd3' }}
+          >
+            {saveNotice}
+          </motion.div>
+        )}
+      </AnimatePresence>
       <ModalShell open={assocDedup !== null} onClose={closeAssocDedup}>
         {assocDedup && (
           <div
@@ -1152,6 +1629,13 @@ export default function ReviewCards() {
                       spellingAnswer={spellingAnswer}
                       onRetry={() => retryAIContent(card.id, cardType)}
                       isRetrying={aiIsRetrying}
+                      storedNote={noteRow ?? card}
+                      backFaceTab={backFaceTab}
+                      onBackFaceTabChange={setBackFaceTab}
+                      onSavePos={(item) => { void performSavePos(item) }}
+                      onSaveConf={(g) => { void performSaveConf(g) }}
+                      savedPosKeys={savedPosKeys}
+                      savedConfKeys={savedConfKeys}
                     />
                   </div>
                 </motion.div>

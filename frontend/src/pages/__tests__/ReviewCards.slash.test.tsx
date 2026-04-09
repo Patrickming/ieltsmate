@@ -65,5 +65,30 @@ describe('ReviewCards slash action', () => {
       expect(useAppStore.getState().rateCard).toHaveBeenCalledWith('n-1', 'easy', undefined)
       expect(routerMocks.navigate).toHaveBeenCalledWith('/review/summary')
     }, { timeout: 4000 })
+
+    const markMock = useAppStore.getState().markNoteMastered as ReturnType<typeof vi.fn>
+    const rateMock = useAppStore.getState().rateCard as ReturnType<typeof vi.fn>
+    expect(markMock.mock.invocationCallOrder[0]).toBeLessThan(rateMock.mock.invocationCallOrder[0])
+  })
+
+  it('mark 失败时提示语义准确，且仍按记得评分并继续流程', async () => {
+    const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    useAppStore.setState({
+      markNoteMastered: vi.fn().mockResolvedValue(false),
+      rateCard: vi.fn(),
+    })
+
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('hostel'))
+    await user.click(screen.getByRole('button', { name: /斩！/ }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().markNoteMastered).toHaveBeenCalledWith('n-1')
+      expect(useAppStore.getState().rateCard).toHaveBeenCalledWith('n-1', 'easy', undefined)
+      expect(alertMock).toHaveBeenCalledWith('已按记得评分，但未标记为已掌握，请稍后重试')
+      expect(routerMocks.navigate).toHaveBeenCalledWith('/review/summary')
+    }, { timeout: 4000 })
   })
 })
