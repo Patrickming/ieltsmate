@@ -1,5 +1,6 @@
 // ── 类型定义 ──────────────────────────────────────────────────────
 import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
+import type { WordFamily } from '../types/wordFamily'
 
 export type Category = '口语' | '短语' | '句子' | '同义替换' | '拼写' | '单词' | '写作'
 
@@ -14,6 +15,7 @@ export interface Note {
   antonyms?: string[]
   partsOfSpeech?: PartOfSpeechItem[]
   confusables?: ConfusableGroup[]
+  wordFamily?: WordFamily
   example?: string
   memoryTip?: string
   tags?: string[]

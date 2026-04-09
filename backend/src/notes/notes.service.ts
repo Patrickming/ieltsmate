@@ -5,6 +5,7 @@ import { CreateNoteDto } from './dto/create-note.dto'
 import { CreateUserNoteDto } from './dto/create-user-note.dto'
 import { UpdateNoteDto } from './dto/update-note.dto'
 import { normalizeConfusableGroups, normalizePartOfSpeechList } from './types/note-extensions'
+import { normalizeWordFamily } from './types/word-family'
 
 @Injectable()
 export class NotesService {
@@ -36,6 +37,12 @@ export class NotesService {
           ? {
               confusables: normalizeConfusableGroups(dto.confusables) as unknown as Prisma.InputJsonValue,
             }
+          : {}),
+        ...(dto.wordFamily !== undefined && dto.wordFamily !== null && typeof dto.wordFamily === 'object'
+          ? (() => {
+              const wf = normalizeWordFamily(dto.wordFamily)
+              return wf ? { wordFamily: wf as unknown as Prisma.InputJsonValue } : {}
+            })()
           : {}),
       },
     })
@@ -91,6 +98,12 @@ export class NotesService {
     }
     if (dto.confusables !== undefined && Array.isArray(dto.confusables)) {
       data.confusables = normalizeConfusableGroups(dto.confusables) as unknown as Prisma.InputJsonValue
+    }
+    if (dto.wordFamily !== undefined && dto.wordFamily !== null && typeof dto.wordFamily === 'object') {
+      const wf = normalizeWordFamily(dto.wordFamily)
+      if (wf) {
+        data.wordFamily = wf as unknown as Prisma.InputJsonValue
+      }
     }
 
     if (Object.keys(data).length === 0) {

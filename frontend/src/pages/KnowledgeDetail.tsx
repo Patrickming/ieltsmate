@@ -11,6 +11,7 @@ import { LoadingState } from '../components/ui/LoadingState'
 import { useAppStore } from '../store/useAppStore'
 import { apiUrl } from '../lib/apiBase'
 import { CATEGORIES, type Category } from '../data/mockData'
+import type { Pos4 } from '../types/wordFamily'
 
 interface UserNote {
   id: string
@@ -95,6 +96,12 @@ export default function KnowledgeDetail() {
   const accuracy = note.reviewCount
     ? Math.round(((note.correctCount ?? 0) / note.reviewCount) * 100)
     : 0
+  const posLabel: Record<Pos4, string> = {
+    noun: '名词',
+    verb: '动词',
+    adjective: '形容词',
+    adverb: '副词',
+  }
 
   const handleSaveNote = async () => {
     if (!newNote.trim() || !id || savingNote) return
@@ -525,6 +532,97 @@ export default function KnowledgeDetail() {
                     <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
                       <Volume2 size={16} className="text-primary" />
                       <span className="text-[15px] text-[#a5b4fc]">{note.phonetic}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Word family */}
+                {note.wordFamily && (
+                  <div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🧩 词性派生</div>
+                    <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 flex flex-col gap-3">
+                      <div>
+                        <div className="text-[11px] font-bold text-text-subtle mb-1">当前词</div>
+                        <div className="flex flex-wrap items-baseline gap-2">
+                          <span className="text-[16px] font-semibold text-text-primary">{note.wordFamily.base.word}</span>
+                          <span className="text-[11px] text-primary">
+                            {note.wordFamily.base.pos === 'other' ? '当前词性' : (posLabel[note.wordFamily.base.pos as Pos4] ?? note.wordFamily.base.pos)}
+                          </span>
+                          {note.wordFamily.base.phonetic && (
+                            <span className="text-[12px] text-[#a5b4fc] font-mono">{note.wordFamily.base.phonetic}</span>
+                          )}
+                        </div>
+                        <p className="text-[13px] text-text-secondary mt-1">{note.wordFamily.base.meaning}</p>
+                      </div>
+                      {(['noun', 'verb', 'adjective', 'adverb'] as Pos4[]).map((pk) => (
+                        <div key={pk}>
+                          <div className="text-[11px] font-bold text-text-subtle mb-1">{posLabel[pk]}</div>
+                          {(note.wordFamily?.derivedByPos?.[pk]?.length ?? 0) === 0 ? (
+                            <p className="text-[13px] text-text-dim">无</p>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              {note.wordFamily!.derivedByPos[pk].map((item, idx) => (
+                                <div key={`${pk}-${item.word}-${idx}`} className="pl-3 border-l-2 border-primary/35">
+                                  <div className="flex flex-wrap items-baseline gap-2">
+                                    <span className="text-[14px] font-semibold text-text-primary">{item.word}</span>
+                                    {item.phonetic && <span className="text-[12px] text-[#a5b4fc] font-mono">{item.phonetic}</span>}
+                                  </div>
+                                  <p className="text-[13px] text-text-secondary mt-0.5">{item.meaning}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Parts of speech */}
+                {note.partsOfSpeech && note.partsOfSpeech.length > 0 && (
+                  <div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🧠 词性</div>
+                    <div className="flex flex-col gap-2">
+                      {note.partsOfSpeech.map((item, idx) => (
+                        <div key={`${item.pos}-${item.meaning}-${idx}`} className="bg-[#141420] border border-[#27272a] rounded-lg px-3.5 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-primary">{item.label}</span>
+                            <span className="text-[11px] text-text-subtle">{item.pos}</span>
+                            {item.phonetic && <span className="text-[12px] text-[#a5b4fc] font-mono">{item.phonetic}</span>}
+                          </div>
+                          <p className="text-[13px] text-text-secondary mt-1">{item.meaning}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Confusables */}
+                {note.confusables && note.confusables.length > 0 && (
+                  <div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🔀 易混淆</div>
+                    <div className="flex flex-col gap-2">
+                      {note.confusables.map((group, gi) => (
+                        <div key={`conf-${gi}`} className="bg-[#141420] border border-[#27272a] rounded-lg px-3.5 py-3">
+                          <div className="text-[11px] text-text-subtle mb-1.5">
+                            {group.kind === 'meaning' ? '义近易混' : '形近 / 拼写易混'}
+                          </div>
+                          {group.kind === 'meaning' && (
+                            <p className="text-[12px] text-text-dim mb-2">区别：{group.difference}</p>
+                          )}
+                          <div className="flex flex-col gap-1.5">
+                            {group.words.map((w, wi) => (
+                              <div key={`${w.word}-${wi}`} className="pl-3 border-l-2 border-primary/35">
+                                <div className="flex flex-wrap items-baseline gap-2">
+                                  <span className="text-[14px] font-semibold text-text-primary">{w.word}</span>
+                                  {w.phonetic && <span className="text-[12px] text-[#a5b4fc] font-mono">{w.phonetic}</span>}
+                                </div>
+                                <p className="text-[13px] text-text-secondary mt-0.5">{w.meaning}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}

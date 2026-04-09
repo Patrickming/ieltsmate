@@ -11,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator'
 import { ConfusableGroupDto, PartOfSpeechItemDto } from './note-extension-fields.dto'
+import { WordFamilyDto } from './word-family-fields.dto'
 
 export class UpdateNoteDto {
   @IsOptional()
@@ -71,4 +72,9 @@ export class UpdateNoteDto {
   @ValidateNested({ each: true })
   @Type(() => ConfusableGroupDto)
   confusables?: ConfusableGroupDto[]
+
+  @ValidateIf((_, value) => value !== undefined)
+  @ValidateNested()
+  @Type(() => WordFamilyDto)
+  wordFamily?: WordFamilyDto
 }

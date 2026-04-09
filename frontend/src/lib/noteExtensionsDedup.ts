@@ -46,3 +46,85 @@ export function mergeUniqueConfusables(base: ConfusableGroup[], incoming: Confus
   }
   return out
 }
+
+function asRecord(input: unknown): Record<string, unknown> | null {
+  return input && typeof input === 'object' ? (input as Record<string, unknown>) : null
+}
+
+function cleanString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+export function normalizePartOfSpeechForUI(input: unknown): PartOfSpeechItem[] {
+  if (!Array.isArray(input)) return []
+  const out: PartOfSpeechItem[] = []
+  const seen = new Set<string>()
+  for (const row of input) {
+    const obj = asRecord(row)
+    if (!obj) continue
+    const pos = cleanString(obj.pos)
+    const label = cleanString(obj.label)
+    const meaning = cleanString(obj.meaning)
+    if (!pos || !label || !meaning) continue
+    const item: PartOfSpeechItem = {
+      pos,
+      label,
+      meaning,
+      ...(cleanString(obj.phonetic) ? { phonetic: cleanString(obj.phonetic) } : {}),
+      ...(cleanString(obj.example) ? { example: cleanString(obj.example) } : {}),
+      ...(cleanString(obj.exampleTranslation)
+        ? { exampleTranslation: cleanString(obj.exampleTranslation) }
+        : {}),
+    }
+    const key = posDedupKey(item)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out
+}
+
+export function normalizeConfusablesForUI(input: unknown): ConfusableGroup[] {
+  if (!Array.isArray(input)) return []
+  const out: ConfusableGroup[] = []
+  const seen = new Set<string>()
+  for (const row of input) {
+    const obj = asRecord(row)
+    if (!obj) continue
+    const kind = obj.kind
+    if (kind !== 'form' && kind !== 'meaning') continue
+    if (!Array.isArray(obj.words) || obj.words.length < 2) continue
+    const words = obj.words
+      .map((w) => {
+        const wo = asRecord(w)
+        if (!wo) return null
+        const word = cleanString(wo.word)
+        const meaning = cleanString(wo.meaning)
+        if (!word || !meaning) return null
+        const phonetic = cleanString(wo.phonetic)
+        return {
+          word,
+          meaning,
+          ...(phonetic ? { phonetic } : {}),
+        }
+      })
+      .filter((w): w is NonNullable<typeof w> => Boolean(w))
+    if (words.length < 2) continue
+    if (kind === 'meaning') {
+      const difference = cleanString(obj.difference)
+      if (!difference) continue
+      const group: ConfusableGroup = { kind: 'meaning', difference, words }
+      const key = confusableDedupKey(group)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(group)
+    } else {
+      const group: ConfusableGroup = { kind: 'form', words }
+      const key = confusableDedupKey(group)
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(group)
+    }
+  }
+  return out
+}

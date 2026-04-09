@@ -217,7 +217,7 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     expect(screen.getByText('💬 例句')).toBeInTheDocument()
   })
 
-  it('新字段为空时仅显示旧学习内容且不崩', async () => {
+  it('新字段为空时仍显示背面三栏切换且默认落在学习内容', async () => {
     seedReviewState(updateNoteMock, {
       aiContent: {
         fallback: false,
@@ -235,7 +235,8 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     renderWithRouter(<ReviewCards />)
 
     await user.click(screen.getByText('hostel'))
-    expect(screen.queryByTestId('review-back-tab-pos-confusable')).not.toBeInTheDocument()
+    expect(screen.getByTestId('review-back-tab-word-family')).toBeInTheDocument()
+    expect(screen.getByTestId('review-back-tab-pos-confusable')).toBeInTheDocument()
     expect(screen.getByText('💬 例句')).toBeInTheDocument()
   })
 

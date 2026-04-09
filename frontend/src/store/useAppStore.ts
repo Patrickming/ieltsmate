@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import type { Note, Category } from '../data/mockData'
 import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
+import type { WordFamily } from '../types/wordFamily'
 import { apiUrl } from '../lib/apiBase'
+import { normalizeWordFamilyForUI } from '../lib/wordFamilyDedup'
+import { normalizeConfusablesForUI, normalizePartOfSpeechForUI } from '../lib/noteExtensionsDedup'
 
 // ── 上海当日 YYYY-MM-DD ───────────────────────────────────────────
 function getTodayCSTString(): string {
@@ -50,6 +53,7 @@ interface BackendNote {
   antonyms: string[]
   partsOfSpeech?: unknown
   confusables?: unknown
+  wordFamily?: unknown
   example: string | null
   memoryTip: string | null
   reviewStatus: 'new' | 'learning' | 'mastered'
@@ -74,6 +78,9 @@ function formatNoteDate(isoStr: string): string {
 }
 
 function mapBackendNote(n: BackendNote): Note {
+  const normalizedWordFamily = normalizeWordFamilyForUI(n.wordFamily)
+  const normalizedPartsOfSpeech = normalizePartOfSpeechForUI(n.partsOfSpeech)
+  const normalizedConfusables = normalizeConfusablesForUI(n.confusables)
   return {
     id: n.id,
     content: n.content,
@@ -83,8 +90,9 @@ function mapBackendNote(n: BackendNote): Note {
     phonetic: n.phonetic ?? undefined,
     synonyms: n.synonyms ?? [],
     antonyms: n.antonyms ?? [],
-    ...(Array.isArray(n.partsOfSpeech) ? { partsOfSpeech: n.partsOfSpeech as PartOfSpeechItem[] } : {}),
-    ...(Array.isArray(n.confusables) ? { confusables: n.confusables as ConfusableGroup[] } : {}),
+    ...(normalizedPartsOfSpeech.length > 0 ? { partsOfSpeech: normalizedPartsOfSpeech } : {}),
+    ...(normalizedConfusables.length > 0 ? { confusables: normalizedConfusables } : {}),
+    ...(normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}),
     example: n.example ?? undefined,
     memoryTip: n.memoryTip ?? undefined,
     createdAt: formatNoteDate(n.createdAt),
@@ -302,6 +310,7 @@ interface AppState {
     antonyms?: string[]
     partsOfSpeech?: PartOfSpeechItem[]
     confusables?: ConfusableGroup[]
+    wordFamily?: WordFamily
   }) => Promise<boolean>
   markNoteMastered: (id: string) => Promise<boolean>
   selectedNote: Note | null

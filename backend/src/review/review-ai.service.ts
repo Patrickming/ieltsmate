@@ -165,9 +165,18 @@ export class ReviewAiService {
         { "word": "词2", "meaning": "义项" }
       ]
     }
-  ]
+  ],
+  "wordFamily": {
+    "base": { "word": "目标词", "pos": "adjective", "meaning": "义项（中文）", "phonetic": "/音标/" },
+    "derivedByPos": {
+      "noun": [{ "word": "派生名词", "pos": "noun", "meaning": "义项", "phonetic": "/音标/" }],
+      "verb": [],
+      "adjective": [],
+      "adverb": []
+    }
+  }
 }
-partsOfSpeech/confusables 可选；confusables 中 kind 为 form（形近/拼写易混）或 meaning（义近易混），kind 为 meaning 时必须提供非空 difference；每组至少两个 words。
+partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供 wordFamily）；derivedByPos 四个数组均需存在；派生项 pos 必须为 noun|verb|adjective|adverb 且与所在分区一致；confusables 中 kind 为 form（形近/拼写易混）或 meaning（义近易混），kind 为 meaning 时必须提供非空 difference；每组至少两个 words。
 只返回JSON，不要其他内容。`
     }
 
@@ -250,9 +259,18 @@ partsOfSpeech/confusables 可选；confusables 中 kind 为 form（形近/拼写
         { "word": "词2", "meaning": "义项" }
       ]
     }
-  ]
+  ],
+  "wordFamily": {
+    "base": { "word": "目标词", "pos": "verb", "meaning": "义项（中文）", "phonetic": "/音标/" },
+    "derivedByPos": {
+      "noun": [],
+      "verb": [],
+      "adjective": [{ "word": "derived", "pos": "adjective", "meaning": "义项", "phonetic": "" }],
+      "adverb": []
+    }
+  }
 }
-partsOfSpeech/confusables 可选；confusables 规则同 word-speech 卡片说明。
+partsOfSpeech/confusables/wordFamily 可选；wordFamily 规则同 word-speech 卡片说明；confusables 规则同 word-speech 卡片说明。
 只返回JSON，不要其他内容。`
     }
 

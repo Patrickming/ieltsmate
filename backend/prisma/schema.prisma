@@ -25,6 +25,7 @@ model Note {
   memoryTip      String?
   partsOfSpeech  Json?
   confusables    Json?
+  wordFamily     Json?
   reviewStatus   ReviewStatus @default(new)
   reviewCount    Int          @default(0)
   correctCount   Int          @default(0)

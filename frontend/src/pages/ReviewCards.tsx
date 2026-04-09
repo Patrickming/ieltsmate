@@ -16,11 +16,18 @@ import {
   mergeUniquePos,
   posDedupKey,
 } from '../lib/noteExtensionsDedup'
+import {
+  emptyDerivedByPos,
+  flattenWordFamilyItems,
+  mergeWordFamilyItems,
+  wordFamilyItemDedupKey,
+} from '../lib/wordFamilyDedup'
 import { useAppStore } from '../store/useAppStore'
 import { apiUrl } from '../lib/apiBase'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
 import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
+import type { Pos4, WordFamily, WordFamilyBase, WordFamilyItem } from '../types/wordFamily'
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
   if (category === '口语' || category === '单词') return 'word-speech'
   if (category === '短语') return 'phrase'
@@ -209,11 +216,11 @@ function CardFront({ note, cardType, answer, onAnswerChange, onReveal }: {
 
 // ── AI types (mirroring backend) ────────────────────────────────────────────
 interface AIContentBase { fallback: boolean }
-interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[] }
+interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[]; wordFamily?: WordFamily }
 interface PhraseAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string }
 interface SynonymAI extends AIContentBase { fallback: false; wordMeanings: Array<{ word: string; phonetic: string; meaning: string }>; antonymGroup: string[]; moreSynonyms: string[] }
 interface SentenceAI extends AIContentBase { fallback: false; analysis: string; paraphrases: Array<{ sentence: string; dimension: string }> }
-interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string }; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[] }
+interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string }; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[]; wordFamily?: WordFamily }
 interface FallbackAI extends AIContentBase { fallback: true; phonetic: string | null; translation: string; synonyms: string[]; antonyms: string[]; example: string | null; memoryTip: string | null }
 type CardAIContent = WordSpeechAI | PhraseAI | SynonymAI | SentenceAI | SpellingAI | FallbackAI
 
@@ -271,37 +278,66 @@ function SaveChip({ word, saved, onSave }: { word: string; saved: boolean; onSav
   )
 }
 
-type BackFaceTab = 'learning' | 'posConfusable'
+type BackFaceTab = 'learning' | 'wordFamily' | 'posConfusable'
 
-function PosBackTabBar({ active, onChange }: { active: BackFaceTab; onChange: (t: BackFaceTab) => void }) {
+const POS4_LABEL: Record<Pos4, string> = {
+  noun: '名词',
+  verb: '动词',
+  adjective: '形容词',
+  adverb: '副词',
+}
+
+function basePosLabel(pos: string): string {
+  const t = pos.trim().toLowerCase()
+  if (t === 'noun' || t === 'other' || t === '其它' || t === '其他') return '当前词性'
+  if (t === 'verb') return '动词'
+  if (t === 'adjective') return '形容词'
+  if (t === 'adverb') return '副词'
+  return pos
+}
+
+function buildDefaultWordFamily(note: Note): WordFamily {
+  const firstMeaning = note.translation.split(/[；;]/).map((s) => s.trim()).filter(Boolean)[0] ?? note.translation
+  return {
+    base: {
+      word: note.content,
+      pos: 'other',
+      meaning: firstMeaning,
+      ...(note.phonetic ? { phonetic: note.phonetic } : {}),
+    },
+    derivedByPos: emptyDerivedByPos(),
+  }
+}
+
+function ReviewBackTabBar({
+  active,
+  onChange,
+  showWordFamily,
+}: {
+  active: BackFaceTab
+  onChange: (t: BackFaceTab) => void
+  showWordFamily: boolean
+}) {
+  const btn = (tab: BackFaceTab, testId: string, label: string) => (
+    <button
+      type="button"
+      data-testid={testId}
+      onClick={(e) => {
+        e.stopPropagation()
+        onChange(tab)
+      }}
+      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
+        active === tab ? 'border-primary text-primary bg-primary/10' : 'border-border text-text-dim hover:border-border-strong'
+      }`}
+    >
+      {label}
+    </button>
+  )
   return (
-    <div className="flex gap-2 mb-4 shrink-0" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        data-testid="review-back-tab-learning"
-        onClick={(e) => {
-          e.stopPropagation()
-          onChange('learning')
-        }}
-        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
-          active === 'learning' ? 'border-primary text-primary bg-primary/10' : 'border-border text-text-dim hover:border-border-strong'
-        }`}
-      >
-        学习内容
-      </button>
-      <button
-        type="button"
-        data-testid="review-back-tab-pos-confusable"
-        onClick={(e) => {
-          e.stopPropagation()
-          onChange('posConfusable')
-        }}
-        className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition-colors ${
-          active === 'posConfusable' ? 'border-primary text-primary bg-primary/10' : 'border-border text-text-dim hover:border-border-strong'
-        }`}
-      >
-        词性&易混淆
-      </button>
+    <div className="flex gap-2 mb-4 shrink-0 flex-wrap" onClick={(e) => e.stopPropagation()}>
+      {btn('learning', 'review-back-tab-learning', '学习内容')}
+      {showWordFamily ? btn('wordFamily', 'review-back-tab-word-family', '词性派生') : null}
+      {btn('posConfusable', 'review-back-tab-pos-confusable', '词性&易混淆')}
     </div>
   )
 }
@@ -447,6 +483,130 @@ function PosConfusablePanel({
   )
 }
 
+function isWordFamilyItemSaved(
+  item: WordFamilyItem,
+  stored: Note | undefined,
+  sessionKeys: string[],
+): boolean {
+  const k = wordFamilyItemDedupKey(item)
+  if (sessionKeys.includes(k)) return true
+  const wf = stored?.wordFamily
+  if (!wf) return false
+  return flattenWordFamilyItems(wf).some((x) => wordFamilyItemDedupKey(x) === k)
+}
+
+function WordFamilyPanel({
+  note,
+  aiWordFamily,
+  storedNote,
+  savedKeys,
+  onSaveItem,
+  onSaveAll,
+}: {
+  note: Note
+  aiWordFamily?: WordFamily
+  storedNote: Note
+  savedKeys: string[]
+  onSaveItem: (item: WordFamilyItem) => void
+  onSaveAll: () => void
+}) {
+  const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
+  const storedWf = storedNote.wordFamily
+  const aiFlat = aiWordFamily ? flattenWordFamilyItems(aiWordFamily) : []
+  const seed: WordFamily = storedWf
+    ? storedWf
+    : aiWordFamily
+      ? {
+          base: { ...aiWordFamily.base },
+          derivedByPos: emptyDerivedByPos(),
+        }
+      : buildDefaultWordFamily(note)
+  const merged = mergeWordFamilyItems(seed, aiFlat)
+  const baseShow: WordFamilyBase =
+    aiWordFamily?.base?.word
+      ? aiWordFamily.base
+      : storedWf?.base?.word
+        ? storedWf.base
+        : buildDefaultWordFamily(note).base
+
+  const posKeys: Pos4[] = ['noun', 'verb', 'adjective', 'adverb']
+
+  return (
+    <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
+      <div className="rounded-xl border border-[#27272a] bg-[#12121a] px-4 py-3.5">
+        <div className="text-[10px] font-bold uppercase tracking-wider text-text-subtle mb-2">当前词</div>
+        <div className="flex flex-wrap items-baseline gap-2 mb-1">
+          <span className="text-[18px] font-bold text-text-primary">{baseShow.word}</span>
+          <span
+            className="text-[11px] font-bold px-2 py-0.5 rounded-md border"
+            style={{ borderColor: barColor + '66', color: barColor }}
+          >
+            {basePosLabel(String(baseShow.pos))}
+          </span>
+        </div>
+        <p className="text-[15px] text-text-secondary leading-relaxed">{baseShow.meaning}</p>
+        {baseShow.phonetic && (
+          <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">{baseShow.phonetic}</p>
+        )}
+      </div>
+
+      {posKeys.map((pk) => (
+        <div key={pk}>
+          <div className="text-sm font-semibold text-text-muted mb-2">{POS4_LABEL[pk]}</div>
+          {merged.derivedByPos[pk].length === 0 ? (
+            <p className="text-sm text-text-dim" data-testid={`review-wf-empty-${pk}`}>
+              无
+            </p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {merged.derivedByPos[pk].map((item, idx) => {
+                const saved = isWordFamilyItemSaved(item, storedNote, savedKeys)
+                const ph = item.phonetic?.trim() ?? ''
+                return (
+                  <div
+                    key={`${wordFamilyItemDedupKey(item)}-${idx}`}
+                    className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                      <div className="flex flex-wrap items-baseline gap-2">
+                        <span className="text-[16px] font-semibold text-text-primary">{item.word}</span>
+                        <span className="text-[11px] text-text-subtle font-mono">{item.pos}</span>
+                      </div>
+                      <button
+                        type="button"
+                        data-testid={`review-wf-save-${pk}-${idx}`}
+                        onClick={() => onSaveItem(item)}
+                        className="flex items-center gap-1 shrink-0"
+                        style={{ color: saved ? '#34d399' : '#818cf8' }}
+                      >
+                        {saved ? <Check size={10} /> : <Plus size={10} />}
+                        <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+                      </button>
+                    </div>
+                    <p className="text-[14px] text-text-secondary leading-relaxed">{item.meaning}</p>
+                    {ph ? <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">{ph}</p> : null}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ))}
+
+      <div className="pt-1">
+        <button
+          type="button"
+          data-testid="review-wf-save-all"
+          onClick={() => onSaveAll()}
+          className="w-full py-2.5 rounded-lg text-[13px] font-semibold border border-primary/50 text-primary hover:bg-primary/10 transition-colors"
+        >
+          一键存入本组派生
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function UserNotesSection({ userNotes, withTopDivider = false }: { userNotes: string[]; withTopDivider?: boolean }) {
   if (userNotes.length === 0) return null
 
@@ -468,13 +628,17 @@ function UserNotesSection({ userNotes, withTopDivider = false }: { userNotes: st
 // ── CardBack sub-components ───────────────────────────────────────────────────
 function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes,
   showPosConfusableTabs = false,
+  showWordFamilyTab = false,
   backFaceTab = 'learning',
   onBackFaceTabChange,
   storedNote,
   onSavePos,
   onSaveConf,
+  onSaveWordFamilyItem,
+  onSaveWordFamilyAll,
   savedPosKeys = [],
   savedConfKeys = [],
+  savedWordFamilyKeys = [],
 }: {
   note: Note
   ai: WordSpeechAI | PhraseAI
@@ -484,24 +648,25 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   onSaveAnt: (s: string) => void
   userNotes: string[]
   showPosConfusableTabs?: boolean
+  showWordFamilyTab?: boolean
   backFaceTab?: BackFaceTab
   onBackFaceTabChange?: (t: BackFaceTab) => void
   storedNote?: Note
   onSavePos?: (item: PartOfSpeechItem) => void
   onSaveConf?: (g: ConfusableGroup) => void
+  onSaveWordFamilyItem?: (item: WordFamilyItem) => void
+  onSaveWordFamilyAll?: () => void
   savedPosKeys?: string[]
   savedConfKeys?: string[]
+  savedWordFamilyKeys?: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const speechAi = ai as WordSpeechAI
   const extPos = showPosConfusableTabs ? speechAi.partsOfSpeech : undefined
   const extConf = showPosConfusableTabs ? speechAi.confusables : undefined
-  const hasPosConfusableData = showPosConfusableTabs && (
-    (storedNote?.partsOfSpeech?.length ?? 0) > 0 ||
-    (storedNote?.confusables?.length ?? 0) > 0 ||
-    (extPos?.length ?? 0) > 0 ||
-    (extConf?.length ?? 0) > 0
-  )
+  const showReviewTabs = Boolean(showPosConfusableTabs && onBackFaceTabChange)
+  const existingSynonyms = new Set((storedNote?.synonyms ?? note.synonyms ?? []).map((s) => s.trim()))
+  const existingAntonyms = new Set((storedNote?.antonyms ?? note.antonyms ?? []).map((s) => s.trim()))
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -509,10 +674,19 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
-      {hasPosConfusableData && onBackFaceTabChange && (
-        <PosBackTabBar active={backFaceTab} onChange={onBackFaceTabChange} />
+      {showReviewTabs && (
+        <ReviewBackTabBar active={backFaceTab} onChange={onBackFaceTabChange!} showWordFamily={showWordFamilyTab} />
       )}
-      {hasPosConfusableData && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
+      {showReviewTabs && showWordFamilyTab && backFaceTab === 'wordFamily' && storedNote && onSaveWordFamilyItem && onSaveWordFamilyAll ? (
+        <WordFamilyPanel
+          note={note}
+          aiWordFamily={speechAi.wordFamily}
+          storedNote={storedNote}
+          savedKeys={savedWordFamilyKeys}
+          onSaveItem={onSaveWordFamilyItem}
+          onSaveAll={onSaveWordFamilyAll}
+        />
+      ) : showReviewTabs && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
         <PosConfusablePanel
           aiPos={extPos}
           aiConf={extConf}
@@ -540,7 +714,14 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
             <div>
               <AITip label="🔄 同义词/短语" tip="AI 实时生成，点击「存入」可保存到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+                {ai.synonyms.map((s) => (
+                  <SaveChip
+                    key={s}
+                    word={s}
+                    saved={savedSyn.includes(s) || existingSynonyms.has(s.trim())}
+                    onSave={onSaveSyn}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -548,7 +729,14 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
             <div>
               <AITip label="🔀 反义词/短语" tip="AI 生成的语义对立词，点击「存入」可关联到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
+                {ai.antonyms.map((s) => (
+                  <SaveChip
+                    key={s}
+                    word={s}
+                    saved={savedAnt.includes(s) || existingAntonyms.has(s.trim())}
+                    onSave={onSaveAnt}
+                  />
+                ))}
               </div>
             </div>
           )}
@@ -681,13 +869,17 @@ function CardBackSentence({ note, ai, userNotes }: { note: Note; ai: SentenceAI;
 
 function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, spellingAnswer, userNotes,
   showPosConfusableTabs = false,
+  showWordFamilyTab = true,
   backFaceTab = 'learning',
   onBackFaceTabChange,
   storedNote,
   onSavePos,
   onSaveConf,
+  onSaveWordFamilyItem,
+  onSaveWordFamilyAll,
   savedPosKeys = [],
   savedConfKeys = [],
+  savedWordFamilyKeys = [],
 }: {
   note: Note
   ai: SpellingAI
@@ -698,24 +890,25 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   spellingAnswer?: string
   userNotes: string[]
   showPosConfusableTabs?: boolean
+  showWordFamilyTab?: boolean
   backFaceTab?: BackFaceTab
   onBackFaceTabChange?: (t: BackFaceTab) => void
   storedNote?: Note
   onSavePos?: (item: PartOfSpeechItem) => void
   onSaveConf?: (g: ConfusableGroup) => void
+  onSaveWordFamilyItem?: (item: WordFamilyItem) => void
+  onSaveWordFamilyAll?: () => void
   savedPosKeys?: string[]
   savedConfKeys?: string[]
+  savedWordFamilyKeys?: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = spellingAnswer
     ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
     : null
-  const hasPosConfusableData = showPosConfusableTabs && (
-    (storedNote?.partsOfSpeech?.length ?? 0) > 0 ||
-    (storedNote?.confusables?.length ?? 0) > 0 ||
-    (ai.partsOfSpeech?.length ?? 0) > 0 ||
-    (ai.confusables?.length ?? 0) > 0
-  )
+  const showReviewTabs = Boolean(showPosConfusableTabs && onBackFaceTabChange)
+  const existingSynonyms = new Set((storedNote?.synonyms ?? note.synonyms ?? []).map((s) => s.trim()))
+  const existingAntonyms = new Set((storedNote?.antonyms ?? note.antonyms ?? []).map((s) => s.trim()))
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -723,10 +916,19 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
         <Badge category={note.category} size="md" />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
-      {hasPosConfusableData && onBackFaceTabChange && (
-        <PosBackTabBar active={backFaceTab} onChange={onBackFaceTabChange} />
+      {showReviewTabs && (
+        <ReviewBackTabBar active={backFaceTab} onChange={onBackFaceTabChange!} showWordFamily={showWordFamilyTab} />
       )}
-      {hasPosConfusableData && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
+      {showReviewTabs && showWordFamilyTab && backFaceTab === 'wordFamily' && storedNote && onSaveWordFamilyItem && onSaveWordFamilyAll ? (
+        <WordFamilyPanel
+          note={note}
+          aiWordFamily={ai.wordFamily}
+          storedNote={storedNote}
+          savedKeys={savedWordFamilyKeys}
+          onSaveItem={onSaveWordFamilyItem}
+          onSaveAll={onSaveWordFamilyAll}
+        />
+      ) : showReviewTabs && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
         <PosConfusablePanel
           aiPos={ai.partsOfSpeech}
           aiConf={ai.confusables}
@@ -773,7 +975,14 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
             <div>
               <AITip label="🔄 同义词" tip="点击「存入」可保存到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {ai.synonyms.map(s => <SaveChip key={s} word={s} saved={savedSyn.includes(s)} onSave={onSaveSyn} />)}
+            {ai.synonyms.map((s) => (
+              <SaveChip
+                key={s}
+                word={s}
+                saved={savedSyn.includes(s) || existingSynonyms.has(s.trim())}
+                onSave={onSaveSyn}
+              />
+            ))}
               </div>
             </div>
           )}
@@ -781,7 +990,14 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
             <div>
               <AITip label="🔀 反义词" tip="点击「存入」可关联到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {ai.antonyms.map(s => <SaveChip key={s} word={s} saved={savedAnt.includes(s)} onSave={onSaveAnt} />)}
+            {ai.antonyms.map((s) => (
+              <SaveChip
+                key={s}
+                word={s}
+                saved={savedAnt.includes(s) || existingAntonyms.has(s.trim())}
+                onSave={onSaveAnt}
+              />
+            ))}
               </div>
             </div>
           )}
@@ -810,12 +1026,16 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
 
 function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying, userNotes,
   backFaceTab = 'learning',
+  showWordFamilyTab = false,
   onBackFaceTabChange,
   storedNote,
   onSavePos,
   onSaveConf,
+  onSaveWordFamilyItem,
+  onSaveWordFamilyAll,
   savedPosKeys = [],
   savedConfKeys = [],
+  savedWordFamilyKeys = [],
 }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
@@ -824,20 +1044,24 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying,
   isRetrying?: boolean
   userNotes: string[]
   backFaceTab?: BackFaceTab
+  showWordFamilyTab?: boolean
   onBackFaceTabChange?: (t: BackFaceTab) => void
   storedNote?: Note
   onSavePos?: (item: PartOfSpeechItem) => void
   onSaveConf?: (g: ConfusableGroup) => void
+  onSaveWordFamilyItem?: (item: WordFamilyItem) => void
+  onSaveWordFamilyAll?: () => void
   savedPosKeys?: string[]
   savedConfKeys?: string[]
+  savedWordFamilyKeys?: string[]
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const spellingCorrect = cardType === 'spelling' && spellingAnswer
     ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
     : null
-  const showExtTabs = (cardType === 'word-speech' || cardType === 'spelling') && (
-    (storedNote?.partsOfSpeech?.length ?? 0) > 0 || (storedNote?.confusables?.length ?? 0) > 0
-  )
+  const showExtTabs =
+    (cardType === 'word-speech' || cardType === 'spelling') &&
+    Boolean(onBackFaceTabChange)
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -862,10 +1086,19 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying,
           </button>
         )}
       </div>
-      {showExtTabs && onBackFaceTabChange && (
-        <PosBackTabBar active={backFaceTab} onChange={onBackFaceTabChange} />
+      {showExtTabs && (
+        <ReviewBackTabBar active={backFaceTab} onChange={onBackFaceTabChange!} showWordFamily={showWordFamilyTab} />
       )}
-      {showExtTabs && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
+      {showExtTabs && showWordFamilyTab && backFaceTab === 'wordFamily' && storedNote && onSaveWordFamilyItem && onSaveWordFamilyAll ? (
+        <WordFamilyPanel
+          note={note}
+          aiWordFamily={undefined}
+          storedNote={storedNote}
+          savedKeys={savedWordFamilyKeys}
+          onSaveItem={onSaveWordFamilyItem}
+          onSaveAll={onSaveWordFamilyAll}
+        />
+      ) : showExtTabs && backFaceTab === 'posConfusable' && storedNote && onSavePos && onSaveConf ? (
         <PosConfusablePanel
           aiPos={undefined}
           aiConf={undefined}
@@ -963,8 +1196,11 @@ function CardBack({
   onBackFaceTabChange,
   onSavePos,
   onSaveConf,
+  onSaveWordFamilyItem,
+  onSaveWordFamilyAll,
   savedPosKeys,
   savedConfKeys,
+  savedWordFamilyKeys,
 }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
@@ -982,9 +1218,14 @@ function CardBack({
   onBackFaceTabChange: (t: BackFaceTab) => void
   onSavePos: (item: PartOfSpeechItem) => void
   onSaveConf: (g: ConfusableGroup) => void
+  onSaveWordFamilyItem: (item: WordFamilyItem) => void
+  onSaveWordFamilyAll: () => void
   savedPosKeys: string[]
   savedConfKeys: string[]
+  savedWordFamilyKeys: string[]
 }) {
+  const showWordFamilyTab = cardType === 'spelling' || note.category === '单词'
+
   if (aiContent === undefined || aiContent === null) {
     return <AILoadingAnimation />
   }
@@ -994,6 +1235,7 @@ function CardBack({
       <CardBackFallback
         note={note}
         cardType={cardType}
+        showWordFamilyTab={showWordFamilyTab}
         spellingAnswer={spellingAnswer}
         onRetry={onRetry}
         isRetrying={isRetrying}
@@ -1003,8 +1245,11 @@ function CardBack({
         storedNote={storedNote}
         onSavePos={onSavePos}
         onSaveConf={onSaveConf}
+        onSaveWordFamilyItem={onSaveWordFamilyItem}
+        onSaveWordFamilyAll={onSaveWordFamilyAll}
         savedPosKeys={savedPosKeys}
         savedConfKeys={savedConfKeys}
+        savedWordFamilyKeys={savedWordFamilyKeys}
       />
     )
   }
@@ -1021,13 +1266,17 @@ function CardBack({
           onSaveAnt={onSaveAnt}
           userNotes={userNotes}
           showPosConfusableTabs
+          showWordFamilyTab={showWordFamilyTab}
           backFaceTab={backFaceTab}
           onBackFaceTabChange={onBackFaceTabChange}
           storedNote={storedNote}
           onSavePos={onSavePos}
           onSaveConf={onSaveConf}
+          onSaveWordFamilyItem={onSaveWordFamilyItem}
+          onSaveWordFamilyAll={onSaveWordFamilyAll}
           savedPosKeys={savedPosKeys}
           savedConfKeys={savedConfKeys}
+          savedWordFamilyKeys={savedWordFamilyKeys}
         />
       )
     case 'phrase':
@@ -1058,13 +1307,17 @@ function CardBack({
           spellingAnswer={spellingAnswer}
           userNotes={userNotes}
           showPosConfusableTabs
+          showWordFamilyTab={showWordFamilyTab}
           backFaceTab={backFaceTab}
           onBackFaceTabChange={onBackFaceTabChange}
           storedNote={storedNote}
           onSavePos={onSavePos}
           onSaveConf={onSaveConf}
+          onSaveWordFamilyItem={onSaveWordFamilyItem}
+          onSaveWordFamilyAll={onSaveWordFamilyAll}
           savedPosKeys={savedPosKeys}
           savedConfKeys={savedConfKeys}
+          savedWordFamilyKeys={savedWordFamilyKeys}
         />
       )
     default:
@@ -1078,16 +1331,48 @@ function CardBack({
           onSaveAnt={onSaveAnt}
           userNotes={userNotes}
           showPosConfusableTabs
+          showWordFamilyTab={showWordFamilyTab}
           backFaceTab={backFaceTab}
           onBackFaceTabChange={onBackFaceTabChange}
           storedNote={storedNote}
           onSavePos={onSavePos}
           onSaveConf={onSaveConf}
+          onSaveWordFamilyItem={onSaveWordFamilyItem}
+          onSaveWordFamilyAll={onSaveWordFamilyAll}
           savedPosKeys={savedPosKeys}
           savedConfKeys={savedConfKeys}
+          savedWordFamilyKeys={savedWordFamilyKeys}
         />
       )
   }
+}
+
+function ensureWordFamilyForSave(
+  note: Note,
+  ai: WordSpeechAI | SpellingAI | undefined,
+  latest: Note | undefined,
+): WordFamily {
+  if (latest?.wordFamily) {
+    return latest.wordFamily
+  }
+  if (ai?.wordFamily?.base?.word) {
+    const wf = ai.wordFamily
+    return {
+      base: {
+        word: wf.base.word.trim(),
+        pos: wf.base.pos,
+        meaning: wf.base.meaning.trim(),
+        ...(wf.base.phonetic?.trim() ? { phonetic: wf.base.phonetic.trim() } : {}),
+      },
+      derivedByPos: {
+        noun: [...(wf.derivedByPos?.noun ?? [])],
+        verb: [...(wf.derivedByPos?.verb ?? [])],
+        adjective: [...(wf.derivedByPos?.adjective ?? [])],
+        adverb: [...(wf.derivedByPos?.adverb ?? [])],
+      },
+    }
+  }
+  return buildDefaultWordFamily(note)
 }
 
 /** Pill-style favorite toggle used inside review session */
@@ -1141,6 +1426,7 @@ export default function ReviewCards() {
   const [backFaceTab, setBackFaceTab] = useState<BackFaceTab>('learning')
   const [savedPosKeys, setSavedPosKeys] = useState<string[]>([])
   const [savedConfKeys, setSavedConfKeys] = useState<string[]>([])
+  const [savedWordFamilyKeys, setSavedWordFamilyKeys] = useState<string[]>([])
   const [saveNotice, setSaveNotice] = useState<string | null>(null)
 
   const session = reviewSession
@@ -1200,6 +1486,7 @@ export default function ReviewCards() {
   useEffect(() => {
     setBackFaceTab('learning')
     setSaveNotice(null)
+    setSavedWordFamilyKeys([])
   }, [card?.id])
 
   useEffect(() => {
@@ -1236,6 +1523,7 @@ export default function ReviewCards() {
     setSavedAnt([])
     setSavedPosKeys([])
     setSavedConfKeys([])
+    setSavedWordFamilyKeys([])
     setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= remaining) {
@@ -1263,6 +1551,7 @@ export default function ReviewCards() {
     setSavedAnt([])
     setSavedPosKeys([])
     setSavedConfKeys([])
+    setSavedWordFamilyKeys([])
     setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= remaining) {
@@ -1307,7 +1596,10 @@ export default function ReviewCards() {
     const k = posDedupKey(item)
     if (savedPosKeys.includes(k)) return
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
-    if (latest?.partsOfSpeech?.some((p) => posDedupKey(p) === k)) return
+    if (latest?.partsOfSpeech?.some((p) => posDedupKey(p) === k)) {
+      setSaveNotice('已存在')
+      return
+    }
     const base = latest?.partsOfSpeech ?? card.partsOfSpeech ?? []
     const merged = mergeUniquePos(base, [item])
     setSavedPosKeys((p) => [...p, k])
@@ -1324,7 +1616,10 @@ export default function ReviewCards() {
     const k = confusableDedupKey(group)
     if (savedConfKeys.includes(k)) return
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
-    if (latest?.confusables?.some((g) => confusableDedupKey(g) === k)) return
+    if (latest?.confusables?.some((g) => confusableDedupKey(g) === k)) {
+      setSaveNotice('已存在')
+      return
+    }
     const base = latest?.confusables ?? card.confusables ?? []
     const merged = mergeUniqueConfusables(base, [group])
     setSavedConfKeys((p) => [...p, k])
@@ -1337,10 +1632,90 @@ export default function ReviewCards() {
     }
   }
 
+  const performSaveWordFamilyItem = async (item: WordFamilyItem) => {
+    const k = wordFamilyItemDedupKey(item)
+    if (savedWordFamilyKeys.includes(k)) {
+      setSaveNotice('已存在')
+      return
+    }
+    const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
+    if (latest?.wordFamily && flattenWordFamilyItems(latest.wordFamily).some((x) => wordFamilyItemDedupKey(x) === k)) {
+      setSaveNotice('已存在')
+      return
+    }
+    const ai = aiContent as WordSpeechAI | SpellingAI | undefined
+    if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
+      return
+    }
+    const baseWf = ensureWordFamilyForSave(card, ai, latest)
+    const norm: WordFamilyItem = {
+      ...item,
+      phonetic: item.phonetic?.trim() ?? '',
+    }
+    const merged = mergeWordFamilyItems(baseWf, [norm])
+    setSavedWordFamilyKeys((p) => [...p, k])
+    const ok = await updateNote(card.id, { wordFamily: merged })
+    if (ok) {
+      incrementSavedExtensions()
+    } else {
+      setSavedWordFamilyKeys((p) => p.filter((x) => x !== k))
+      setSaveNotice('保存失败，可重试')
+    }
+  }
+
+  const performSaveWordFamilyAll = async () => {
+    if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
+      setSaveNotice('暂无词性派生数据')
+      return
+    }
+    const ai = aiContent as WordSpeechAI | SpellingAI
+    if (!ai.wordFamily) {
+      setSaveNotice('暂无词性派生数据')
+      return
+    }
+    const aiItems = flattenWordFamilyItems(ai.wordFamily).map((it) => ({
+      ...it,
+      phonetic: it.phonetic?.trim() ?? '',
+    }))
+    const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
+    const existing = latest?.wordFamily
+    const existingKeys = new Set(
+      existing ? flattenWordFamilyItems(existing).map(wordFamilyItemDedupKey) : [],
+    )
+    let dup = 0
+    const pending: WordFamilyItem[] = []
+    for (const it of aiItems) {
+      const key = wordFamilyItemDedupKey(it)
+      if (existingKeys.has(key) || savedWordFamilyKeys.includes(key)) {
+        dup += 1
+        continue
+      }
+      pending.push(it)
+      existingKeys.add(key)
+    }
+    if (pending.length === 0) {
+      setSaveNotice(`新增 0 条，跳过重复 ${dup} 条，失败 0 条`)
+      return
+    }
+    const baseWf = ensureWordFamilyForSave(card, ai, latest)
+    const merged = mergeWordFamilyItems(baseWf, pending)
+    const ok = await updateNote(card.id, { wordFamily: merged })
+    if (ok) {
+      setSavedWordFamilyKeys((p) => [...p, ...pending.map(wordFamilyItemDedupKey)])
+      incrementSavedExtensions()
+      setSaveNotice(`新增 ${pending.length} 条，跳过重复 ${dup} 条，失败 0 条`)
+    } else {
+      setSaveNotice(`新增 0 条，跳过重复 ${dup} 条，失败 ${pending.length} 条`)
+    }
+  }
+
   const handleSaveSyn = async (syn: string) => {
     if (savedSyn.includes(syn)) return
     const existing = noteRow?.synonyms ?? card.synonyms ?? []
-    if (existing.some((e) => e.trim() === syn.trim())) return
+    if (existing.some((e) => e.trim() === syn.trim())) {
+      setSaveNotice('已存在')
+      return
+    }
     const conflicts = findConflictingAssociationEntries(syn, existing)
     if (conflicts.length > 0) {
       setAssocDedup({ kind: 'synonyms', candidate: syn, conflicts })
@@ -1352,7 +1727,10 @@ export default function ReviewCards() {
   const handleSaveAnt = async (ant: string) => {
     if (savedAnt.includes(ant)) return
     const existing = noteRow?.antonyms ?? card.antonyms ?? []
-    if (existing.some((e) => e.trim() === ant.trim())) return
+    if (existing.some((e) => e.trim() === ant.trim())) {
+      setSaveNotice('已存在')
+      return
+    }
     const conflicts = findConflictingAssociationEntries(ant, existing)
     if (conflicts.length > 0) {
       setAssocDedup({ kind: 'antonyms', candidate: ant, conflicts })
@@ -1634,8 +2012,11 @@ export default function ReviewCards() {
                       onBackFaceTabChange={setBackFaceTab}
                       onSavePos={(item) => { void performSavePos(item) }}
                       onSaveConf={(g) => { void performSaveConf(g) }}
+                      onSaveWordFamilyItem={(item) => { void performSaveWordFamilyItem(item) }}
+                      onSaveWordFamilyAll={() => { void performSaveWordFamilyAll() }}
                       savedPosKeys={savedPosKeys}
                       savedConfKeys={savedConfKeys}
+                      savedWordFamilyKeys={savedWordFamilyKeys}
                     />
                   </div>
                 </motion.div>

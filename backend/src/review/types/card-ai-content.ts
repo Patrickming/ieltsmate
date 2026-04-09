@@ -1,4 +1,5 @@
 import type { ConfusableGroup, PartOfSpeechItem } from '../../notes/types/note-extensions'
+import type { WordFamily } from '../../notes/types/word-family'
 
 export type CardType = 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling'
 
@@ -25,6 +26,7 @@ export interface WordSpeechAI {
   memoryTip: string
   partsOfSpeech?: PartOfSpeechItem[]
   confusables?: ConfusableGroup[]
+  wordFamily?: WordFamily
 }
 
 export interface PhraseAI {
@@ -59,6 +61,7 @@ export interface SpellingAI {
   contextExample: { sentence: string; analysis: string; translation?: string }
   partsOfSpeech?: PartOfSpeechItem[]
   confusables?: ConfusableGroup[]
+  wordFamily?: WordFamily
 }
 
 export interface FallbackResponse {

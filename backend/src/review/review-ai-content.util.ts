@@ -2,6 +2,7 @@ import {
   normalizeConfusableGroups,
   normalizePartOfSpeechList,
 } from '../notes/types/note-extensions'
+import { normalizeWordFamily } from '../notes/types/word-family'
 import type {
   CardAIContent,
   CardType,
@@ -36,6 +37,7 @@ function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null
   }
   const parts = normalizePartOfSpeechList(p.partsOfSpeech)
   const conf = normalizeConfusableGroups(p.confusables)
+  const wf = normalizeWordFamily(p.wordFamily)
   const exampleTranslation = cleanOptionalString(p.exampleTranslation)
   return {
     fallback: false,
@@ -47,6 +49,7 @@ function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null
     memoryTip: p.memoryTip,
     ...(parts.length > 0 ? { partsOfSpeech: parts } : {}),
     ...(conf.length > 0 ? { confusables: conf } : {}),
+    ...(wf ? { wordFamily: wf } : {}),
   }
 }
 
@@ -154,6 +157,7 @@ function parseSpellingPayload(p: Record<string, unknown>): SpellingAI | null {
   const contextTranslation = cleanOptionalString(c.translation)
   const parts = normalizePartOfSpeechList(p.partsOfSpeech)
   const conf = normalizeConfusableGroups(p.confusables)
+  const wf = normalizeWordFamily(p.wordFamily)
   return {
     fallback: false,
     phonetic: p.phonetic,
@@ -167,6 +171,7 @@ function parseSpellingPayload(p: Record<string, unknown>): SpellingAI | null {
     },
     ...(parts.length > 0 ? { partsOfSpeech: parts } : {}),
     ...(conf.length > 0 ? { confusables: conf } : {}),
+    ...(wf ? { wordFamily: wf } : {}),
   }
 }
 

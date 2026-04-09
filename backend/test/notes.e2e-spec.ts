@@ -132,6 +132,52 @@ describe('Notes API', () => {
     expect(pos2).toHaveLength(1)
   })
 
+  it('POST /notes 与 PATCH /notes/:id 支持 wordFamily 且服务端归一化去重', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'popular',
+        translation: '受欢迎的',
+        category: '单词',
+        wordFamily: {
+          base: { word: 'popular', pos: 'adjective', meaning: '受欢迎的', phonetic: '/p/' },
+          derivedByPos: {
+            noun: [
+              { word: 'popularity', pos: 'noun', meaning: '普及', phonetic: '/n/' },
+              { word: 'popularity', pos: 'noun', meaning: '普及', phonetic: '/dup/' },
+            ],
+            verb: [],
+            adjective: [],
+            adverb: [],
+          },
+        },
+      })
+      .expect(201)
+
+    const id = created.body.data.id as string
+    const wf = created.body.data.wordFamily as { derivedByPos: { noun: unknown[] } }
+    expect(wf.derivedByPos.noun).toHaveLength(1)
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/notes/${id}`)
+      .send({
+        wordFamily: {
+          base: { word: 'popular', pos: 'adjective', meaning: '受欢迎的', phonetic: '/p/' },
+          derivedByPos: {
+            noun: [{ word: 'popularity', pos: 'noun', meaning: '普及', phonetic: '/n/' }],
+            verb: [{ word: 'popularize', pos: 'verb', meaning: '普及化', phonetic: '' }],
+            adjective: [],
+            adverb: [],
+          },
+        },
+      })
+      .expect(200)
+
+    const wf2 = patched.body.data.wordFamily as { derivedByPos: { noun: unknown[]; verb: unknown[] } }
+    expect(wf2.derivedByPos.noun).toHaveLength(1)
+    expect(wf2.derivedByPos.verb).toHaveLength(1)
+  })
+
   it('POST/PATCH 传 partsOfSpeech 或 confusables 为 null 返回 400', async () => {
     await request(app.getHttpServer())
       .post('/notes')
