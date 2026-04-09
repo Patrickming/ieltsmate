@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen, Heart } from 'lucide-react'
+import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen, Heart, Trash2, Check } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
@@ -49,10 +49,22 @@ type KnowledgeBaseMainProps = {
 }
 
 function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }: KnowledgeBaseMainProps) {
-  const { notes, openQuickNote, favorites, lastAddedNoteId, clearLastAddedNoteId, writingNotes, writingNotesLoading } = useAppStore()
+  const {
+    notes,
+    openQuickNote,
+    favorites,
+    lastAddedNoteId,
+    clearLastAddedNoteId,
+    writingNotes,
+    writingNotesLoading,
+    deleteNote,
+  } = useAppStore()
   const navigate = useNavigate()
   const noteRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null)
+  const [batchDeleteMode, setBatchDeleteMode] = useState(false)
+  const [selectedNoteIds, setSelectedNoteIds] = useState<string[]>([])
+  const [batchDeleting, setBatchDeleting] = useState(false)
 
   useEffect(() => {
     const main = document.querySelector('main')
@@ -121,6 +133,48 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
   const showFavorites = groupFilter === '收藏夹'
 
   const allItems = showNotes ? filteredNotes : []
+  const canBatchDelete = showNotes || showFavorites
+
+  function toggleBatchDeleteMode() {
+    setBatchDeleteMode((prev) => !prev)
+    setSelectedNoteIds([])
+  }
+
+  function toggleSelectedNote(noteId: string) {
+    setSelectedNoteIds((prev) => {
+      if (prev.includes(noteId)) return prev.filter((id) => id !== noteId)
+      return [...prev, noteId]
+    })
+  }
+
+  async function handleConfirmBatchDelete() {
+    if (selectedNoteIds.length === 0 || batchDeleting) return
+    const ok = window.confirm(`确认删除选中的 ${selectedNoteIds.length} 条笔记吗？此操作不可撤销。`)
+    if (!ok) return
+
+    setBatchDeleting(true)
+    const targets = [...selectedNoteIds]
+    const results = await Promise.all(targets.map((id) => deleteNote(id)))
+    const failedCount = results.filter((v) => !v).length
+    setBatchDeleting(false)
+
+    if (failedCount > 0) {
+      window.alert(`删除完成：成功 ${targets.length - failedCount} 条，失败 ${failedCount} 条。`)
+      return
+    }
+
+    setSelectedNoteIds([])
+    setBatchDeleteMode(false)
+  }
+
+  useEffect(() => {
+    if (!batchDeleteMode) return
+    const visibleIds = new Set<string>([
+      ...allItems.map((n) => n.id),
+      ...(showFavorites ? favNotes.map((n) => n.id) : []),
+    ])
+    setSelectedNoteIds((prev) => prev.filter((id) => visibleIds.has(id)))
+  }, [allItems, batchDeleteMode, favNotes, showFavorites])
 
   useEffect(() => {
     if (!lastAddedNoteId) return
@@ -145,6 +199,18 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
             <h1 className="text-2xl font-bold text-text-primary">知识库</h1>
             <p className="text-sm text-text-dim mt-1">管理和浏览所有笔记</p>
           </div>
+          {canBatchDelete && (
+            <Button
+              type="button"
+              variant={batchDeleteMode ? 'danger' : 'outline'}
+              size="lg"
+              icon={<Trash2 size={14} />}
+              className="h-9 min-h-9 rounded-sm text-[13px] px-4"
+              onClick={toggleBatchDeleteMode}
+            >
+              {batchDeleteMode ? '取消批量' : '批量删除'}
+            </Button>
+          )}
           <Button
             type="button"
             variant="primary"
@@ -335,6 +401,20 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
             />
           </div>
         </div>
+        {batchDeleteMode && canBatchDelete && (
+          <div className="flex items-center justify-between rounded-md border border-[#7f1d1d]/60 bg-[#2a1111] px-4 py-2.5">
+            <span className="text-sm text-[#fecaca]">已选择 {selectedNoteIds.length} 条笔记</span>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={selectedNoteIds.length === 0 || batchDeleting}
+              onClick={() => { void handleConfirmBatchDelete() }}
+            >
+              {batchDeleting ? '删除中...' : `确认删除 ${selectedNoteIds.length} 条笔记`}
+            </Button>
+          </div>
+        )}
 
         {/* Content */}
         {showWriting && (
@@ -395,9 +475,32 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, delay: i * 0.03 }}
-                    className={highlightedNoteId === note.id ? 'note-added-highlight' : ''}
+                    className={`relative ${highlightedNoteId === note.id ? 'note-added-highlight' : ''} ${batchDeleteMode && selectedNoteIds.includes(note.id) ? 'ring-2 ring-[#ef4444] ring-offset-0 rounded-xl' : ''}`}
                   >
-                    <NoteCard note={note} />
+                    <div className={batchDeleteMode ? 'pointer-events-none' : ''}>
+                      <NoteCard note={note} />
+                    </div>
+                    {batchDeleteMode && (
+                      <button
+                        type="button"
+                        aria-label={`选择笔记 ${note.content}`}
+                        aria-pressed={selectedNoteIds.includes(note.id)}
+                        onClick={() => toggleSelectedNote(note.id)}
+                        className={`absolute inset-0 z-20 rounded-xl border transition-colors ${
+                          selectedNoteIds.includes(note.id)
+                            ? 'border-[#ef4444] bg-[#ef4444]/10'
+                            : 'border-transparent hover:border-[#ef4444]/70 hover:bg-[#ef4444]/5'
+                        }`}
+                      >
+                        <span className={`absolute top-2 right-2 inline-flex h-6 w-6 items-center justify-center rounded-full border ${
+                          selectedNoteIds.includes(note.id)
+                            ? 'border-[#ef4444] bg-[#ef4444] text-white'
+                            : 'border-border bg-surface-card text-transparent'
+                        }`}>
+                          <Check size={14} />
+                        </span>
+                      </button>
+                    )}
                   </motion.div>
                 ))}
                 </AnimatePresence>
@@ -441,13 +544,37 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
                 {favNotes.map((note, i) => (
                   <motion.div
                     key={note.id}
+                    className={`relative ${batchDeleteMode && selectedNoteIds.includes(note.id) ? 'ring-2 ring-[#ef4444] ring-offset-0 rounded-xl' : ''}`}
                     layout
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.2, delay: i * 0.03 }}
                   >
-                    <NoteCard note={note} />
+                    <div className={batchDeleteMode ? 'pointer-events-none' : ''}>
+                      <NoteCard note={note} />
+                    </div>
+                    {batchDeleteMode && (
+                      <button
+                        type="button"
+                        aria-label={`选择笔记 ${note.content}`}
+                        aria-pressed={selectedNoteIds.includes(note.id)}
+                        onClick={() => toggleSelectedNote(note.id)}
+                        className={`absolute inset-0 z-20 rounded-xl border transition-colors ${
+                          selectedNoteIds.includes(note.id)
+                            ? 'border-[#ef4444] bg-[#ef4444]/10'
+                            : 'border-transparent hover:border-[#ef4444]/70 hover:bg-[#ef4444]/5'
+                        }`}
+                      >
+                        <span className={`absolute top-2 right-2 inline-flex h-6 w-6 items-center justify-center rounded-full border ${
+                          selectedNoteIds.includes(note.id)
+                            ? 'border-[#ef4444] bg-[#ef4444] text-white'
+                            : 'border-border bg-surface-card text-transparent'
+                        }`}>
+                          <Check size={14} />
+                        </span>
+                      </button>
+                    )}
                   </motion.div>
                 ))}
                 </AnimatePresence>
