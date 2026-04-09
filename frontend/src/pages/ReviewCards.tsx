@@ -7,7 +7,9 @@ import { Badge } from '../components/ui/Badge'
 import { ModalShell } from '../components/ui/ModalShell'
 import { StrokeButton } from '../components/ui/StrokeButton'
 import {
+  associationDisplaySaved,
   findConflictingAssociationEntries,
+  formatAssociationItem,
   mergeAssociationListsUnique,
 } from '../lib/associationDedup'
 import {
@@ -216,12 +218,13 @@ function CardFront({ note, cardType, answer, onAnswerChange, onReveal }: {
 }
 
 // ── AI types (mirroring backend) ────────────────────────────────────────────
+type AssociationPair = { word: string; meaning: string }
 interface AIContentBase { fallback: boolean }
-interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[]; wordFamily?: WordFamily }
-interface PhraseAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; example: string; exampleTranslation?: string; memoryTip: string }
-interface SynonymAI extends AIContentBase { fallback: false; wordMeanings: Array<{ word: string; phonetic: string; meaning: string }>; antonymGroup: string[]; moreSynonyms: string[] }
+interface WordSpeechAI extends AIContentBase { fallback: false; phonetic: string; synonyms: AssociationPair[]; antonyms: AssociationPair[]; example: string; exampleTranslation?: string; memoryTip: string; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[]; wordFamily?: WordFamily }
+interface PhraseAI extends AIContentBase { fallback: false; phonetic: string; synonyms: AssociationPair[]; antonyms: AssociationPair[]; example: string; exampleTranslation?: string; memoryTip: string }
+interface SynonymAI extends AIContentBase { fallback: false; wordMeanings: Array<{ word: string; phonetic: string; meaning: string }>; antonymGroup: AssociationPair[]; moreSynonyms: AssociationPair[] }
 interface SentenceAI extends AIContentBase { fallback: false; analysis: string; paraphrases: Array<{ sentence: string; dimension: string }> }
-interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: string[]; antonyms: string[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string }; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[]; wordFamily?: WordFamily }
+interface SpellingAI extends AIContentBase { fallback: false; phonetic: string; synonyms: AssociationPair[]; antonyms: AssociationPair[]; memoryTip: string; contextExample: { sentence: string; translation?: string; analysis: string }; partsOfSpeech?: PartOfSpeechItem[]; confusables?: ConfusableGroup[]; wordFamily?: WordFamily }
 interface FallbackAI extends AIContentBase { fallback: true; phonetic: string | null; translation: string; synonyms: string[]; antonyms: string[]; example: string | null; memoryTip: string | null }
 type CardAIContent = WordSpeechAI | PhraseAI | SynonymAI | SentenceAI | SpellingAI | FallbackAI
 
@@ -264,14 +267,15 @@ function AILoadingAnimation() {
 }
 
 // ── Synonym/Antonym save chip ──────────────────────────────────────────────────
-function SaveChip({ word, saved, onSave }: { word: string; saved: boolean; onSave: (w: string) => void }) {
+function SaveChip({ pair, saved, onSave }: { pair: AssociationPair; saved: boolean; onSave: (p: AssociationPair) => void }) {
   return (
     <div
       className="flex flex-col gap-1.5 px-3 py-2.5 rounded-md border"
       style={saved ? { background: '#1a2e22', borderColor: '#34d399' } : { background: '#1a1a28', borderColor: '#27272a' }}
     >
-      <span className="text-[15px] text-text-primary">{word}</span>
-      <button onClick={() => onSave(word)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
+      <span className="text-[15px] text-text-primary">{pair.word}</span>
+      <p className="text-[13px] text-text-secondary leading-snug">{pair.meaning}</p>
+      <button type="button" onClick={() => onSave(pair)} className="flex items-center gap-1" style={{ color: saved ? '#34d399' : '#818cf8' }}>
         {saved ? <Check size={10} /> : <Plus size={10} />}
         <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
       </button>
@@ -628,8 +632,8 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   ai: WordSpeechAI | PhraseAI
   savedSyn: string[]
   savedAnt: string[]
-  onSaveSyn: (s: string) => void
-  onSaveAnt: (s: string) => void
+  onSaveSyn: (p: AssociationPair) => void
+  onSaveAnt: (p: AssociationPair) => void
   userNotes: string[]
   showPosConfusableTabs?: boolean
   showWordFamilyTab?: boolean
@@ -649,8 +653,8 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   const extPos = showPosConfusableTabs ? speechAi.partsOfSpeech : undefined
   const extConf = showPosConfusableTabs ? speechAi.confusables : undefined
   const showReviewTabs = Boolean(showPosConfusableTabs && onBackFaceTabChange)
-  const existingSynonyms = new Set((storedNote?.synonyms ?? note.synonyms ?? []).map((s) => s.trim()))
-  const existingAntonyms = new Set((storedNote?.antonyms ?? note.antonyms ?? []).map((s) => s.trim()))
+  const existingSynList = storedNote?.synonyms ?? note.synonyms ?? []
+  const existingAntList = storedNote?.antonyms ?? note.antonyms ?? []
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -698,14 +702,19 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
             <div>
               <AITip label="🔄 同义词/短语" tip="AI 实时生成，点击「存入」可保存到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {ai.synonyms.map((s) => (
-                  <SaveChip
-                    key={s}
-                    word={s}
-                    saved={savedSyn.includes(s) || existingSynonyms.has(s.trim())}
-                    onSave={onSaveSyn}
-                  />
-                ))}
+                {ai.synonyms.map((s, i) => {
+                  const formatted = formatAssociationItem(s.word, s.meaning)
+                  if (!formatted) return null
+                  const chipSaved = savedSyn.includes(formatted) || associationDisplaySaved(formatted, existingSynList)
+                  return (
+                    <SaveChip
+                      key={`${formatted}-${i}`}
+                      pair={s}
+                      saved={chipSaved}
+                      onSave={onSaveSyn}
+                    />
+                  )
+                })}
               </div>
             </div>
           )}
@@ -713,14 +722,19 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
             <div>
               <AITip label="🔀 反义词/短语" tip="AI 生成的语义对立词，点击「存入」可关联到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-                {ai.antonyms.map((s) => (
-                  <SaveChip
-                    key={s}
-                    word={s}
-                    saved={savedAnt.includes(s) || existingAntonyms.has(s.trim())}
-                    onSave={onSaveAnt}
-                  />
-                ))}
+                {ai.antonyms.map((s, i) => {
+                  const formatted = formatAssociationItem(s.word, s.meaning)
+                  if (!formatted) return null
+                  const chipSaved = savedAnt.includes(formatted) || associationDisplaySaved(formatted, existingAntList)
+                  return (
+                    <SaveChip
+                      key={`${formatted}-${i}`}
+                      pair={s}
+                      saved={chipSaved}
+                      onSave={onSaveAnt}
+                    />
+                  )
+                })}
               </div>
             </div>
           )}
@@ -748,16 +762,18 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   )
 }
 
-function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes }: {
-  note: Note; ai: SynonymAI
-  savedSyn: string[]; savedAnt: string[]; onSaveSyn: (s: string) => void; onSaveAnt: (s: string) => void
+function CardBackSynonym({ note, storedNote, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes }: {
+  note: Note
+  storedNote: Note
+  ai: SynonymAI
+  savedSyn: string[]
+  savedAnt: string[]
+  onSaveSyn: (p: AssociationPair) => void
+  onSaveAnt: (p: AssociationPair) => void
   userNotes: string[]
 }) {
-  // Format a word-meaning pair for saving: full meaning text (no truncation)
-  const formatWmKey = (wm: { word: string; meaning: string }) => {
-    const m = wm.meaning.trim()
-    return m ? `${wm.word} (${m})` : wm.word
-  }
+  const existingSynList = storedNote.synonyms ?? note.synonyms ?? []
+  const existingAntList = storedNote.antonyms ?? note.antonyms ?? []
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -769,18 +785,21 @@ function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, u
       <div>
         <AITip label="各词细微差别" tip="点击「存入」可将该词（含中文释义）保存到知识库同义词" />
         <div className="flex flex-col gap-3 mt-2.5">
-          {ai.wordMeanings.map(wm => {
-            const saveKey = formatWmKey(wm)
-            const isSaved = savedSyn.includes(saveKey)
+          {ai.wordMeanings.map((wm, wi) => {
+            const formatted = formatAssociationItem(wm.word, wm.meaning)
+            const isSaved = formatted
+              ? savedSyn.includes(formatted) || associationDisplaySaved(formatted, existingSynList)
+              : false
             return (
-              <div key={wm.word} className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5">
+              <div key={`${wm.word}-${wi}`} className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5">
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-2">
                     <span className="text-[17px] font-bold text-text-primary">{wm.word}</span>
                     {wm.phonetic && <span className="text-[13px] text-[#a5b4fc]">{wm.phonetic}</span>}
                   </div>
                   <button
-                    onClick={() => onSaveSyn(saveKey)}
+                    type="button"
+                    onClick={() => onSaveSyn({ word: wm.word, meaning: wm.meaning })}
                     className="flex items-center gap-1 shrink-0 mt-0.5"
                     style={{ color: isSaved ? '#34d399' : '#818cf8' }}
                   >
@@ -799,7 +818,19 @@ function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, u
         <div>
           <AITip label="🔀 反义同义替换" tip="AI 生成的语义对立替换词组，点击「存入」可保存到知识库反义词" />
           <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.antonymGroup.map(w => <SaveChip key={w} word={w} saved={savedAnt.includes(w)} onSave={onSaveAnt} />)}
+            {ai.antonymGroup.map((w, i) => {
+              const formatted = formatAssociationItem(w.word, w.meaning)
+              if (!formatted) return null
+              const chipSaved = savedAnt.includes(formatted) || associationDisplaySaved(formatted, existingAntList)
+              return (
+                <SaveChip
+                  key={`${formatted}-${i}`}
+                  pair={w}
+                  saved={chipSaved}
+                  onSave={onSaveAnt}
+                />
+              )
+            })}
           </div>
         </div>
       )}
@@ -807,7 +838,19 @@ function CardBackSynonym({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, u
         <div>
           <AITip label="➕ 更多同义替换" tip="AI 扩展生成的近义词组，点击「存入」可保存到知识库同义词" />
           <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.moreSynonyms.map(w => <SaveChip key={w} word={w} saved={savedSyn.includes(w)} onSave={onSaveSyn} />)}
+            {ai.moreSynonyms.map((w, i) => {
+              const formatted = formatAssociationItem(w.word, w.meaning)
+              if (!formatted) return null
+              const chipSaved = savedSyn.includes(formatted) || associationDisplaySaved(formatted, existingSynList)
+              return (
+                <SaveChip
+                  key={`${formatted}-${i}`}
+                  pair={w}
+                  saved={chipSaved}
+                  onSave={onSaveSyn}
+                />
+              )
+            })}
           </div>
         </div>
       )}
@@ -869,8 +912,8 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   ai: SpellingAI
   savedSyn: string[]
   savedAnt: string[]
-  onSaveSyn: (s: string) => void
-  onSaveAnt: (s: string) => void
+  onSaveSyn: (p: AssociationPair) => void
+  onSaveAnt: (p: AssociationPair) => void
   spellingAnswer?: string
   userNotes: string[]
   showPosConfusableTabs?: boolean
@@ -891,8 +934,8 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
     ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
     : null
   const showReviewTabs = Boolean(showPosConfusableTabs && onBackFaceTabChange)
-  const existingSynonyms = new Set((storedNote?.synonyms ?? note.synonyms ?? []).map((s) => s.trim()))
-  const existingAntonyms = new Set((storedNote?.antonyms ?? note.antonyms ?? []).map((s) => s.trim()))
+  const existingSynList = storedNote?.synonyms ?? note.synonyms ?? []
+  const existingAntList = storedNote?.antonyms ?? note.antonyms ?? []
 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
@@ -959,14 +1002,19 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
             <div>
               <AITip label="🔄 同义词" tip="点击「存入」可保存到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.synonyms.map((s) => (
-              <SaveChip
-                key={s}
-                word={s}
-                saved={savedSyn.includes(s) || existingSynonyms.has(s.trim())}
-                onSave={onSaveSyn}
-              />
-            ))}
+                {ai.synonyms.map((s, i) => {
+                  const formatted = formatAssociationItem(s.word, s.meaning)
+                  if (!formatted) return null
+                  const chipSaved = savedSyn.includes(formatted) || associationDisplaySaved(formatted, existingSynList)
+                  return (
+                    <SaveChip
+                      key={`${formatted}-${i}`}
+                      pair={s}
+                      saved={chipSaved}
+                      onSave={onSaveSyn}
+                    />
+                  )
+                })}
               </div>
             </div>
           )}
@@ -974,14 +1022,19 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
             <div>
               <AITip label="🔀 反义词" tip="点击「存入」可关联到知识库" />
               <div className="flex flex-wrap gap-2 mt-2.5">
-            {ai.antonyms.map((s) => (
-              <SaveChip
-                key={s}
-                word={s}
-                saved={savedAnt.includes(s) || existingAntonyms.has(s.trim())}
-                onSave={onSaveAnt}
-              />
-            ))}
+                {ai.antonyms.map((s, i) => {
+                  const formatted = formatAssociationItem(s.word, s.meaning)
+                  if (!formatted) return null
+                  const chipSaved = savedAnt.includes(formatted) || associationDisplaySaved(formatted, existingAntList)
+                  return (
+                    <SaveChip
+                      key={`${formatted}-${i}`}
+                      pair={s}
+                      saved={chipSaved}
+                      onSave={onSaveAnt}
+                    />
+                  )
+                })}
               </div>
             </div>
           )}
@@ -1191,8 +1244,8 @@ function CardBack({
   aiContent: CardAIContent | null | undefined
   savedSyn: string[]
   savedAnt: string[]
-  onSaveSyn: (s: string) => void
-  onSaveAnt: (s: string) => void
+  onSaveSyn: (p: AssociationPair) => void
+  onSaveAnt: (p: AssociationPair) => void
   spellingAnswer?: string
   onRetry?: () => void
   isRetrying?: boolean
@@ -1276,7 +1329,18 @@ function CardBack({
         />
       )
     case 'synonym':
-      return <CardBackSynonym note={note} ai={aiContent as SynonymAI} savedSyn={savedSyn} savedAnt={savedAnt} onSaveSyn={onSaveSyn} onSaveAnt={onSaveAnt} userNotes={userNotes} />
+      return (
+        <CardBackSynonym
+          note={note}
+          storedNote={storedNote}
+          ai={aiContent as SynonymAI}
+          savedSyn={savedSyn}
+          savedAnt={savedAnt}
+          onSaveSyn={onSaveSyn}
+          onSaveAnt={onSaveAnt}
+          userNotes={userNotes}
+        />
+      )
     case 'sentence':
       return <CardBackSentence note={note} ai={aiContent as SentenceAI} userNotes={userNotes} />
     case 'spelling':
@@ -1467,6 +1531,8 @@ export default function ReviewCards() {
     setBackFaceTab('learning')
     setSaveNotice(null)
     setSavedWordFamilyKeys([])
+    setAssocDedup(null)
+    setAssocDedupSaving(false)
   }, [card?.id])
 
   useEffect(() => {
@@ -1504,6 +1570,8 @@ export default function ReviewCards() {
     setSavedPosKeys([])
     setSavedConfKeys([])
     setSavedWordFamilyKeys([])
+    setAssocDedup(null)
+    setAssocDedupSaving(false)
     setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= remaining) {
@@ -1532,6 +1600,8 @@ export default function ReviewCards() {
     setSavedPosKeys([])
     setSavedConfKeys([])
     setSavedWordFamilyKeys([])
+    setAssocDedup(null)
+    setAssocDedupSaving(false)
     setSpellingAnswer('')
     setTimeout(() => {
       if (current + 1 >= remaining) {
@@ -1544,7 +1614,7 @@ export default function ReviewCards() {
 
   const noteRow = notes.find((n) => n.id === card.id)
 
-  const performSaveSyn = async (syn: string) => {
+  const performSaveSynFormatted = async (syn: string) => {
     if (savedSyn.includes(syn)) return
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
     const base = latest?.synonyms ?? card.synonyms ?? []
@@ -1558,7 +1628,7 @@ export default function ReviewCards() {
     }
   }
 
-  const performSaveAnt = async (ant: string) => {
+  const performSaveAntFormatted = async (ant: string) => {
     if (savedAnt.includes(ant)) return
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
     const base = latest?.antonyms ?? card.antonyms ?? []
@@ -1629,6 +1699,7 @@ export default function ReviewCards() {
     }
     const ai = aiContent as WordSpeechAI | SpellingAI | undefined
     if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
+      setSaveNotice('暂无词性派生数据')
       return
     }
     const baseWf = ensureWordFamilyForSave(card, ai, latest)
@@ -1696,10 +1767,12 @@ export default function ReviewCards() {
     }
   }
 
-  const handleSaveSyn = async (syn: string) => {
+  const handleSaveSyn = async (item: AssociationPair) => {
+    const syn = formatAssociationItem(item.word, item.meaning)
+    if (!syn) return
     if (savedSyn.includes(syn)) return
     const existing = noteRow?.synonyms ?? card.synonyms ?? []
-    if (existing.some((e) => e.trim() === syn.trim())) {
+    if (associationDisplaySaved(syn, existing)) {
       setSaveNotice('已存在')
       return
     }
@@ -1708,13 +1781,15 @@ export default function ReviewCards() {
       setAssocDedup({ kind: 'synonyms', candidate: syn, conflicts })
       return
     }
-    await performSaveSyn(syn)
+    await performSaveSynFormatted(syn)
   }
 
-  const handleSaveAnt = async (ant: string) => {
+  const handleSaveAnt = async (item: AssociationPair) => {
+    const ant = formatAssociationItem(item.word, item.meaning)
+    if (!ant) return
     if (savedAnt.includes(ant)) return
     const existing = noteRow?.antonyms ?? card.antonyms ?? []
-    if (existing.some((e) => e.trim() === ant.trim())) {
+    if (associationDisplaySaved(ant, existing)) {
       setSaveNotice('已存在')
       return
     }
@@ -1723,7 +1798,7 @@ export default function ReviewCards() {
       setAssocDedup({ kind: 'antonyms', candidate: ant, conflicts })
       return
     }
-    await performSaveAnt(ant)
+    await performSaveAntFormatted(ant)
   }
 
   const closeAssocDedup = () => {
@@ -1736,9 +1811,9 @@ export default function ReviewCards() {
     setAssocDedupSaving(true)
     try {
       if (assocDedup.kind === 'synonyms') {
-        await performSaveSyn(assocDedup.candidate)
+        await performSaveSynFormatted(assocDedup.candidate)
       } else {
-        await performSaveAnt(assocDedup.candidate)
+        await performSaveAntFormatted(assocDedup.candidate)
       }
       setAssocDedup(null)
     } finally {
@@ -1989,8 +2064,8 @@ export default function ReviewCards() {
                       userNotes={userNotesByCard[card.id] ?? []}
                       savedSyn={savedSyn}
                       savedAnt={savedAnt}
-                      onSaveSyn={(s) => { void handleSaveSyn(s) }}
-                      onSaveAnt={(s) => { void handleSaveAnt(s) }}
+                      onSaveSyn={(p) => { void handleSaveSyn(p) }}
+                      onSaveAnt={(p) => { void handleSaveAnt(p) }}
                       spellingAnswer={spellingAnswer}
                       onRetry={() => retryAIContent(card.id, cardType)}
                       isRetrying={aiIsRetrying}

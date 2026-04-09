@@ -49,7 +49,7 @@ function seedReviewState(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
       ? {
         fallback: false,
         phonetic: '/teɪk ɒf/',
-        synonyms: ['depart'],
+        synonyms: [{ word: 'depart', meaning: '离开' }],
         antonyms: [],
         example: 'The plane takes off at six.',
         memoryTip: '短语记忆',
@@ -353,5 +353,69 @@ describe('ReviewCards 词性与易混扩展', () => {
     await waitFor(() => {
       expect(updateNoteMock).toHaveBeenCalledTimes(2)
     })
+  })
+
+  it('短语：点击同义词「存入」后 updateNote 的 synonyms 含 word (meaning) 格式', async () => {
+    seedReviewState(updateNoteMock, {
+      category: '短语',
+      aiContent: {
+        fallback: false,
+        phonetic: '/teɪk ɒf/',
+        synonyms: [{ word: 'depart', meaning: '离开' }],
+        antonyms: [],
+        example: 'The plane takes off at six.',
+        memoryTip: '短语记忆',
+      },
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('take off'))
+    await user.click(screen.getByRole('button', { name: '存入' }))
+
+    await waitFor(() => {
+      expect(updateNoteMock).toHaveBeenCalled()
+    })
+    const call = updateNoteMock.mock.calls.find((c) => c[0] === 'n-1' && c[1]?.synonyms)
+    expect(call?.[1].synonyms).toEqual(expect.arrayContaining(['depart (离开)']))
+  })
+
+  it('单词：点击反义词「存入」后 updateNote 的 antonyms 含 word (meaning) 格式', async () => {
+    seedReviewState(updateNoteMock, {
+      aiContent: {
+        fallback: false,
+        phonetic: '/ˈhɒstl/',
+        synonyms: [],
+        antonyms: [{ word: 'hotel', meaning: '酒店' }],
+        example: 'We stayed at a hostel.',
+        exampleTranslation: '我们住在旅舍。',
+        memoryTip: '联想 hotel',
+        partsOfSpeech: [{ pos: 'n.', label: '名', meaning: '青年旅舍', phonetic: '/ˈhɒstl/' }],
+        confusables: [
+          {
+            kind: 'meaning' as const,
+            difference: '第一组区别说明完整展示',
+            words: [
+              { word: 'hostel', meaning: '旅舍', phonetic: '/h/' },
+              { word: 'hotel', meaning: '酒店', phonetic: '/hoʊˈtel/' },
+            ],
+          },
+        ],
+      },
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('hostel'))
+    const saveButtons = screen.getAllByRole('button', { name: '存入' })
+    await user.click(saveButtons[saveButtons.length - 1])
+
+    await waitFor(() => {
+      expect(updateNoteMock).toHaveBeenCalled()
+    })
+    const call = updateNoteMock.mock.calls.find((c) => c[0] === 'n-1' && c[1]?.antonyms)
+    expect(call?.[1].antonyms).toEqual(expect.arrayContaining(['hotel (酒店)']))
   })
 })

@@ -4,6 +4,7 @@ import {
 } from '../notes/types/note-extensions'
 import { normalizeWordFamily } from '../notes/types/word-family'
 import type {
+  AssociationItem,
   CardAIContent,
   CardType,
   PhraseAI,
@@ -13,8 +14,30 @@ import type {
   WordSpeechAI,
 } from './types/card-ai-content'
 
-function isStringArray(x: unknown): x is string[] {
-  return Array.isArray(x) && x.every((i) => typeof i === 'string')
+/**
+ * 仅接受 { word, meaning }[]：二者均为 string，trim 后均非空；否则返回 null。
+ */
+function parseAssociationItems(x: unknown): AssociationItem[] | null {
+  if (!Array.isArray(x)) {
+    return null
+  }
+  const out: AssociationItem[] = []
+  for (const item of x) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return null
+    }
+    const o = item as Record<string, unknown>
+    if (typeof o.word !== 'string' || typeof o.meaning !== 'string') {
+      return null
+    }
+    const word = o.word.trim()
+    const meaning = o.meaning.trim()
+    if (!word || !meaning) {
+      return null
+    }
+    out.push({ word, meaning })
+  }
+  return out
 }
 
 function cleanOptionalString(x: unknown): string | undefined {
@@ -29,7 +52,9 @@ function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null
   if (typeof p.phonetic !== 'string') {
     return null
   }
-  if (!isStringArray(p.synonyms) || !isStringArray(p.antonyms)) {
+  const synonyms = parseAssociationItems(p.synonyms)
+  const antonyms = parseAssociationItems(p.antonyms)
+  if (synonyms === null || antonyms === null) {
     return null
   }
   if (typeof p.example !== 'string' || typeof p.memoryTip !== 'string') {
@@ -42,8 +67,8 @@ function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null
   return {
     fallback: false,
     phonetic: p.phonetic,
-    synonyms: p.synonyms,
-    antonyms: p.antonyms,
+    synonyms,
+    antonyms,
     example: p.example,
     ...(exampleTranslation ? { exampleTranslation } : {}),
     memoryTip: p.memoryTip,
@@ -57,7 +82,9 @@ function parsePhrasePayload(p: Record<string, unknown>): PhraseAI | null {
   if (typeof p.phonetic !== 'string') {
     return null
   }
-  if (!isStringArray(p.synonyms) || !isStringArray(p.antonyms)) {
+  const synonyms = parseAssociationItems(p.synonyms)
+  const antonyms = parseAssociationItems(p.antonyms)
+  if (synonyms === null || antonyms === null) {
     return null
   }
   if (typeof p.example !== 'string' || typeof p.memoryTip !== 'string') {
@@ -67,8 +94,8 @@ function parsePhrasePayload(p: Record<string, unknown>): PhraseAI | null {
   return {
     fallback: false,
     phonetic: p.phonetic,
-    synonyms: p.synonyms,
-    antonyms: p.antonyms,
+    synonyms,
+    antonyms,
     example: p.example,
     ...(exampleTranslation ? { exampleTranslation } : {}),
     memoryTip: p.memoryTip,
@@ -99,14 +126,16 @@ function parseSynonymPayload(p: Record<string, unknown>): SynonymAI | null {
       meaning: o.meaning,
     })
   }
-  if (!isStringArray(p.antonymGroup) || !isStringArray(p.moreSynonyms)) {
+  const antonymGroup = parseAssociationItems(p.antonymGroup)
+  const moreSynonyms = parseAssociationItems(p.moreSynonyms)
+  if (antonymGroup === null || moreSynonyms === null) {
     return null
   }
   return {
     fallback: false,
     wordMeanings,
-    antonymGroup: p.antonymGroup,
-    moreSynonyms: p.moreSynonyms,
+    antonymGroup,
+    moreSynonyms,
   }
 }
 
@@ -140,7 +169,9 @@ function parseSpellingPayload(p: Record<string, unknown>): SpellingAI | null {
   if (typeof p.phonetic !== 'string') {
     return null
   }
-  if (!isStringArray(p.synonyms) || !isStringArray(p.antonyms)) {
+  const synonyms = parseAssociationItems(p.synonyms)
+  const antonyms = parseAssociationItems(p.antonyms)
+  if (synonyms === null || antonyms === null) {
     return null
   }
   if (typeof p.memoryTip !== 'string') {
@@ -161,8 +192,8 @@ function parseSpellingPayload(p: Record<string, unknown>): SpellingAI | null {
   return {
     fallback: false,
     phonetic: p.phonetic,
-    synonyms: p.synonyms,
-    antonyms: p.antonyms,
+    synonyms,
+    antonyms,
     memoryTip: p.memoryTip,
     contextExample: {
       sentence: c.sentence,

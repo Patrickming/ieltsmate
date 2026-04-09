@@ -141,8 +141,15 @@ export class ReviewAiService {
 {
   "fallback": false,
   "phonetic": "音标（如已知请填写，如不知请查询）",
-  "synonyms": ["同义词1", "同义词2", "同义词3"],
-  "antonyms": ["反义词1", "反义词2"],
+  "synonyms": [
+    { "word": "同义词1", "meaning": "该同义词相对目标词的具体中文释义" },
+    { "word": "同义词2", "meaning": "具体中文释义" },
+    { "word": "同义词3", "meaning": "具体中文释义" }
+  ],
+  "antonyms": [
+    { "word": "反义词1", "meaning": "具体中文释义" },
+    { "word": "反义词2", "meaning": "具体中文释义" }
+  ],
   "example": "一个地道的例句",
   "exampleTranslation": "例句的中文翻译",
   "memoryTip": "帮助记忆的技巧或联想",
@@ -177,7 +184,7 @@ export class ReviewAiService {
   }
 }
 partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供 wordFamily）；derivedByPos 四个数组均需存在；派生项 pos 必须为 noun|verb|adjective|adverb 且与所在分区一致；confusables 中 kind 为 form（形近/拼写易混）或 meaning（义近易混），kind 为 meaning 时必须提供非空 difference；每组至少两个 words。
-只返回JSON，不要其他内容。`
+synonyms 与 antonyms 须为对象数组 [{ "word": "…", "meaning": "…" }]：word 与 meaning 必须非空；meaning 必须给出具体中文释义。只返回 JSON，不要其他内容。`
     }
 
     if (cardType === 'phrase') {
@@ -185,13 +192,19 @@ partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供
 {
   "fallback": false,
   "phonetic": "整体发音提示或重读说明",
-  "synonyms": ["同义短语1", "同义短语2"],
-  "antonyms": ["反义短语1", "反义短语2"],
+  "synonyms": [
+    { "word": "同义短语1", "meaning": "该短语相对目标短语的具体中文释义" },
+    { "word": "同义短语2", "meaning": "具体中文释义" }
+  ],
+  "antonyms": [
+    { "word": "反义短语1", "meaning": "具体中文释义" },
+    { "word": "反义短语2", "meaning": "具体中文释义" }
+  ],
   "example": "一个地道的例句",
   "exampleTranslation": "例句的中文翻译",
   "memoryTip": "帮助记忆的技巧"
 }
-只返回JSON，不要其他内容。`
+synonyms 与 antonyms 须为对象数组 [{ "word": "…", "meaning": "…" }]：word 与 meaning 必须非空；meaning 必须给出具体中文释义。只返回 JSON，不要其他内容。`
     }
 
     if (cardType === 'synonym') {
@@ -207,10 +220,18 @@ partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供
     { "word": "单词1", "phonetic": "音标", "meaning": "具体含义及与其他词的细微差别" },
     { "word": "单词2", "phonetic": "音标", "meaning": "具体含义及与其他词的细微差别" }
   ],
-  "antonymGroup": ["反义同义替换词1", "反义同义替换词2", "反义同义替换词3"],
-  "moreSynonyms": ["更多同义词1", "更多同义词2", "更多同义词3"]
+  "antonymGroup": [
+    { "word": "反义替换词1", "meaning": "具体中文释义" },
+    { "word": "反义替换词2", "meaning": "具体中文释义" },
+    { "word": "反义替换词3", "meaning": "具体中文释义" }
+  ],
+  "moreSynonyms": [
+    { "word": "更多同义词1", "meaning": "具体中文释义" },
+    { "word": "更多同义词2", "meaning": "具体中文释义" },
+    { "word": "更多同义词3", "meaning": "具体中文释义" }
+  ]
 }
-只返回JSON，不要其他内容。`
+antonymGroup 与 moreSynonyms 须为对象数组 [{ "word": "…", "meaning": "…" }]：word 与 meaning 必须非空；meaning 必须给出具体中文释义。只返回 JSON，不要其他内容。`
     }
 
     if (cardType === 'sentence') {
@@ -224,7 +245,7 @@ partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供
     { "sentence": "改写版本3（整体重构）", "dimension": "整体重构：完全不同的表达方式" }
   ]
 }
-只返回JSON，不要其他内容。`
+只返回 JSON，不要其他内容。`
     }
 
     if (cardType === 'spelling') {
@@ -232,8 +253,14 @@ partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供
 {
   "fallback": false,
   "phonetic": "音标",
-  "synonyms": ["同义词1", "同义词2"],
-  "antonyms": ["反义词1", "反义词2"],
+  "synonyms": [
+    { "word": "同义词1", "meaning": "具体中文释义" },
+    { "word": "同义词2", "meaning": "具体中文释义" }
+  ],
+  "antonyms": [
+    { "word": "反义词1", "meaning": "具体中文释义" },
+    { "word": "反义词2", "meaning": "具体中文释义" }
+  ],
   "memoryTip": "拼写记忆技巧（如词根词缀分析）",
   "contextExample": {
     "sentence": "包含该单词的例句",
@@ -271,7 +298,7 @@ partsOfSpeech/confusables/wordFamily 可选；wordFamily.base 必填（若提供
   }
 }
 partsOfSpeech/confusables/wordFamily 可选；wordFamily 规则同 word-speech 卡片说明；confusables 规则同 word-speech 卡片说明。
-只返回JSON，不要其他内容。`
+synonyms 与 antonyms 须为对象数组 [{ "word": "…", "meaning": "…" }]：word 与 meaning 必须非空；meaning 必须给出具体中文释义。只返回 JSON，不要其他内容。`
     }
 
     return `${base}\n请以JSON格式提供学习内容。`

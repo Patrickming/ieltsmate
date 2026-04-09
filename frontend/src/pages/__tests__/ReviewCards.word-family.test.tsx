@@ -441,7 +441,7 @@ describe('ReviewCards 词性派生', () => {
           'n-syn': {
             fallback: false,
             phonetic: '/ˈprevələnt/',
-            synonyms: ['widespread'],
+            synonyms: [{ word: 'widespread', meaning: '广泛的' }],
             antonyms: [],
             example: 'A prevalent issue in cities.',
             memoryTip: 'tip',

@@ -16,11 +16,16 @@ export function categoryToCardType(category: string): CardType | null {
   return CATEGORY_TO_CARD_TYPE[category] ?? null
 }
 
+export interface AssociationItem {
+  word: string
+  meaning: string
+}
+
 export interface WordSpeechAI {
   fallback: false
   phonetic: string
-  synonyms: string[]
-  antonyms: string[]
+  synonyms: AssociationItem[]
+  antonyms: AssociationItem[]
   example: string
   exampleTranslation?: string
   memoryTip: string
@@ -32,8 +37,8 @@ export interface WordSpeechAI {
 export interface PhraseAI {
   fallback: false
   phonetic: string
-  synonyms: string[]
-  antonyms: string[]
+  synonyms: AssociationItem[]
+  antonyms: AssociationItem[]
   example: string
   exampleTranslation?: string
   memoryTip: string
@@ -42,8 +47,8 @@ export interface PhraseAI {
 export interface SynonymAI {
   fallback: false
   wordMeanings: Array<{ word: string; phonetic: string; meaning: string }>
-  antonymGroup: string[]
-  moreSynonyms: string[]
+  antonymGroup: AssociationItem[]
+  moreSynonyms: AssociationItem[]
 }
 
 export interface SentenceAI {
@@ -55,8 +60,8 @@ export interface SentenceAI {
 export interface SpellingAI {
   fallback: false
   phonetic: string
-  synonyms: string[]
-  antonyms: string[]
+  synonyms: AssociationItem[]
+  antonyms: AssociationItem[]
   memoryTip: string
   contextExample: { sentence: string; analysis: string; translation?: string }
   partsOfSpeech?: PartOfSpeechItem[]

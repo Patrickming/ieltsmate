@@ -1,10 +1,39 @@
-/** Leading Latin token (incl. hyphenated) for “same headword” detection. */
+/** Strip trailing ` (…)` produced by {@link formatAssociationItem}; legacy plain strings unchanged. */
+function stripAssociationParenSuffix(s: string): string {
+  const t = s.trim()
+  const m = t.match(/^(.+)\s+\([^)]*\)\s*$/)
+  return m ? m[1].trim() : t
+}
+
+/** Persisted form for synonym/antonym association lines: `word (meaning)` (both non-empty after trim). */
+export function formatAssociationItem(word: string, meaning: string): string | null {
+  const w = word.trim()
+  const m = meaning.trim()
+  if (!w || !m) return null
+  return `${w} (${m})`
+}
+
+/** Leading Latin token (incl. hyphenated) for “same headword” detection. Works for `word (meaning)` and legacy plain strings. */
 export function extractAssociationKey(s: string): string {
   const t = s.trim()
   if (!t) return ''
-  const m = t.match(/^([a-zA-Z][a-zA-Z-]*)/)
+  const head = stripAssociationParenSuffix(t)
+  const m = head.match(/^([a-zA-Z][a-zA-Z-]*)/)
   if (m) return m[1].toLowerCase()
-  return t
+  return head
+}
+
+/** True if this formatted line is already represented in `existing` (exact match, or legacy plain headword match). */
+export function associationDisplaySaved(candidateFormatted: string, existing: string[]): boolean {
+  const c = candidateFormatted.trim()
+  if (!c) return false
+  if (existing.some((e) => e.trim() === c)) return true
+  const ck = extractAssociationKey(c)
+  return existing.some((e) => {
+    const et = e.trim()
+    if (!et || et.includes('(')) return false
+    return extractAssociationKey(et) === ck
+  })
 }
 
 /** Existing entries that share the same association key as candidate but are not exactly equal (trim). */
