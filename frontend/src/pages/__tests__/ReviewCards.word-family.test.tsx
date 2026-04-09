@@ -223,7 +223,7 @@ describe('ReviewCards 词性派生', () => {
     await user.click(screen.getByText('popular'))
     await user.click(screen.getByTestId('review-back-tab-word-family'))
 
-    expect(screen.getAllByText('原始词').length).toBeGreaterThan(0)
+    expect(screen.queryByText('原始词')).not.toBeInTheDocument()
     expect(screen.queryByText('当前词')).not.toBeInTheDocument()
     expect(screen.getByTestId('review-wf-empty-adjective')).toHaveTextContent('无')
     expect(screen.getByTestId('review-wf-empty-adverb')).toHaveTextContent('无')
@@ -243,6 +243,68 @@ describe('ReviewCards 词性派生', () => {
     })
     const call = updateNoteMock.mock.calls.find((c) => c[0] === 'n-wf' && c[1]?.wordFamily)
     expect(call).toBeDefined()
+    expect(call?.[1].wordFamily.derivedByPos.noun).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ word: 'popularity' }),
+      ]),
+    )
+    expect(call?.[1].wordFamily.derivedByPos.verb ?? []).toHaveLength(0)
+  })
+
+  it('与当前词同词面的项不显示在派生列表', async () => {
+    const wfWithSameSurface: WordFamily = {
+      base: { word: 'disperse', pos: 'verb', meaning: '分散', phonetic: '/dɪˈspɜːs/' },
+      derivedByPos: {
+        ...emptyDerivedByPos(),
+        noun: [{ word: 'disperse', pos: 'noun', meaning: '分散', phonetic: '/dɪˈspɜːs/' }],
+        adjective: [{ word: 'dispersive', pos: 'adjective', meaning: '分散的', phonetic: '' }],
+      },
+    }
+    useAppStore.setState((s) => ({
+      ...s,
+      notes: [
+        {
+          id: 'n-wf',
+          content: 'disperse',
+          translation: '分散',
+          category: '单词',
+          subcategory: '杂笔记',
+          createdAt: '今天',
+          reviewStatus: 'new',
+          reviewCount: 0,
+          correctCount: 0,
+          wrongCount: 0,
+          synonyms: [],
+          antonyms: [],
+        },
+      ],
+      reviewSession: s.reviewSession
+        ? {
+            ...s.reviewSession,
+            cards: [{ ...s.reviewSession.cards[0], content: 'disperse', translation: '分散', category: '单词' }],
+            aiContent: {
+              'n-wf': {
+                fallback: false,
+                phonetic: '/dɪˈspɜːs/',
+                synonyms: [],
+                antonyms: [],
+                example: 'Particles disperse quickly.',
+                memoryTip: 'tip',
+                wordFamily: wfWithSameSurface,
+              },
+            },
+          }
+        : s.reviewSession,
+    }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('disperse'))
+    await user.click(screen.getByTestId('review-back-tab-word-family'))
+
+    expect(screen.getByTestId('review-wf-empty-noun')).toHaveTextContent('无')
+    expect(screen.getByText('dispersive')).toBeInTheDocument()
   })
 
   it('单条重复项点击会出现“已存在”提示', async () => {

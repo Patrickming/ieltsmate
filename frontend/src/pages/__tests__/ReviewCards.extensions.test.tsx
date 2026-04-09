@@ -133,7 +133,7 @@ function seedReviewState(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
   })
 }
 
-describe('ReviewCards 词性&易混淆扩展', () => {
+describe('ReviewCards 词性与易混扩展', () => {
   const updateNoteMock = vi.fn().mockResolvedValue(true)
 
   beforeEach(() => {
@@ -144,7 +144,7 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     seedReviewState(updateNoteMock)
   })
 
-  it('翻面后可切换到「词性&易混淆」并全量展示 confusables', async () => {
+  it('翻面后可切换到「易混小词」并全量展示 confusables', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       createFetchResponse({ data: { items: [] } }),
     )
@@ -158,10 +158,28 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     expect(screen.getByText('第一组区别说明完整展示')).toBeInTheDocument()
     expect(screen.getByText('hotel')).toBeInTheDocument()
     expect(screen.getByText('/hoʊˈtel/')).toBeInTheDocument()
+    expect(screen.getByTestId('review-back-tab-pos-confusable')).toHaveTextContent('易混小词')
     expect(screen.getByText('义近易混')).toBeInTheDocument()
     expect(screen.getByText('形近 / 拼写易混')).toBeInTheDocument()
     expect(screen.getByText('affect')).toBeInTheDocument()
     expect(screen.getByText('effect')).toBeInTheDocument()
+  })
+
+  it('词性块从右侧移动到左侧词性派生页', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createFetchResponse({ data: { items: [] } }),
+    )
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('hostel'))
+    await user.click(screen.getByTestId('review-back-tab-word-family'))
+    expect(screen.getByText('词性')).toBeInTheDocument()
+    expect(screen.getByTestId('review-pos-save-0')).toBeInTheDocument()
+
+    await user.click(screen.getByTestId('review-back-tab-pos-confusable'))
+    expect(screen.queryByText('词性')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('review-pos-save-0')).not.toBeInTheDocument()
   })
 
   it('同词组同时命中形近和义近时，两个分区都显示「形近+义近」标识', async () => {
@@ -222,7 +240,7 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     expect(screen.getByRole('button', { name: '😞 不记得' })).toBeInTheDocument()
   })
 
-  it('点击词性「存入」会调用 updateNote 写入 partsOfSpeech', async () => {
+  it('点击词性派生页中的词性「存入」会调用 updateNote 写入 partsOfSpeech', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       createFetchResponse({ data: { items: [] } }),
     )
@@ -231,7 +249,7 @@ describe('ReviewCards 词性&易混淆扩展', () => {
     renderWithRouter(<ReviewCards />)
 
     await user.click(screen.getByText('hostel'))
-    await user.click(screen.getByTestId('review-back-tab-pos-confusable'))
+    await user.click(screen.getByTestId('review-back-tab-word-family'))
 
     await user.click(screen.getByTestId('review-pos-save-0'))
 
