@@ -129,6 +129,7 @@ describe('useAppStore updateNote extensions', () => {
         adjective: [],
         adverb: [],
       },
+      rootDerived: [],
     }
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
       const url = String(input)
@@ -224,6 +225,7 @@ describe('useAppStore updateNote extensions', () => {
     expect(updated?.wordFamily?.derivedByPos.verb).toEqual([
       { word: 'lead', pos: 'verb', meaning: '带领', phonetic: '' },
     ])
+    expect(updated?.wordFamily?.rootDerived).toEqual([])
   })
 
   it('loadNotes 遇到脏 partsOfSpeech/confusables 也可安全归一', async () => {

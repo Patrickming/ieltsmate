@@ -539,7 +539,7 @@ export default function KnowledgeDetail() {
                 {/* Word family */}
                 {note.wordFamily && (
                   <div>
-                    <div className="text-sm font-semibold text-text-muted mb-2.5">🧩 词性派生</div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🧩 词性&词根派生</div>
                     <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 flex flex-col gap-3">
                       <div>
                         <div className="text-[11px] font-bold text-text-subtle mb-1">原始词</div>
@@ -573,6 +573,23 @@ export default function KnowledgeDetail() {
                           )}
                         </div>
                       ))}
+                      {(note.wordFamily?.rootDerived?.length ?? 0) > 0 && (
+                        <div>
+                          <div className="text-[11px] font-bold text-text-subtle mb-1">词根派生</div>
+                          <div className="flex flex-col gap-2">
+                            {note.wordFamily!.rootDerived.map((item, idx) => (
+                              <div key={`root-${item.word}-${idx}`} className="pl-3 border-l-2 border-primary/35">
+                                <div className="flex flex-wrap items-baseline gap-2">
+                                  <span className="text-[14px] font-semibold text-text-primary">{item.word}</span>
+                                  <span className="text-[11px] text-text-subtle font-mono">{item.pos}</span>
+                                  {item.phonetic && <span className="text-[12px] text-[#a5b4fc] font-mono">{item.phonetic}</span>}
+                                </div>
+                                <p className="text-[13px] text-text-secondary mt-0.5">{item.meaning}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

@@ -158,7 +158,7 @@ describe('ReviewCards 词性与易混扩展', () => {
     expect(screen.getByText('第一组区别说明完整展示')).toBeInTheDocument()
     expect(screen.getByText('hotel')).toBeInTheDocument()
     expect(screen.getByText('/hoʊˈtel/')).toBeInTheDocument()
-    expect(screen.getByTestId('review-back-tab-pos-confusable')).toHaveTextContent('易混小词')
+    expect(screen.getByTestId('review-back-tab-pos-confusable')).toHaveTextContent('易混淆词')
     expect(screen.getByText('义近易混')).toBeInTheDocument()
     expect(screen.getByText('形近 / 拼写易混')).toBeInTheDocument()
     expect(screen.getByText('affect')).toBeInTheDocument()

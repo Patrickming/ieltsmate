@@ -19,4 +19,5 @@ export interface WordFamilyItem {
 export interface WordFamily {
   base: WordFamilyBase
   derivedByPos: Record<Pos4, WordFamilyItem[]>
+  rootDerived: WordFamilyItem[]
 }

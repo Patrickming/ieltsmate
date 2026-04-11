@@ -43,6 +43,7 @@ function normalizeBucketItem(raw: unknown, bucket: Pos4): WordFamilyItem | null 
 /**
  * UI 防御性归一：输入脏 JSON 时不抛异常，非法项直接丢弃。
  * - derivedByPos 四个键始终存在且为数组
+ * - rootDerived 始终为数组（与派生项相同校验与去重键）
  * - 派生项仅保留合法 word/pos/meaning，phonetic 兜底为空串
  */
 export function normalizeWordFamilyForUI(input: unknown): WordFamily | undefined {
@@ -73,6 +74,25 @@ export function normalizeWordFamilyForUI(input: unknown): WordFamily | undefined
       }
     }
 
+    const rootDerived: WordFamilyItem[] = []
+    const rootArr = root.rootDerived
+    if (Array.isArray(rootArr)) {
+      for (const row of rootArr) {
+        const r = asRecord(row)
+        if (!r) continue
+        const w = cleanString(r.word)
+        const m = cleanString(r.meaning)
+        if (!w || !m) continue
+        const p = r.pos
+        if (!isPos4(p)) continue
+        const item: WordFamilyItem = { word: w, pos: p, meaning: m, phonetic: cleanString(r.phonetic) }
+        const key = wordFamilyItemDedupKey(item)
+        if (seen.has(key)) continue
+        seen.add(key)
+        rootDerived.push(item)
+      }
+    }
+
     return {
       base: {
         word: baseWord,
@@ -81,6 +101,7 @@ export function normalizeWordFamilyForUI(input: unknown): WordFamily | undefined
         ...(cleanString(baseRaw.phonetic) ? { phonetic: cleanString(baseRaw.phonetic) } : {}),
       },
       derivedByPos,
+      rootDerived,
     }
   } catch {
     return undefined
@@ -100,7 +121,11 @@ export function flattenWordFamilyItems(wf: WordFamily): WordFamilyItem[] {
   return out
 }
 
-export function mergeWordFamilyItems(base: WordFamily, incomingItems: WordFamilyItem[]): WordFamily {
+export function mergeWordFamilyItems(
+  base: WordFamily,
+  incomingItems: WordFamilyItem[],
+  incomingRootItems?: WordFamilyItem[],
+): WordFamily {
   const seen = new Set<string>()
   const derived = emptyDerivedByPos()
   for (const k of POS4_ORDER) {
@@ -117,5 +142,18 @@ export function mergeWordFamilyItems(base: WordFamily, incomingItems: WordFamily
     seen.add(key)
     derived[it.pos].push(it)
   }
-  return { base: { ...base.base }, derivedByPos: derived }
+  const rootDerived: WordFamilyItem[] = []
+  for (const it of base.rootDerived ?? []) {
+    const key = wordFamilyItemDedupKey(it)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rootDerived.push(it)
+  }
+  for (const it of incomingRootItems ?? []) {
+    const key = wordFamilyItemDedupKey(it)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rootDerived.push(it)
+  }
+  return { base: { ...base.base }, derivedByPos: derived, rootDerived }
 }

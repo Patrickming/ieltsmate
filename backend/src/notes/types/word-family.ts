@@ -19,6 +19,7 @@ export interface WordFamilyItem {
 export interface WordFamily {
   base: WordFamilyBase
   derivedByPos: Record<Pos4, WordFamilyItem[]>
+  rootDerived: WordFamilyItem[]
 }
 
 const POS4_ORDER: Pos4[] = ['noun', 'verb', 'adjective', 'adverb']
@@ -99,6 +100,23 @@ function normalizeItemForBucket(
   return item
 }
 
+function normalizeRootItem(
+  raw: Record<string, unknown>,
+  globalSeen: Set<string>,
+): WordFamilyItem | null {
+  const word = trimStr(raw.word)
+  const meaning = trimStr(raw.meaning)
+  if (!word || !meaning) return null
+  const pos = mapToPos4(trimStr(raw.pos))
+  if (!pos) return null
+  const phoneticRaw = trimStr(raw.phonetic)
+  const item: WordFamilyItem = { word, pos, meaning, phonetic: phoneticRaw }
+  const k = wordFamilyItemDedupKey(item)
+  if (globalSeen.has(k)) return null
+  globalSeen.add(k)
+  return item
+}
+
 /**
  * 校验并归一化 wordFamily；非法结构返回 null。
  * base.word / base.meaning 必填；各分区固定存在（可空数组）。
@@ -151,13 +169,29 @@ export function normalizeWordFamily(input: unknown): WordFamily | null {
     }
   }
 
-  return { base, derivedByPos }
+  const rootDerived: WordFamilyItem[] = []
+  const rootArr = o.rootDerived
+  if (Array.isArray(rootArr)) {
+    for (const row of rootArr) {
+      if (!row || typeof row !== 'object') continue
+      const item = normalizeRootItem(row as Record<string, unknown>, globalSeen)
+      if (item) {
+        rootDerived.push(item)
+      }
+    }
+  }
+
+  return { base, derivedByPos, rootDerived }
 }
 
 /**
  * 将 incoming 派生项合并进 base，按 word+pos+meaning 全局去重。
  */
-export function mergeWordFamilyItems(base: WordFamily, incomingItems: WordFamilyItem[]): WordFamily {
+export function mergeWordFamilyItems(
+  base: WordFamily,
+  incomingItems: WordFamilyItem[],
+  incomingRootItems?: WordFamilyItem[],
+): WordFamily {
   const seen = new Set<string>()
   const derived = emptyDerivedByPos()
   for (const k of POS4_ORDER) {
@@ -174,5 +208,18 @@ export function mergeWordFamilyItems(base: WordFamily, incomingItems: WordFamily
     seen.add(key)
     derived[it.pos].push(it)
   }
-  return { base: { ...base.base }, derivedByPos: derived }
+  const rootDerived: WordFamilyItem[] = []
+  for (const it of base.rootDerived ?? []) {
+    const key = wordFamilyItemDedupKey(it)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rootDerived.push(it)
+  }
+  for (const it of incomingRootItems ?? []) {
+    const key = wordFamilyItemDedupKey(it)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rootDerived.push(it)
+  }
+  return { base: { ...base.base }, derivedByPos: derived, rootDerived }
 }

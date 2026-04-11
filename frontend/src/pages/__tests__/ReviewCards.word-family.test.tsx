@@ -37,6 +37,9 @@ function seedWordFamilyReview(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
       noun: [{ word: 'popularity', pos: 'noun', meaning: '普及', phonetic: '/ˌpɒpjuˈlærəti/' }],
       verb: [{ word: 'popularize', pos: 'verb', meaning: '使普及', phonetic: '' }],
     },
+    rootDerived: [
+      { word: 'populace', pos: 'noun', meaning: '民众，平民', phonetic: '/popjelas/' },
+    ],
   }
   const defaultAI =
     category === '拼写'
@@ -128,6 +131,7 @@ describe('ReviewCards 词性派生', () => {
 
     await user.click(screen.getByText('popular'))
     expect(screen.getByTestId('review-back-tab-word-family')).toBeInTheDocument()
+    expect(screen.getByTestId('review-back-tab-word-family')).toHaveTextContent('词性&词根派生')
   })
 
   it('spelling 可见「词性派生」tab', async () => {
@@ -138,6 +142,7 @@ describe('ReviewCards 词性派生', () => {
 
     await user.click(screen.getByText('拼写挑战'))
     expect(screen.getByTestId('review-back-tab-word-family')).toBeInTheDocument()
+    expect(screen.getByTestId('review-back-tab-word-family')).toHaveTextContent('词性&词根派生')
   })
 
   it('口语卡不显示词性派生 tab', async () => {
@@ -229,6 +234,41 @@ describe('ReviewCards 词性派生', () => {
     expect(screen.getByTestId('review-wf-empty-adverb')).toHaveTextContent('无')
   })
 
+  it('词根派生区块渲染 rootDerived 项', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('popular'))
+    await user.click(screen.getByTestId('review-back-tab-word-family'))
+
+    expect(screen.getByText('词根派生')).toBeInTheDocument()
+    expect(screen.getByText('populace')).toBeInTheDocument()
+    expect(screen.getByText('民众，平民')).toBeInTheDocument()
+  })
+
+  it('rootDerived 为空时显示无', async () => {
+    seedWordFamilyReview(updateNoteMock)
+    useAppStore.setState((s) => {
+      const session = s.reviewSession
+      if (session?.aiContent?.['n-wf']) {
+        const ai = session.aiContent['n-wf'] as Record<string, unknown>
+        if (ai.wordFamily) {
+          (ai.wordFamily as Record<string, unknown>).rootDerived = []
+        }
+      }
+      return { ...s }
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('popular'))
+    await user.click(screen.getByTestId('review-back-tab-word-family'))
+
+    expect(screen.getByTestId('review-root-derived-empty')).toHaveTextContent('无')
+  })
+
   it('单条存入触发 updateNote(wordFamily)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
     const user = userEvent.setup()
@@ -259,6 +299,7 @@ describe('ReviewCards 词性派生', () => {
         noun: [{ word: 'disperse', pos: 'noun', meaning: '分散', phonetic: '/dɪˈspɜːs/' }],
         adjective: [{ word: 'dispersive', pos: 'adjective', meaning: '分散的', phonetic: '' }],
       },
+      rootDerived: [],
     }
     useAppStore.setState((s) => ({
       ...s,
@@ -330,6 +371,7 @@ describe('ReviewCards 词性派生', () => {
               ...emptyDerivedByPos(),
               noun: [{ word: 'popularity', pos: 'noun', meaning: '普及', phonetic: '/x/' }],
             },
+            rootDerived: [],
           },
         },
       ],
@@ -368,6 +410,7 @@ describe('ReviewCards 词性派生', () => {
               ...emptyDerivedByPos(),
               noun: [{ word: 'popularity', pos: 'noun', meaning: '普及', phonetic: '/x/' }],
             },
+            rootDerived: [],
           },
         },
       ],
