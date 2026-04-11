@@ -61,11 +61,10 @@ export function ReviewPreparingOverlay({ open, done, total, phase }: ReviewPrepa
             <div className="relative mt-7">
               <div className="h-2.5 rounded-full bg-[#1f2547] border border-[#312e81] overflow-hidden">
                 {total > 0 ? (
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
-                    transition={{ type: 'spring', damping: 22, stiffness: 120 }}
-                    className="h-full bg-gradient-to-r from-[#4f46e5] via-[#6366f1] to-[#818cf8]"
+                  // 不用 spring：轮询很快时弹簧会严重滞后，出现「文字 80% / 条只有一节」的错位
+                  <div
+                    className="h-full max-w-full bg-gradient-to-r from-[#4f46e5] via-[#6366f1] to-[#818cf8] transition-[width] duration-200 ease-out"
+                    style={{ width: `${progress}%` }}
                   />
                 ) : (
                   <motion.div
