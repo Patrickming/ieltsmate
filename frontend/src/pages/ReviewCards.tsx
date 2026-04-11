@@ -338,6 +338,31 @@ function ReviewBackTabBar({
   )
 }
 
+function RegenerateCardButton({
+  onRetry,
+  isRetrying,
+}: {
+  onRetry?: () => void
+  isRetrying?: boolean
+}) {
+  if (!onRetry) return null
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onRetry()
+      }}
+      disabled={isRetrying}
+      className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all disabled:opacity-50"
+      style={{ background: '#1e1a2e', border: '1px solid #7c3aed66', color: '#a78bfa' }}
+    >
+      <RotateCcw size={11} className={isRetrying ? 'animate-spin' : ''} />
+      {isRetrying ? '生成中...' : '重新生成'}
+    </button>
+  )
+}
+
 function isPosSaved(item: PartOfSpeechItem, stored: Note | undefined, sessionKeys: string[]): boolean {
   const k = posDedupKey(item)
   if (sessionKeys.includes(k)) return true
@@ -367,7 +392,6 @@ function PosConfusablePanel({
     acc[key] = (acc[key] ?? 0) + 1
     return acc
   }, {})
-  const barColor = CATEGORY_BAR[storedNote.category] ?? '#818cf8'
 
   return (
     <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
@@ -624,6 +648,8 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   onSaveConf,
   onSaveWordFamilyItem,
   onSaveWordFamilyAll,
+  onRetry,
+  isRetrying,
   savedPosKeys = [],
   savedConfKeys = [],
   savedWordFamilyKeys = [],
@@ -644,6 +670,8 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   onSaveConf?: (g: ConfusableGroup) => void
   onSaveWordFamilyItem?: (item: WordFamilyItem) => void
   onSaveWordFamilyAll?: () => void
+  onRetry?: () => void
+  isRetrying?: boolean
   savedPosKeys?: string[]
   savedConfKeys?: string[]
   savedWordFamilyKeys?: string[]
@@ -660,7 +688,10 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
-        <span className="text-sm text-text-dim">已翻转</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-dim">已翻转</span>
+          <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
+        </div>
       </div>
       {showReviewTabs && (
         <ReviewBackTabBar active={backFaceTab} onChange={onBackFaceTabChange!} showWordFamily={showWordFamilyTab} />
@@ -762,7 +793,18 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   )
 }
 
-function CardBackSynonym({ note, storedNote, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, userNotes }: {
+function CardBackSynonym({
+  note,
+  storedNote,
+  ai,
+  savedSyn,
+  savedAnt,
+  onSaveSyn,
+  onSaveAnt,
+  userNotes,
+  onRetry,
+  isRetrying,
+}: {
   note: Note
   storedNote: Note
   ai: SynonymAI
@@ -771,6 +813,8 @@ function CardBackSynonym({ note, storedNote, ai, savedSyn, savedAnt, onSaveSyn, 
   onSaveSyn: (p: AssociationPair) => void
   onSaveAnt: (p: AssociationPair) => void
   userNotes: string[]
+  onRetry?: () => void
+  isRetrying?: boolean
 }) {
   const existingSynList = storedNote.synonyms ?? note.synonyms ?? []
   const existingAntList = storedNote.antonyms ?? note.antonyms ?? []
@@ -779,7 +823,10 @@ function CardBackSynonym({ note, storedNote, ai, savedSyn, savedAnt, onSaveSyn, 
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
-        <span className="text-sm text-text-dim">已翻转</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-dim">已翻转</span>
+          <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
+        </div>
       </div>
       <UserNotesSection userNotes={userNotes} />
       <div>
@@ -858,12 +905,27 @@ function CardBackSynonym({ note, storedNote, ai, savedSyn, savedAnt, onSaveSyn, 
   )
 }
 
-function CardBackSentence({ note, ai, userNotes }: { note: Note; ai: SentenceAI; userNotes: string[] }) {
+function CardBackSentence({
+  note,
+  ai,
+  userNotes,
+  onRetry,
+  isRetrying,
+}: {
+  note: Note
+  ai: SentenceAI
+  userNotes: string[]
+  onRetry?: () => void
+  isRetrying?: boolean
+}) {
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
-        <span className="text-sm text-text-dim">已翻转</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-dim">已翻转</span>
+          <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
+        </div>
       </div>
       <UserNotesSection userNotes={userNotes} />
       <div>
@@ -904,6 +966,8 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   onSaveConf,
   onSaveWordFamilyItem,
   onSaveWordFamilyAll,
+  onRetry,
+  isRetrying,
   savedPosKeys = [],
   savedConfKeys = [],
   savedWordFamilyKeys = [],
@@ -925,6 +989,8 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   onSaveConf?: (g: ConfusableGroup) => void
   onSaveWordFamilyItem?: (item: WordFamilyItem) => void
   onSaveWordFamilyAll?: () => void
+  onRetry?: () => void
+  isRetrying?: boolean
   savedPosKeys?: string[]
   savedConfKeys?: string[]
   savedWordFamilyKeys?: string[]
@@ -941,7 +1007,10 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" />
-        <span className="text-sm text-text-dim">已翻转</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-dim">已翻转</span>
+          <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
+        </div>
       </div>
       {showReviewTabs && (
         <ReviewBackTabBar active={backFaceTab} onChange={onBackFaceTabChange!} showWordFamily={showWordFamilyTab} />
@@ -1314,6 +1383,8 @@ function CardBack({
           savedPosKeys={savedPosKeys}
           savedConfKeys={savedConfKeys}
           savedWordFamilyKeys={savedWordFamilyKeys}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
         />
       )
     case 'phrase':
@@ -1326,6 +1397,8 @@ function CardBack({
           onSaveSyn={onSaveSyn}
           onSaveAnt={onSaveAnt}
           userNotes={userNotes}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
         />
       )
     case 'synonym':
@@ -1339,10 +1412,20 @@ function CardBack({
           onSaveSyn={onSaveSyn}
           onSaveAnt={onSaveAnt}
           userNotes={userNotes}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
         />
       )
     case 'sentence':
-      return <CardBackSentence note={note} ai={aiContent as SentenceAI} userNotes={userNotes} />
+      return (
+        <CardBackSentence
+          note={note}
+          ai={aiContent as SentenceAI}
+          userNotes={userNotes}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
+        />
+      )
     case 'spelling':
       return (
         <CardBackSpelling
@@ -1366,6 +1449,8 @@ function CardBack({
           savedPosKeys={savedPosKeys}
           savedConfKeys={savedConfKeys}
           savedWordFamilyKeys={savedWordFamilyKeys}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
         />
       )
     default:
@@ -1390,6 +1475,8 @@ function CardBack({
           savedPosKeys={savedPosKeys}
           savedConfKeys={savedConfKeys}
           savedWordFamilyKeys={savedWordFamilyKeys}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
         />
       )
   }
