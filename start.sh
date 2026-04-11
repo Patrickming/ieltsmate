@@ -14,7 +14,7 @@ FRONTEND_DIR="$PROJECT_DIR/frontend"
 BACKEND_LOG="/tmp/ieltsmate-backend.log"
 FRONTEND_LOG="/tmp/ieltsmate-frontend.log"
 
-DB_HOST="127.0.0.1"
+DB_HOST="localhost"
 DB_PORT="5432"
 BASE_BACKEND_PORT="3000"
 BASE_FRONTEND_PORT="5173"
@@ -82,7 +82,7 @@ find_available_port() {
 }
 
 backend_healthy() {
-  curl -fsS --noproxy '*' "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1
+  curl -fsS --noproxy '*' "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1
 }
 
 wait_for_port() {
@@ -123,7 +123,7 @@ run_startup() {
   echo ""
   echo -e "${Y}  [2/3]  后端 NestJS${NC}"
   if backend_healthy; then
-    ok "后端已在运行 (http://127.0.0.1:${BACKEND_PORT})"
+    ok "后端已在运行 (http://localhost:${BACKEND_PORT})"
   else
     # 端口占用则自动切换到可用端口
     if port_is_open "$BACKEND_PORT"; then
@@ -143,7 +143,7 @@ run_startup() {
     nohup env PORT="$BACKEND_PORT" pnpm dev >"$BACKEND_LOG" 2>&1 &
     if wait_for_port "$BACKEND_PORT" 20; then
       backend_healthy \
-        && ok "后端启动成功 (http://127.0.0.1:${BACKEND_PORT})" \
+        && ok "后端启动成功 (http://localhost:${BACKEND_PORT})" \
         || warn "端口已开启但健康检查未通过 → $BACKEND_LOG"
     else
       err "后端启动超时 → $BACKEND_LOG"
@@ -155,8 +155,8 @@ run_startup() {
   echo -e "${Y}  [3/3]  前端 Vite${NC}"
   # 判断前端是否真正健康（能返回 HTML）
   if port_is_open "$FRONTEND_PORT" && \
-     curl -fsS --noproxy '*' "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1; then
-    ok "前端已在运行 (http://127.0.0.1:${FRONTEND_PORT})"
+     curl -fsS --noproxy '*' "http://localhost:${FRONTEND_PORT}/" >/dev/null 2>&1; then
+    ok "前端已在运行 (http://localhost:${FRONTEND_PORT})"
   else
     # 端口占用则自动切换到可用端口
     if port_is_open "$FRONTEND_PORT"; then
@@ -173,10 +173,10 @@ run_startup() {
     cd "$FRONTEND_DIR" || exit 1
     : > "$FRONTEND_LOG"
     info "启动前端进程 (pnpm dev, PORT=${FRONTEND_PORT}, API=${BACKEND_PORT})..."
-    nohup env VITE_API_BASE_URL="http://127.0.0.1:${BACKEND_PORT}" \
-      pnpm dev --host 127.0.0.1 --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
+    nohup env VITE_API_BASE_URL="http://localhost:${BACKEND_PORT}" \
+      pnpm dev --host localhost --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
     if wait_for_port "$FRONTEND_PORT" 15; then
-      ok "前端启动成功 (http://127.0.0.1:${FRONTEND_PORT})"
+      ok "前端启动成功 (http://localhost:${FRONTEND_PORT})"
     else
       err "前端启动失败 → $FRONTEND_LOG"
     fi
@@ -282,16 +282,16 @@ render_dashboard() {
   # 后端
   printf "  ${M}%-16s${NC}" "Backend  NestJS"
   printf " %b" "$be_lbl"
-  printf "  ${DIM}http://127.0.0.1:%-6s${NC}" "$BACKEND_PORT"
+  printf "  ${DIM}http://localhost:%-6s${NC}" "$BACKEND_PORT"
   if [ "$be_state" = "UP" ]; then
-    printf "  ${G}/health OK${NC}  ${DIM}API: http://127.0.0.1:${BACKEND_PORT}/api-docs${NC}"
+    printf "  ${G}/health OK${NC}  ${DIM}API: http://localhost:${BACKEND_PORT}/api-docs${NC}"
   fi
   echo ""
 
   # 前端
   printf "  ${M}%-16s${NC}" "Frontend Vite"
   printf " %b" "$fe_lbl"
-  printf "  ${DIM}http://127.0.0.1:%-6s${NC}" "$FRONTEND_PORT"
+  printf "  ${DIM}http://localhost:%-6s${NC}" "$FRONTEND_PORT"
   if [ "$fe_state" = "UP" ]; then
     printf "  ${G}dev server OK${NC}"
   fi

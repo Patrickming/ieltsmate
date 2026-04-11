@@ -280,6 +280,8 @@ describe('review-ai-content util', () => {
     expect(prompt).toMatch(/\{\s*"word"\s*:.*"meaning"\s*:/s)
     expect(prompt).toContain('word 与 meaning 必须非空')
     expect(prompt).toContain('meaning 必须给出具体中文释义')
+    expect(prompt).toContain('中文含义”来自用户笔记，可能不准确或词性有误')
+    expect(prompt).toContain('wordFamily.base.pos 必须是“目标词本身”的主词性')
     expect(prompt).toContain('只返回 JSON')
   })
 
@@ -306,6 +308,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toMatch(/\{\s*"word"\s*:.*"meaning"\s*:/s)
     expect(prompt).toContain('word 与 meaning 必须非空')
     expect(prompt).toContain('meaning 必须给出具体中文释义')
+    expect(prompt).toContain('中文含义”来自用户笔记，可能不准确或词性有误')
     expect(prompt).toContain('只返回 JSON')
   })
 
@@ -318,6 +321,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toMatch(/\{\s*"word"\s*:.*"meaning"\s*:/s)
     expect(prompt).toContain('word 与 meaning 必须非空')
     expect(prompt).toContain('meaning 必须给出具体中文释义')
+    expect(prompt).toContain('中文含义”来自用户笔记，可能不准确或词性有误')
     expect(prompt).toContain('只返回 JSON')
   })
 })
