@@ -292,6 +292,13 @@ const POS4_LABEL: Record<Pos4, string> = {
   adverb: '副词',
 }
 
+const POS4_TO_POS_ABBR: Record<Pos4, string> = {
+  noun: 'n.',
+  verb: 'v.',
+  adjective: 'adj.',
+  adverb: 'adv.',
+}
+
 function buildDefaultWordFamily(note: Note): WordFamily {
   const firstMeaning = note.translation.split(/[；;]/).map((s) => s.trim()).filter(Boolean)[0] ?? note.translation
   return {
@@ -494,8 +501,27 @@ function WordFamilyPanel({
   onSaveAll: () => void
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
-  const mergedPos = mergeUniquePos(storedNote.partsOfSpeech ?? [], aiPos ?? [])
   const storedWf = storedNote.wordFamily
+  const sourceWf = aiWordFamily ?? storedWf
+  const basePosFromWordFamily: PartOfSpeechItem[] = (() => {
+    if (!sourceWf) return []
+    const baseWord = sourceWf.base.word.trim().toLowerCase()
+    const currentWord = note.content.trim().toLowerCase()
+    if (baseWord !== currentWord) return []
+    if (sourceWf.base.pos === 'other') return []
+    const meaning = sourceWf.base.meaning.trim()
+    if (!meaning) return []
+    return [{
+      pos: POS4_TO_POS_ABBR[sourceWf.base.pos],
+      label: POS4_LABEL[sourceWf.base.pos],
+      meaning,
+      ...(sourceWf.base.phonetic?.trim() ? { phonetic: sourceWf.base.phonetic.trim() } : {}),
+    }]
+  })()
+  const mergedPos = mergeUniquePos(
+    storedNote.partsOfSpeech ?? [],
+    mergeUniquePos(aiPos ?? [], basePosFromWordFamily),
+  )
   const aiFlat = aiWordFamily ? flattenWordFamilyItems(aiWordFamily) : []
   const seed: WordFamily = storedWf
     ? storedWf
