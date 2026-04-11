@@ -196,10 +196,24 @@ type AddQuickNoteResult = {
 
 const QUICK_NOTE_REQUEST_TIMEOUT_MS = 4000
 export const REVIEW_PREPARE_DEFAULT_BATCH_SIZE = 3
-export const REVIEW_PREPARE_DEFAULT_TIMEOUT_MS = 10000
+/** 预热首批 AI 的等待上限（毫秒），与设置页「超时时间」可选项一致 */
+export const REVIEW_PREPARE_DEFAULT_TIMEOUT_MS = 30_000
+/** 设置页可选的预热超时（秒档 15 / 30 / 60） */
+export const REVIEW_PREPARE_TIMEOUT_CHOICES_MS = [15_000, 30_000, 60_000] as const
+
+function normalizeReviewPrepareTimeoutMs(raw: unknown): number {
+  const n = Number(raw)
+  const choices = REVIEW_PREPARE_TIMEOUT_CHOICES_MS as readonly number[]
+  if (choices.includes(n)) return n
+  if (!Number.isFinite(n) || n <= 0) return REVIEW_PREPARE_DEFAULT_TIMEOUT_MS
+  if (n <= 22_500) return 15_000
+  if (n <= 45_000) return 30_000
+  return 60_000
+}
+
 const REVIEW_PREPARE_DEFAULT_POLL_MS = 120
-/** Extra automatic /review/ai/generate attempts after the first failure (fallback or network). */
-const AI_GENERATE_AUTO_RETRIES = 3
+/** 首次请求失败（fallback 或网络错误）后，额外自动重试次数（总尝试次数 = 1 + 本值）。 */
+const AI_GENERATE_AUTO_RETRIES = 5
 const AI_GENERATE_RETRY_BACKOFF_MS = 400
 
 function mapReviewCardType(category: string): string {
@@ -215,6 +229,12 @@ function waitMs(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms)
   })
+}
+
+/** 与 ReviewCards CardBack 一致：仅当有带 fallback 字段的对象时才视为已生成（避免 null/空对象让预热条结束但背面仍转圈） */
+function reviewCardAiReady(v: CardAIContent | null | undefined): boolean {
+  if (v === null || v === undefined) return false
+  return typeof v === 'object' && 'fallback' in v
 }
 
 export interface ProviderConfig {
@@ -294,6 +314,8 @@ interface AppState {
   reviewPrepareBatchSize: number
   reviewPrepareTimeoutMs: number
   setModelSlot: (slot: 'classify' | 'review' | 'chat', model: string) => Promise<void>
+  /** 一次性写入三个默认模型槽位（设置页「确认保存」） */
+  commitModelSlots: (slots: { classify: string; review: string; chat: string }) => Promise<void>
   setReviewPrepareBatchSize: (batchSize: number) => Promise<void>
   setReviewPrepareTimeoutMs: (timeoutMs: number) => Promise<void>
 
@@ -632,9 +654,7 @@ export const useAppStore = create<AppState>((set, get) => {
         reviewPrepareBatchSize: Number(s['reviewPrepareBatchSize']) > 0
           ? Number(s['reviewPrepareBatchSize'])
           : REVIEW_PREPARE_DEFAULT_BATCH_SIZE,
-        reviewPrepareTimeoutMs: Number(s['reviewPrepareTimeoutMs']) > 0
-          ? Number(s['reviewPrepareTimeoutMs'])
-          : REVIEW_PREPARE_DEFAULT_TIMEOUT_MS,
+        reviewPrepareTimeoutMs: normalizeReviewPrepareTimeoutMs(s['reviewPrepareTimeoutMs']),
       })
       if (s['theme']) {
         document.documentElement.classList.toggle('light', s['theme'] === 'light')
@@ -660,6 +680,27 @@ export const useAppStore = create<AppState>((set, get) => {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings: { [`${slot}Model`]: model } }),
+      })
+    } catch { /* 静默 */ }
+  },
+
+  commitModelSlots: async (slots) => {
+    set({
+      classifyModel: slots.classify,
+      reviewModel: slots.review,
+      chatModel: slots.chat,
+    })
+    try {
+      await fetch(apiUrl('/settings'), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: {
+            classifyModel: slots.classify,
+            reviewModel: slots.review,
+            chatModel: slots.chat,
+          },
+        }),
       })
     } catch { /* 静默 */ }
   },
@@ -1051,7 +1092,7 @@ export const useAppStore = create<AppState>((set, get) => {
     for (const card of targetCards) {
       const latest = get().reviewSession
       if (!latest) break
-      if (latest.aiContent[card.id] !== undefined || latest.aiLoading[card.id]) continue
+      if (reviewCardAiReady(latest.aiContent[card.id]) || latest.aiLoading[card.id]) continue
       void get().fetchAIContent(card.id, mapReviewCardType(card.category))
     }
 
@@ -1061,7 +1102,7 @@ export const useAppStore = create<AppState>((set, get) => {
     while (Date.now() - start < timeoutMs) {
       const latest = get().reviewSession
       if (!latest) break
-      done = targetCards.filter((card) => latest.aiContent[card.id] !== undefined).length
+      done = targetCards.filter((card) => reviewCardAiReady(latest.aiContent[card.id])).length
       set({ reviewPreparingProgress: { done, total } })
       if (done >= total) {
         set({ reviewPreparing: false, reviewPreparingProgress: { done, total } })
@@ -1072,7 +1113,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     const latest = get().reviewSession
     if (latest) {
-      done = targetCards.filter((card) => latest.aiContent[card.id] !== undefined).length
+      done = targetCards.filter((card) => reviewCardAiReady(latest.aiContent[card.id])).length
     }
     set({ reviewPreparing: false, reviewPreparingProgress: { done, total } })
     return { timedOut: done < total, done, total }
@@ -1258,16 +1299,20 @@ export const useAppStore = create<AppState>((set, get) => {
     void get().fetchAIContent(noteId, cardType)
   },
 
+  /** 从当前卡片起，为后续 `reviewPrepareBatchSize` 张（含当前索引）补齐 AI；需与 prepareInitialAIBatch 窗口一致。 */
   ensureAIWindow: (currentIdx) => {
     const session = get().reviewSession
     if (!session) return
-    const { cards, aiContent, aiLoading } = session
+    const batch = Math.max(1, get().reviewPrepareBatchSize)
+    const end = Math.min(currentIdx + batch, session.cards.length)
 
-    for (let i = currentIdx; i < Math.min(currentIdx + 3, cards.length); i++) {
-      const card = cards[i]
+    for (let i = currentIdx; i < end; i++) {
+      const latest = get().reviewSession
+      if (!latest) return
+      const card = latest.cards[i]
       if (!card) continue
-      if (aiContent[card.id] !== undefined) continue
-      if (aiLoading[card.id]) continue
+      if (reviewCardAiReady(latest.aiContent[card.id])) continue
+      if (latest.aiLoading[card.id]) continue
       void get().fetchAIContent(card.id, mapReviewCardType(card.category))
     }
   },

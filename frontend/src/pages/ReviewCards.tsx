@@ -1714,6 +1714,18 @@ export default function ReviewCards() {
     if (!session) navigate('/review')
   }, [session, navigate])
 
+  // 进入复习页后兜底补一次滑动窗口（避免预热完成判定与展示条件不一致时首张背面仍缺 aiContent）
+  useEffect(() => {
+    if (!session?.sessionId || session.cards.length === 0) return
+    const sid = session.sessionId
+    const tid = window.setTimeout(() => {
+      const s = useAppStore.getState().reviewSession
+      if (!s || s.sessionId !== sid) return
+      useAppStore.getState().ensureAIWindow(s.current)
+    }, 0)
+    return () => window.clearTimeout(tid)
+  }, [session?.sessionId, session?.cards.length])
+
   useEffect(() => {
     if (!card?.id) return
     // Fetch on back-side reveal so we can retry on subsequent flips if needed.

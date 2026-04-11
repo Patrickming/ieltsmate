@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react'
 import {
   X, Cpu, Check, ChevronDown, ChevronRight, Eye, EyeOff,
-  Plus, Trash2, Lock, Zap, GitBranch, Sparkles, Brain, Globe,
-  Bot, Server, Star, Camera,
+  Plus, Trash2, Zap, GitBranch, Sparkles, Brain, Globe,
+  Bot, Server, Star, Camera, Hexagon,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
@@ -15,6 +15,15 @@ const PRESET_PROVIDERS = [
   { id: 'anthropic', name: 'Anthropic', icon: Brain, color: '#fb7185', baseUrl: 'https://api.anthropic.com/v1', recommended: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'] },
   { id: 'gemini', name: 'Google Gemini', icon: Sparkles, color: '#fbbf24', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', recommended: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'] },
   { id: 'deepseek', name: 'DeepSeek', icon: Star, color: '#22d3ee', baseUrl: 'https://api.deepseek.com/v1', recommended: ['deepseek-chat', 'deepseek-reasoner'] },
+  // 智谱 AI 开放平台 OpenAI 兼容端点，见 https://docs.bigmodel.cn/cn/api/introduction
+  {
+    id: 'bigmodel',
+    name: 'BigModel (智谱 GLM)',
+    icon: Hexagon,
+    color: '#2563eb',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    recommended: ['glm-5.1', 'glm-4.5-air', 'glm-4-plus', 'glm-4-flash', 'glm-4-air'],
+  },
   { id: 'ollama', name: 'Ollama', icon: Server, color: '#a78bfa', baseUrl: 'http://localhost:11434/v1', recommended: ['llama3.2', 'qwen2.5', 'mistral', 'gemma2'] },
   { id: 'custom', name: '自定义', icon: Globe, color: '#71717a', baseUrl: '', recommended: [] },
 ]

@@ -483,13 +483,32 @@ export class AiService {
     return p
   }
 
+  /**
+   * 按配置里的 modelId 查找已登记模型。支持完整 ID；若未命中且配置为「无 / 的后缀」，
+   * 则匹配以 `/${configuredId}` 结尾的 modelId（兼容旧版设置页只存短名导致误回退默认 GLM 的问题）。
+   */
+  private async findAiModelByConfiguredId(configuredId: string) {
+    const exact = await this.prisma.aiModel.findFirst({
+      where: { modelId: configuredId },
+      include: { provider: true },
+    })
+    if (exact) return exact
+
+    if (!configuredId || configuredId.includes('/')) {
+      return null
+    }
+
+    return this.prisma.aiModel.findFirst({
+      where: { modelId: { endsWith: `/${configuredId}` } },
+      include: { provider: true },
+      orderBy: { provider: { sortOrder: 'asc' } },
+    })
+  }
+
   private async resolveProviderAndModel(dto: ChatDto) {
     if (dto.model) {
-      const m = await this.prisma.aiModel.findFirst({
-        where: { modelId: dto.model },
-        include: { provider: true },
-      })
-      if (m) return { provider: m.provider, model: dto.model }
+      const m = await this.findAiModelByConfiguredId(dto.model)
+      if (m) return { provider: m.provider, model: m.modelId }
     }
 
     const allSettings = await this.settings.getAll()
@@ -497,11 +516,8 @@ export class AiService {
     const defaultModelId = allSettings[slotKey]
 
     if (defaultModelId) {
-      const m = await this.prisma.aiModel.findFirst({
-        where: { modelId: defaultModelId },
-        include: { provider: true },
-      })
-      if (m) return { provider: m.provider, model: defaultModelId }
+      const m = await this.findAiModelByConfiguredId(defaultModelId)
+      if (m) return { provider: m.provider, model: m.modelId }
     }
 
     const first = await this.prisma.aiProvider.findFirst({

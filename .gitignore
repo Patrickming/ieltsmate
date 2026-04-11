@@ -33,6 +33,7 @@ Thumbs.db
 # Editor
 .vscode/settings.json
 .idea/
+.cursor/
 
 # Test coverage
 coverage/
