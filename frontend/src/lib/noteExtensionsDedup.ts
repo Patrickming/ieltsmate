@@ -1,8 +1,28 @@
 import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
 
+const POS_ALIAS_TO_CANONICAL: Record<string, string> = {
+  n: 'noun',
+  'n.': 'noun',
+  noun: 'noun',
+  v: 'verb',
+  'v.': 'verb',
+  verb: 'verb',
+  adj: 'adjective',
+  'adj.': 'adjective',
+  adjective: 'adjective',
+  adv: 'adverb',
+  'adv.': 'adverb',
+  adverb: 'adverb',
+}
+
+export function canonicalizePos(pos: string): string {
+  const normalized = pos.trim().toLowerCase().replace(/\s+/g, '')
+  return POS_ALIAS_TO_CANONICAL[normalized] ?? normalized
+}
+
 /** 与后端 normalize 一致：pos + meaning（归一化） */
 export function posDedupKey(item: PartOfSpeechItem): string {
-  return `${item.pos.trim().toLowerCase()}|${item.meaning.trim().toLowerCase()}`
+  return `${canonicalizePos(item.pos)}|${item.meaning.trim().toLowerCase()}`
 }
 
 function normWordSurface(word: string): string {

@@ -29,6 +29,16 @@ describe('review-ai-content util', () => {
     })
   })
 
+  it('normalizePartOfSpeechList 将词性全称与缩写视为同一别名', () => {
+    const out = normalizePartOfSpeechList([
+      { pos: 'adjective', label: '形容词', meaning: '受欢迎的' },
+      { pos: 'adj.', label: '形', meaning: '受欢迎的' },
+      { pos: 'adverb', label: '副词', meaning: '通俗地' },
+    ])
+    expect(out).toHaveLength(2)
+    expect(out.map((x) => x.pos)).toEqual(['adjective', 'adverb'])
+  })
+
   it('normalizeConfusableGroups 过滤 kind=meaning 且 difference 为空', () => {
     const out = normalizeConfusableGroups([
       {

@@ -234,6 +234,51 @@ describe('ReviewCards 词性派生', () => {
     expect(screen.getByTestId('review-wf-empty-adverb')).toHaveTextContent('无')
   })
 
+  it('AI 已返回完整词性时，不再从 wordFamily.base 额外补一条缩写词性', async () => {
+    useAppStore.setState((s) => ({
+      ...s,
+      reviewSession: s.reviewSession
+        ? {
+            ...s.reviewSession,
+            aiContent: {
+              'n-wf': {
+                fallback: false,
+                phonetic: '/ˈpɒpjələ(r)/',
+                synonyms: [],
+                antonyms: [],
+                example: 'ex',
+                memoryTip: 'tip',
+                partsOfSpeech: [
+                  { pos: 'adjective', label: '形容词', meaning: '受欢迎的；流行的' },
+                ],
+                wordFamily: {
+                  base: {
+                    word: 'popular',
+                    pos: 'adjective',
+                    meaning: '受欢迎的',
+                    phonetic: '/ˈpɒpjələ(r)/',
+                  },
+                  derivedByPos: emptyDerivedByPos(),
+                  rootDerived: [],
+                },
+              },
+            },
+          }
+        : s.reviewSession,
+    }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByText('popular'))
+    await user.click(screen.getByTestId('review-back-tab-word-family'))
+
+    expect(screen.getByTestId('review-pos-save-0')).toBeInTheDocument()
+    expect(screen.queryByTestId('review-pos-save-1')).not.toBeInTheDocument()
+    expect(screen.getByText('adjective')).toBeInTheDocument()
+    expect(screen.queryByText('adj.')).not.toBeInTheDocument()
+  })
+
   it('词根派生区块渲染 rootDerived 项', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(createFetchResponse({ data: { items: [] } }))
     const user = userEvent.setup()

@@ -17,8 +17,28 @@ export type ConfusableGroup =
   | { kind: 'form'; words: ConfusableWord[] }
   | { kind: 'meaning'; words: ConfusableWord[]; difference: string }
 
+const POS_ALIAS_TO_CANONICAL: Record<string, string> = {
+  n: 'noun',
+  'n.': 'noun',
+  noun: 'noun',
+  v: 'verb',
+  'v.': 'verb',
+  verb: 'verb',
+  adj: 'adjective',
+  'adj.': 'adjective',
+  adjective: 'adjective',
+  adv: 'adverb',
+  'adv.': 'adverb',
+  adverb: 'adverb',
+}
+
+function canonicalizePos(pos: string): string {
+  const normalized = pos.trim().toLowerCase().replace(/\s+/g, '')
+  return POS_ALIAS_TO_CANONICAL[normalized] ?? normalized
+}
+
 function normKeyPosMeaning(pos: string, meaning: string): string {
-  return `${pos.trim().toLowerCase()}|${meaning.trim().toLowerCase()}`
+  return `${canonicalizePos(pos)}|${meaning.trim().toLowerCase()}`
 }
 
 /** 词面归一化，用于组去重键中的排序拼接 */

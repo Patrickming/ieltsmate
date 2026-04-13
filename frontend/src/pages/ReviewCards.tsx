@@ -13,6 +13,7 @@ import {
   mergeAssociationListsUnique,
 } from '../lib/associationDedup'
 import {
+  canonicalizePos,
   confusableWordsSurfaceKey,
   confusableDedupKey,
   mergeUniqueConfusables,
@@ -520,7 +521,7 @@ function WordFamilyPanel({
     if (!meaning) return []
     const targetPosAbbr = POS4_TO_POS_ABBR[sourceWf.base.pos]
     const alreadyHasPos = [...allStoredPos, ...allAiPos].some(
-      (p) => p.pos.trim().toLowerCase() === targetPosAbbr.trim().toLowerCase(),
+      (p) => canonicalizePos(p.pos) === canonicalizePos(targetPosAbbr),
     )
     if (alreadyHasPos) return []
     return [{
