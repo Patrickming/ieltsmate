@@ -53,7 +53,11 @@ export default function ReviewSelection() {
   const [subCats, setSubCats] = useState<Set<Category | '全部'>>(new Set(['全部']))
   const [range, setRange] = useState<Range>('all')
   const [order, setOrder] = useState<Order>('random')
-  const [mode, setMode] = useState<Mode>('random')
+  const [mode, setMode] = useState<Mode>(() => {
+    const p = loadContinueProgress()
+    if (!p) return 'random'
+    return p.cardOrder.length - p.completedIds.length > 0 ? 'continue' : 'random'
+  })
   const [starting, setStarting] = useState(false)
   const [prepareHint, setPrepareHint] = useState<string | null>(null)
 
