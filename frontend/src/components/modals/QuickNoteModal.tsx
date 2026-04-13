@@ -62,6 +62,7 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
   const [aiCategory, setAiCategory] = useState<Category>('短语')
   const [aiDetecting, setAiDetecting] = useState(false)
   const classifyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const modalRef = useRef<HTMLDivElement>(null)
 
@@ -91,6 +92,12 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
     window.addEventListener('keydown', handleTabKey)
     return () => window.removeEventListener('keydown', handleTabKey)
   }, [handleTabKey])
+
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    }
+  }, [])
 
   // Trigger AI classification when text changes (only in AI mode)
   useEffect(() => {
@@ -131,10 +138,12 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
         : '后端不可用，已本地保存（联调兜底）'
     )
     setSaved(true)
-    setTimeout(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = setTimeout(() => {
       onClose()
       setSaved(false)
       setSaveHint('')
+      closeTimerRef.current = null
     }, 800)
   }
 

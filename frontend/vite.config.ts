@@ -10,6 +10,32 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/scheduler/') ||
+            id.includes('/zustand/') ||
+            id.includes('react-router-dom') ||
+            id.includes('/react-router/') ||
+            id.includes('@remix-run/router')
+          ) {
+            return 'vendor-core'
+          }
+          if (id.includes('react-markdown') || id.includes('remark-gfm') || id.includes('/remark-')) {
+            return 'vendor-markdown'
+          }
+          if (id.includes('framer-motion')) {
+            return 'vendor-motion'
+          }
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/notes': {

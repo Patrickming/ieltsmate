@@ -1,15 +1,17 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import Dashboard from './pages/Dashboard'
-import KnowledgeBase from './pages/KnowledgeBase'
-import KnowledgeDetail from './pages/KnowledgeDetail'
-import WritingNoteDetail from './pages/WritingNoteDetail'
-import ReviewSelection from './pages/ReviewSelection'
-import ReviewCards from './pages/ReviewCards'
-import ReviewSummary from './pages/ReviewSummary'
-import Settings from './pages/Settings'
+import { LoadingState } from './components/ui/LoadingState'
 import { useAppStore } from './store/useAppStore'
+
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'))
+const KnowledgeDetail = lazy(() => import('./pages/KnowledgeDetail'))
+const WritingNoteDetail = lazy(() => import('./pages/WritingNoteDetail'))
+const ReviewSelection = lazy(() => import('./pages/ReviewSelection'))
+const ReviewCards = lazy(() => import('./pages/ReviewCards'))
+const ReviewSummary = lazy(() => import('./pages/ReviewSummary'))
+const Settings = lazy(() => import('./pages/Settings'))
 
 const QuickNoteModal = lazy(() =>
   import('./components/modals/QuickNoteModal').then((m) => ({ default: m.QuickNoteModal }))
@@ -97,7 +99,9 @@ function AppInner() {
   return (
     <>
       <GlobalShortcuts />
-      <AnimatedRoutes />
+      <Suspense fallback={<LoadingState />}>
+        <AnimatedRoutes />
+      </Suspense>
       <Suspense fallback={null}>
         {showQuickNote && <QuickNoteModal />}
         {showSearch && <SearchModal />}
