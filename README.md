@@ -23,7 +23,7 @@
 
 ## 特性
 
-- **知识库管理** — 按分类（单词 / 短语 / 句子 / 同义替换 / 口语 / 拼写）组织笔记，支持批量操作、收藏与搜索
+- **知识库管理** — 按分类（单词 / 短语 / 句子 / 同义替换 / 口语 / 拼写 / 写作）组织笔记，支持搜索、批量删除、收藏与批量导入
 - **间隔复习** — 可按范围（全部 / 错题 / 排除已掌握）和模式（随机 / 续接上次）启动复习，自动记录正确率与进度
 - **AI 智能扩展** — 为每张复习卡片自动生成：
   - **词性穷举** — 强制 AI 列出单词所有真实词性及义项，避免遗漏
@@ -32,10 +32,12 @@
   - **易混淆词** — 形近易混（如 strip vs stripe）和义近易混两类，排除词根关系的干扰
   - **同/反义词** — 带具体释义的结构化关联词对
   - **重新生成** — 一键重新生成当前卡片的全部 AI 内容
-  - 支持自定义 AI 供应商与模型
+  - 支持多供应商 OpenAI 兼容 API（SiliconFlow / OpenRouter / OpenAI / Anthropic / Google Gemini / DeepSeek / BigModel / Ollama / 自定义）
+- **AI 学习助手** — `Ctrl+/` 唤起 AI 面板，支持通过工具调用搜索笔记、查看统计、分析薄弱项、获取最近笔记与收藏
 - **写作笔记** — Markdown 写作笔记管理，支持大/小作文分类
 - **学习追踪** — 每日 Todo、活动热力图、学习统计仪表盘
 - **数据导入/导出** — 批量导入笔记预览 & 确认，一键导出全量数据
+- **交互体验** — 全局快捷键（`Cmd/Ctrl+K` 搜索、`Ctrl+/` AI 面板、`Esc` 关闭弹窗），页面懒加载与构建 chunk 优化
 
 ## 技术架构
 
@@ -116,17 +118,25 @@ pnpm dev
 ieltsmate/
 ├── frontend/                 # React 前端
 │   ├── src/
-│   │   ├── components/       # 通用组件 & 弹窗
-│   │   ├── pages/            # 页面组件（ReviewCards, KnowledgeDetail 等）
+│   │   ├── components/       # 通用组件
+│   │   │   ├── layout/       # 布局组件（Sidebar, Header 等）
+│   │   │   ├── modals/       # 弹窗组件（Search, AI Panel, Import 等）
+│   │   │   ├── review/       # 复习相关组件
+│   │   │   └── ui/           # 基础 UI 组件
+│   │   ├── pages/            # 页面组件（Dashboard, ReviewCards, KnowledgeDetail 等）
 │   │   ├── store/            # Zustand 状态管理
-│   │   ├── lib/              # 工具函数（wordFamilyDedup 等）
-│   │   └── types/            # TypeScript 类型定义（WordFamily 等）
+│   │   ├── lib/              # 工具函数与业务逻辑
+│   │   ├── utils/            # 通用辅助函数
+│   │   ├── styles/           # 样式相关
+│   │   ├── data/             # 静态数据与常量
+│   │   ├── types/            # TypeScript 类型定义
+│   │   └── test/             # 测试配置
 │   └── vite.config.ts
 ├── backend/                  # NestJS 后端
 │   ├── src/
-│   │   ├── notes/            # 笔记 CRUD & 类型定义（word-family.ts 等）
+│   │   ├── notes/            # 笔记 CRUD & 类型定义
 │   │   ├── review/           # 复习系统 & AI Prompt 引擎
-│   │   ├── ai/               # AI 供应商管理
+│   │   ├── ai/               # AI 供应商与模型管理
 │   │   ├── favorites/        # 收藏
 │   │   ├── todos/            # 待办事项
 │   │   ├── dashboard/        # 仪表盘统计
@@ -138,7 +148,7 @@ ieltsmate/
 │   └── prisma/
 │       ├── schema.prisma     # 数据模型
 │       └── migrations/       # 迁移文件
-├── docs/                     # 设计文档 & 方案文档
+├── docs/                     # 设计文档 & 截图
 └── start.sh                  # 一键启动脚本
 ```
 
@@ -172,6 +182,7 @@ ieltsmate/
 |------|------|------|
 | `DATABASE_URL` | PostgreSQL 连接字符串 | `postgresql://postgres:postgres@localhost:5432/ieltsmate?schema=public` |
 | `PORT` | 服务端口（可选，默认 3000） | `3000` |
+| `NOTES_ROOT` | 写作笔记 Markdown 文件根目录（可选） | `/path/to/notes` |
 
 ### 前端（可选）
 
@@ -198,7 +209,7 @@ chmod +x start.sh
 - **词性派生 vs 词根派生** — 词形变化的形态学派生（如加后缀）和同词根但意思分化的词源学派生分别归类
 - **易混淆词** — 形近混淆（拼写相似）和义近混淆（含义接近）两个维度，排除词根关系的噪声
 - **自动重试** — 生成失败时自动多次重试，失败后提示用户可手动重新生成
-- **自定义模型** — 在设置页面中配置 AI 供应商（OpenAI / Claude 等）和具体模型
+- **自定义模型** — 在设置页面中配置 AI 供应商与模型，支持按用途分配不同模型（分类 / 复习卡片生成 / AI 助手聊天）
 
 ## 开源许可
 
