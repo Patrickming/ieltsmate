@@ -270,6 +270,101 @@ describe('review-ai-content util', () => {
     expect(parsed.exampleTranslation).toBe('译文')
   })
 
+  it('parseAIResponse 会过滤不围绕目标词且拼写不够接近的 confusables', () => {
+    const service = new ReviewAiService({} as never, {} as never)
+    const content = JSON.stringify({
+      fallback: false,
+      phonetic: '/lɔːn/',
+      synonyms: [
+        { word: 'grass', meaning: '草坪' },
+        { word: 'meadow', meaning: '草地，牧场' },
+      ],
+      antonyms: [{ word: 'concrete', meaning: '混凝土地面' }],
+      example: 'The lawn looks neat.',
+      memoryTip: 'tip',
+      confusables: [
+        {
+          kind: 'form',
+          words: [
+            { word: 'lorn', meaning: '孤独的' },
+            { word: 'laugh', meaning: '笑' },
+          ],
+        },
+        {
+          kind: 'form',
+          words: [
+            { word: 'lawn', meaning: '草坪' },
+            { word: 'laugh', meaning: '笑' },
+          ],
+        },
+        {
+          kind: 'form',
+          words: [
+            { word: 'lawn', meaning: '草坪' },
+            { word: 'dawn', meaning: '黎明' },
+          ],
+        },
+        {
+          kind: 'meaning',
+          difference: '都是自然环境相关词',
+          words: [
+            { word: 'wild', meaning: '野生的' },
+            { word: 'grass', meaning: '草' },
+          ],
+        },
+        {
+          kind: 'meaning',
+          difference: 'lawn 是人工维护的草坪，meadow 是自然生长的草地',
+          words: [
+            { word: 'lawn', meaning: '草坪' },
+            { word: 'meadow', meaning: '草地，牧场' },
+          ],
+        },
+        {
+          kind: 'meaning',
+          difference: 'lawn 强调修剪整齐的草坪，grassland 更强调大片天然草地',
+          words: [
+            { word: 'lawn', meaning: '草坪' },
+            { word: 'grassland', meaning: '草原' },
+          ],
+        },
+      ],
+    })
+
+    const parsed = (service as unknown as { parseAIResponse: (...args: unknown[]) => unknown }).parseAIResponse(
+      content,
+      'word-speech',
+      {
+        content: 'lawn',
+        translation: '草地',
+        phonetic: null,
+        synonyms: [],
+        antonyms: [],
+        example: null,
+        memoryTip: null,
+      },
+    ) as { fallback: boolean; confusables?: Array<{ kind: string; words: Array<{ word: string }> }> }
+
+    expect(parsed.fallback).toBe(false)
+    expect(parsed.confusables).toEqual([
+      {
+        kind: 'form',
+        words: [
+          { word: 'lawn', meaning: '草坪' },
+          { word: 'dawn', meaning: '黎明' },
+        ],
+      },
+      {
+        kind: 'meaning',
+        words: [
+          { word: 'lawn', meaning: '草坪' },
+          { word: 'grassland', meaning: '草原' },
+        ],
+        difference: 'lawn 强调修剪整齐的草坪，grassland 更强调大片天然草地',
+      },
+    ])
+  })
+
   const stubNote = {
     content: 'test',
     translation: '测试',
@@ -296,6 +391,8 @@ describe('review-ai-content util', () => {
     expect(prompt).toContain('partsOfSpeech 必填')
     expect(prompt).toContain('不要放共享词根的派生词')
     expect(prompt).toContain('derivedByPos 只放词形变化派生')
+    expect(prompt).toContain('每个 confusables 分组必须包含目标词本身')
+    expect(prompt).toContain('若找不到可靠的 form 类，直接省略 form 组')
     expect(prompt).toContain('只返回 JSON')
   })
 
@@ -338,6 +435,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toContain('中文含义”来自用户笔记，可能不准确或词性有误')
     expect(prompt).toContain('rootDerived')
     expect(prompt).toContain('不要放共享词根的派生词')
+    expect(prompt).toContain('每个 confusables 分组必须包含目标词本身')
     expect(prompt).toContain('只返回 JSON')
   })
 })
