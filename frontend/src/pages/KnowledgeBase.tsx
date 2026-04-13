@@ -419,7 +419,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
         {/* Content */}
         {showWriting && (
           <div className="flex flex-col gap-3">
-            {groupFilter !== '杂笔记' && (
+            {groupFilter === '全部' && (
               <h3 className="text-sm font-semibold text-text-muted">写作文件</h3>
             )}
             {writingNotesLoading && (

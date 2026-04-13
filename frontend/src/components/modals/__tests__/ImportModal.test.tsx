@@ -7,9 +7,9 @@ import {
 describe('ImportModal category helpers', () => {
   it('keeps built-in categories and merges parsed custom categories', () => {
     const options = deriveImportCategoryOptions([
-      { content: 'a', translation: '甲', category: '未分类' },
-      { content: 'b', translation: '乙', category: '月份' },
-      { content: 'c', translation: '丙', category: '口语' },
+      { category: '未分类' },
+      { category: '月份' },
+      { category: '口语' },
     ])
 
     expect(options[0]).toBe('未分类')

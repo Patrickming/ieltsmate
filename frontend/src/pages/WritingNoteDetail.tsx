@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, isValidElement } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, FileText, Calendar, RefreshCw, List } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -51,8 +51,8 @@ function parseToc(markdown: string): TocItem[] {
 function extractText(children: React.ReactNode): string {
   if (typeof children === 'string') return children
   if (Array.isArray(children)) return children.map(extractText).join('')
-  if (children !== null && typeof children === 'object' && 'props' in (children as object)) {
-    return extractText((children as React.ReactElement).props.children as React.ReactNode)
+  if (isValidElement<{ children?: React.ReactNode }>(children)) {
+    return extractText(children.props.children)
   }
   return String(children ?? '')
 }

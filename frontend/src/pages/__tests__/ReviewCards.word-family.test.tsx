@@ -7,6 +7,13 @@ import { useAppStore } from '@/store/useAppStore'
 import { emptyDerivedByPos } from '@/lib/wordFamilyDedup'
 import type { WordFamily } from '@/types/wordFamily'
 
+type TestCardAIContent = {
+  fallback: boolean
+  [key: string]: unknown
+}
+
+type UpdateNoteFn = ReturnType<typeof useAppStore.getState>['updateNote']
+
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
@@ -26,7 +33,10 @@ function createFetchResponse(payload: unknown) {
   })
 }
 
-function seedWordFamilyReview(updateNoteMock: ReturnType<typeof vi.fn>, opts?: { category?: '单词' | '拼写' | '口语' }) {
+function seedWordFamilyReview(
+  updateNoteMock: ReturnType<typeof vi.fn>,
+  opts?: { category?: '单词' | '拼写' | '口语' },
+) {
   const category = opts?.category ?? '单词'
   const content = category === '拼写' ? 'popular' : 'popular'
   const translation = '受欢迎的'
@@ -41,7 +51,7 @@ function seedWordFamilyReview(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
       { word: 'populace', pos: 'noun', meaning: '民众，平民', phonetic: '/popjelas/' },
     ],
   }
-  const defaultAI =
+  const defaultAI: TestCardAIContent =
     category === '拼写'
       ? {
           fallback: false,
@@ -108,13 +118,13 @@ function seedWordFamilyReview(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
     abortReviewSession: vi.fn().mockResolvedValue(undefined),
     incrementSavedExtensions: vi.fn(),
     retryAIContent: vi.fn(),
-    updateNote: updateNoteMock,
+    updateNote: updateNoteMock as UpdateNoteFn,
     markNoteMastered: vi.fn().mockResolvedValue(true),
   })
 }
 
 describe('ReviewCards 词性派生', () => {
-  const updateNoteMock = vi.fn().mockResolvedValue(true)
+  const updateNoteMock = vi.fn<UpdateNoteFn>().mockResolvedValue(true)
 
   beforeEach(() => {
     routerMocks.navigate.mockReset()
@@ -328,12 +338,13 @@ describe('ReviewCards 词性派生', () => {
     })
     const call = updateNoteMock.mock.calls.find((c) => c[0] === 'n-wf' && c[1]?.wordFamily)
     expect(call).toBeDefined()
-    expect(call?.[1].wordFamily.derivedByPos.noun).toEqual(
+    const patch = call?.[1]
+    expect(patch?.wordFamily?.derivedByPos.noun).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ word: 'popularity' }),
       ]),
     )
-    expect(call?.[1].wordFamily.derivedByPos.verb ?? []).toHaveLength(0)
+    expect(patch?.wordFamily?.derivedByPos.verb ?? []).toHaveLength(0)
   })
 
   it('与当前词同词面的项不显示在派生列表', async () => {

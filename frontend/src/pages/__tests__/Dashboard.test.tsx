@@ -39,7 +39,11 @@ describe('Dashboard', () => {
     const yesterday = getCSTDateString(-1)
 
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = typeof input === 'string' ? input : input.url
+      const url = typeof input === 'string'
+        ? input
+        : input instanceof Request
+          ? input.url
+          : input.toString()
 
       if (url.startsWith('/todos?date=')) {
         const date = new URL(url, 'http://localhost').searchParams.get('date')

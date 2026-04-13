@@ -5,6 +5,13 @@ import { renderWithRouter } from '@/test/render'
 import ReviewCards from '@/pages/ReviewCards'
 import { useAppStore } from '@/store/useAppStore'
 
+type TestCardAIContent = {
+  fallback: boolean
+  [key: string]: unknown
+}
+
+type UpdateNoteFn = ReturnType<typeof useAppStore.getState>['updateNote']
+
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
@@ -29,12 +36,12 @@ type CardCategory = '单词' | '短语' | '拼写'
 function seedReviewState(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
   category?: CardCategory
   content?: string
-  aiContent?: Record<string, unknown>
+  aiContent?: TestCardAIContent
 }) {
   const category = opts?.category ?? '单词'
   const content = opts?.content ?? (category === '短语' ? 'take off' : category === '拼写' ? 'accommodate' : 'hostel')
   const translation = category === '短语' ? '起飞；脱下' : category === '拼写' ? '容纳' : '旅舍'
-  const defaultAI: Record<string, unknown> = category === '拼写'
+  const defaultAI: TestCardAIContent = category === '拼写'
     ? {
       fallback: false,
       phonetic: '/əˈkɒmədeɪt/',
@@ -128,13 +135,13 @@ function seedReviewState(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
     abortReviewSession: vi.fn().mockResolvedValue(undefined),
     incrementSavedExtensions: vi.fn(),
     retryAIContent: vi.fn(),
-    updateNote: updateNoteMock,
+    updateNote: updateNoteMock as UpdateNoteFn,
     markNoteMastered: vi.fn().mockResolvedValue(true),
   })
 }
 
 describe('ReviewCards 词性与易混扩展', () => {
-  const updateNoteMock = vi.fn().mockResolvedValue(true)
+  const updateNoteMock = vi.fn<UpdateNoteFn>().mockResolvedValue(true)
 
   beforeEach(() => {
     routerMocks.navigate.mockReset()

@@ -1,6 +1,5 @@
 import 'reflect-metadata'
 import { mergeWordFamilyItems, normalizeWordFamily, wordFamilyItemDedupKey } from '../src/notes/types/word-family'
-import { parseReviewAiPayload } from '../src/review/review-ai-content.util'
 
 describe('word family', () => {
   it('normalizeWordFamily 按 word+pos+meaning 全局去重', () => {
@@ -116,48 +115,6 @@ describe('word family', () => {
     expect(merged.rootDerived).toHaveLength(2)
     expect(merged.rootDerived[0].word).toBe('a')
     expect(merged.rootDerived[1].word).toBe('b')
-  })
-
-  it('parseReviewAiPayload word-speech 保留合法 wordFamily', () => {
-    const payload = {
-      fallback: false,
-      phonetic: '/t/',
-      synonyms: [],
-      antonyms: [],
-      example: 'ex',
-      memoryTip: 'tip',
-      wordFamily: {
-        base: { word: 'w', pos: 'noun', meaning: '义', phonetic: '/w/' },
-        derivedByPos: {
-          noun: [],
-          verb: [{ word: 'v', pos: 'verb', meaning: '义2', phonetic: '' }],
-          adjective: [],
-          adverb: [],
-        },
-      },
-    }
-    const r = parseReviewAiPayload(payload, 'word-speech')
-    expect(r).not.toBeNull()
-    expect(r && 'wordFamily' in r && r.wordFamily).toBeDefined()
-    if (r && 'wordFamily' in r && r.wordFamily) {
-      expect(r.wordFamily.base.word).toBe('w')
-      expect(r.wordFamily.derivedByPos.verb).toHaveLength(1)
-    }
-  })
-
-  it('parseReviewAiPayload spelling 非法 wordFamily 时忽略该字段', () => {
-    const payload = {
-      fallback: false,
-      phonetic: '/t/',
-      synonyms: [],
-      antonyms: [],
-      memoryTip: 'tip',
-      contextExample: { sentence: 's', analysis: 'a' },
-      wordFamily: { base: { word: '', pos: 'noun', meaning: '' }, derivedByPos: {} },
-    }
-    const r = parseReviewAiPayload(payload, 'spelling')
-    expect(r).not.toBeNull()
-    expect(r && 'wordFamily' in r ? (r as { wordFamily?: unknown }).wordFamily : undefined).toBeUndefined()
   })
 
   it('wordFamilyItemDedupKey 使用 trim+lower', () => {

@@ -5,6 +5,7 @@ import {
   AlertCircle, CheckCheck, XCircle, ChevronRight, GraduationCap, ArrowDownUp,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { Variants } from 'framer-motion'
 import { Layout } from '../components/layout/Layout'
 import { ReviewPreparingOverlay } from '../components/review/ReviewPreparingOverlay'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
@@ -16,12 +17,12 @@ type Range = 'all' | 'wrong' | 'exclude_mastered'
 type Order = 'random' | 'sequential'
 type Mode = 'random' | 'continue'
 
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 16 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: 'easeOut' } },
+  show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0.16, 1, 0.3, 1] } },
 }
 
-const stagger = {
+const stagger: Variants = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08 } },
 }
