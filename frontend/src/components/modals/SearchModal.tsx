@@ -98,7 +98,7 @@ function SearchModalPanel() {
               i === highlighted ? 'bg-[#1e1e2e]' : 'hover:bg-[#27272a]/50'
             }`}
           >
-            <Badge category={note.category} />
+            <Badge category={note.category} showEmoji />
             <div className="flex-1 text-left min-w-0">
               <div className="text-[14px] font-medium text-text-primary truncate">{note.content}</div>
               <div className="text-xs text-text-dim truncate">{note.translation}</div>

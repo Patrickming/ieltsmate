@@ -135,6 +135,26 @@ describe('review-ai-content util', () => {
     }
   })
 
+  it('parseReviewAiPayload word-speech 同义/反义超过 6 项时会截断到 6 项', () => {
+    const payload = {
+      fallback: false,
+      phonetic: '/tɛst/',
+      synonyms: Array.from({ length: 8 }, (_, i) => ({ word: `s${i + 1}`, meaning: `同${i + 1}` })),
+      antonyms: Array.from({ length: 7 }, (_, i) => ({ word: `a${i + 1}`, meaning: `反${i + 1}` })),
+      example: 'ex',
+      memoryTip: 'tip',
+    }
+    const r = parseReviewAiPayload(payload, 'word-speech')
+    expect(r).not.toBeNull()
+    if (r && 'synonyms' in r && 'antonyms' in r) {
+      expect(r.synonyms).toHaveLength(6)
+      expect(r.antonyms).toHaveLength(6)
+      expect(r.synonyms[0]).toEqual({ word: 's1', meaning: '同1' })
+      expect(r.synonyms[5]).toEqual({ word: 's6', meaning: '同6' })
+      expect(r.antonyms[5]).toEqual({ word: 'a6', meaning: '反6' })
+    }
+  })
+
   it('parseReviewAiPayload word-speech 提取并归一化扩展字段', () => {
     const payload = {
       fallback: false,
@@ -241,6 +261,23 @@ describe('review-ai-content util', () => {
       contextExample: { sentence: 'S.', analysis: 'A.' },
     }
     expect(parseReviewAiPayload(payload, 'spelling')).toBeNull()
+  })
+
+  it('parseReviewAiPayload synonym 的关联组超过 6 项时会截断到 6 项', () => {
+    const payload = {
+      fallback: false,
+      wordMeanings: [{ word: 'a', phonetic: '/a/', meaning: '词义' }],
+      antonymGroup: Array.from({ length: 9 }, (_, i) => ({ word: `ant${i + 1}`, meaning: `反${i + 1}` })),
+      moreSynonyms: Array.from({ length: 8 }, (_, i) => ({ word: `syn${i + 1}`, meaning: `同${i + 1}` })),
+    }
+    const r = parseReviewAiPayload(payload, 'synonym')
+    expect(r).not.toBeNull()
+    if (r && 'antonymGroup' in r && 'moreSynonyms' in r) {
+      expect(r.antonymGroup).toHaveLength(6)
+      expect(r.moreSynonyms).toHaveLength(6)
+      expect(r.antonymGroup[5]).toEqual({ word: 'ant6', meaning: '反6' })
+      expect(r.moreSynonyms[5]).toEqual({ word: 'syn6', meaning: '同6' })
+    }
   })
 
   it('parseAIResponse 能从混杂文本中提取首个平衡 JSON 对象', () => {
@@ -394,6 +431,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toContain('derivedByPos 只放词形变化派生')
     expect(prompt).toContain('每个 confusables 分组必须包含目标词本身')
     expect(prompt).toContain('若找不到可靠的 form 类，直接省略 form 组')
+    expect(prompt).toContain('每个数组最多返回 6 项')
     expect(prompt).toContain('只返回 JSON')
   })
 
@@ -408,6 +446,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toContain('antonymGroup 与 moreSynonyms 须为对象数组')
     expect(prompt).toContain('word 与 meaning 必须非空')
     expect(prompt).toContain('meaning 必须给出具体中文释义')
+    expect(prompt).toContain('每个数组最多返回 6 项')
     expect(prompt).not.toContain(stubNote.translation)
     expect(prompt).toContain('只返回 JSON')
   })
@@ -421,6 +460,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toMatch(/\{\s*"word"\s*:.*"meaning"\s*:/s)
     expect(prompt).toContain('word 与 meaning 必须非空')
     expect(prompt).toContain('meaning 必须给出具体中文释义')
+    expect(prompt).toContain('每个数组最多返回 6 项')
     expect(prompt).toContain('本提示不包含用户笔记中的中文释义')
     expect(prompt).not.toContain(stubNote.translation)
     expect(prompt).toContain('只返回 JSON')
@@ -435,6 +475,7 @@ describe('review-ai-content util', () => {
     expect(prompt).toMatch(/\{\s*"word"\s*:.*"meaning"\s*:/s)
     expect(prompt).toContain('word 与 meaning 必须非空')
     expect(prompt).toContain('meaning 必须给出具体中文释义')
+    expect(prompt).toContain('每个数组最多返回 6 项')
     expect(prompt).toContain('本提示不包含用户笔记中的中文释义')
     expect(prompt).not.toContain(stubNote.translation)
     expect(prompt).toContain('rootDerived')

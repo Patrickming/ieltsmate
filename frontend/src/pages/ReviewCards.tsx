@@ -32,6 +32,24 @@ import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
 import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
 import type { Pos4, WordFamily, WordFamilyItem } from '../types/wordFamily'
+
+type SaveNoticeTone = 'success' | 'warning' | 'error'
+type SaveNoticeState = { text: string; tone: SaveNoticeTone }
+
+const SAVE_NOTICE_STYLE: Record<SaveNoticeTone, { bg: string; border: string; text: string }> = {
+  success: { bg: '#0f2418', border: '#34d39999', text: '#bbf7d0' },
+  warning: { bg: '#2a1f0a', border: '#fbbf2499', text: '#fde68a' },
+  error: { bg: '#2e1418', border: '#fb718599', text: '#fecdd3' },
+}
+
+function inferSaveNoticeTone(text: string): SaveNoticeTone {
+  if (text.includes('失败') || text.includes('重试')) return 'error'
+  if (text.includes('已存在') || text.includes('暂无') || text.includes('跳过重复') || text.includes('不属于')) {
+    return 'warning'
+  }
+  return 'success'
+}
+
 function getCardType(category: Category): 'word-speech' | 'phrase' | 'synonym' | 'sentence' | 'spelling' {
   if (category === '口语' || category === '单词') return 'word-speech'
   if (category === '短语') return 'phrase'
@@ -105,7 +123,7 @@ function CardFront({ note, cardType, answer, onAnswerChange, onReveal }: {
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 shrink-0">
-          <Badge category={note.category} size="md" />
+          <Badge category={note.category} size="md" showEmoji />
           <div className="flex items-center gap-1.5" style={{ color: barColor + 'aa' }}>
             <Keyboard size={12} />
             <span className="text-[11px] font-medium tracking-wide">拼写挑战</span>
@@ -209,7 +227,7 @@ function CardFront({ note, cardType, answer, onAnswerChange, onReveal }: {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-5 px-8">
-      <Badge category={note.category} size="md" />
+      <Badge category={note.category} size="md" showEmoji />
       <h2 className="text-[2.8rem] font-bold text-text-primary text-center leading-tight">
         {note.content}
       </h2>
@@ -617,6 +635,9 @@ function WordFamilyPanel({
         </div>
       ) : null}
 
+      <div className="h-px bg-border my-4" />
+      <div className="text-base font-bold text-text-secondary mb-2">词义派生</div>
+
       {posKeys.map((pk) => (
         <div key={pk}>
           <div className="text-sm font-semibold text-text-muted mb-2">{POS4_LABEL[pk]}</div>
@@ -675,7 +696,7 @@ function WordFamilyPanel({
 
       <div className="h-px bg-border my-4" />
 
-      <div className="text-sm font-semibold text-text-muted mb-2">词根派生</div>
+      <div className="text-base font-bold text-text-secondary mb-2">词根派生</div>
       {mergedRoot.filter((item) => item.word.trim().toLowerCase() !== currentWordSurface).length === 0 ? (
         <p className="text-sm text-text-dim" data-testid="review-root-derived-empty">无</p>
       ) : (
@@ -800,7 +821,7 @@ function CardBackWordPhrase({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
-        <Badge category={note.category} size="md" />
+        <Badge category={note.category} size="md" showEmoji />
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-dim">已翻转</span>
           <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
@@ -937,7 +958,7 @@ function CardBackSynonym({
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
-        <Badge category={note.category} size="md" />
+        <Badge category={note.category} size="md" showEmoji />
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-dim">已翻转</span>
           <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
@@ -1036,7 +1057,7 @@ function CardBackSentence({
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
-        <Badge category={note.category} size="md" />
+        <Badge category={note.category} size="md" showEmoji />
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-dim">已翻转</span>
           <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
@@ -1125,7 +1146,7 @@ function CardBackSpelling({ note, ai, savedSyn, savedAnt, onSaveSyn, onSaveAnt, 
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
-        <Badge category={note.category} size="md" />
+        <Badge category={note.category} size="md" showEmoji />
         <div className="flex items-center gap-2">
           <span className="text-sm text-text-dim">已翻转</span>
           <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
@@ -1297,7 +1318,7 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying,
   return (
     <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between">
-        <Badge category={note.category} size="md" />
+        <Badge category={note.category} size="md" showEmoji />
         <span className="text-sm text-text-dim">已翻转</span>
       </div>
       <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40">
@@ -1698,7 +1719,10 @@ export default function ReviewCards() {
   const [savedPosKeys, setSavedPosKeys] = useState<string[]>([])
   const [savedConfKeys, setSavedConfKeys] = useState<string[]>([])
   const [savedWordFamilyKeys, setSavedWordFamilyKeys] = useState<string[]>([])
-  const [saveNotice, setSaveNotice] = useState<string | null>(null)
+  const [saveNotice, setSaveNotice] = useState<SaveNoticeState | null>(null)
+  const showSaveNotice = (text: string, tone?: SaveNoticeTone) => {
+    setSaveNotice({ text, tone: tone ?? inferSaveNoticeTone(text) })
+  }
 
   const session = reviewSession
   const card = session?.cards[session.current]
@@ -1775,10 +1799,10 @@ export default function ReviewCards() {
   }, [card?.id])
 
   useEffect(() => {
-    if (!saveNotice) return
+    if (!saveNotice?.text) return
     const timer = window.setTimeout(() => setSaveNotice(null), 2200)
     return () => window.clearTimeout(timer)
-  }, [saveNotice])
+  }, [saveNotice?.text])
 
   // Spacebar flip
   useEffect(() => {
@@ -1886,7 +1910,7 @@ export default function ReviewCards() {
     if (savedPosKeys.includes(k)) return
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
     if (latest?.partsOfSpeech?.some((p) => posDedupKey(p) === k)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const base = latest?.partsOfSpeech ?? card.partsOfSpeech ?? []
@@ -1897,7 +1921,7 @@ export default function ReviewCards() {
       incrementSavedExtensions()
     } else {
       setSavedPosKeys((p) => p.filter((x) => x !== k))
-      setSaveNotice('保存失败，可重试')
+      showSaveNotice('保存失败，可重试')
     }
   }
 
@@ -1906,7 +1930,7 @@ export default function ReviewCards() {
     if (savedConfKeys.includes(k)) return
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
     if (latest?.confusables?.some((g) => confusableDedupKey(g) === k)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const base = latest?.confusables ?? card.confusables ?? []
@@ -1917,28 +1941,28 @@ export default function ReviewCards() {
       incrementSavedExtensions()
     } else {
       setSavedConfKeys((p) => p.filter((x) => x !== k))
-      setSaveNotice('保存失败，可重试')
+      showSaveNotice('保存失败，可重试')
     }
   }
 
   const performSaveWordFamilyItem = async (item: WordFamilyItem) => {
     if (item.word.trim().toLowerCase() === card.content.trim().toLowerCase()) {
-      setSaveNotice('当前词本身词性不属于派生词')
+      showSaveNotice('当前词本身词性不属于派生词')
       return
     }
     const k = wordFamilyItemDedupKey(item)
     if (savedWordFamilyKeys.includes(k)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
     if (latest?.wordFamily && flattenWordFamilyItems(latest.wordFamily).some((x) => wordFamilyItemDedupKey(x) === k)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const ai = aiContent as WordSpeechAI | SpellingAI | undefined
     if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
-      setSaveNotice('暂无词性派生数据')
+      showSaveNotice('暂无词性派生数据')
       return
     }
     const baseWf = ensureWordFamilyForSave(card, ai, latest)
@@ -1953,18 +1977,18 @@ export default function ReviewCards() {
       incrementSavedExtensions()
     } else {
       setSavedWordFamilyKeys((p) => p.filter((x) => x !== k))
-      setSaveNotice('保存失败，可重试')
+      showSaveNotice('保存失败，可重试')
     }
   }
 
   const performSaveWordFamilyAll = async () => {
     if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
-      setSaveNotice('暂无词性派生数据')
+      showSaveNotice('暂无词性派生数据')
       return
     }
     const ai = aiContent as WordSpeechAI | SpellingAI
     if (!ai.wordFamily) {
-      setSaveNotice('暂无词性派生数据')
+      showSaveNotice('暂无词性派生数据')
       return
     }
     const currentWordSurface = card.content.trim().toLowerCase()
@@ -1991,7 +2015,7 @@ export default function ReviewCards() {
       existingKeys.add(key)
     }
     if (pending.length === 0) {
-      setSaveNotice(`新增 0 条，跳过重复 ${dup} 条，失败 0 条`)
+      showSaveNotice(`新增 0 条，跳过重复 ${dup} 条，失败 0 条`, dup > 0 ? 'warning' : 'success')
       return
     }
     const baseWf = ensureWordFamilyForSave(card, ai, latest)
@@ -2000,25 +2024,25 @@ export default function ReviewCards() {
     if (ok) {
       setSavedWordFamilyKeys((p) => [...p, ...pending.map(wordFamilyItemDedupKey)])
       incrementSavedExtensions()
-      setSaveNotice(`新增 ${pending.length} 条，跳过重复 ${dup} 条，失败 0 条`)
+      showSaveNotice(`新增 ${pending.length} 条，跳过重复 ${dup} 条，失败 0 条`, 'success')
     } else {
-      setSaveNotice(`新增 0 条，跳过重复 ${dup} 条，失败 ${pending.length} 条`)
+      showSaveNotice(`新增 0 条，跳过重复 ${dup} 条，失败 ${pending.length} 条`)
     }
   }
 
   const performSaveRootItem = async (item: WordFamilyItem) => {
     const k = wordFamilyItemDedupKey(item)
     if (savedWordFamilyKeys.includes(k)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const latest = useAppStore.getState().notes.find((n) => n.id === card.id)
     if (latest?.wordFamily?.rootDerived?.some((x) => wordFamilyItemDedupKey(x) === k)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
-      setSaveNotice('暂无词根派生数据')
+      showSaveNotice('暂无词根派生数据')
       return
     }
     const ai = aiContent as WordSpeechAI | SpellingAI | undefined
@@ -2031,18 +2055,18 @@ export default function ReviewCards() {
       incrementSavedExtensions()
     } else {
       setSavedWordFamilyKeys((p) => p.filter((x) => x !== k))
-      setSaveNotice('保存失败，可重试')
+      showSaveNotice('保存失败，可重试')
     }
   }
 
   const performSaveRootAll = async () => {
     if (!aiContent || ('fallback' in aiContent && aiContent.fallback)) {
-      setSaveNotice('暂无词根派生数据')
+      showSaveNotice('暂无词根派生数据')
       return
     }
     const ai = aiContent as WordSpeechAI | SpellingAI
     if (!ai.wordFamily?.rootDerived?.length) {
-      setSaveNotice('暂无词根派生数据')
+      showSaveNotice('暂无词根派生数据')
       return
     }
     const currentWordSurface = card.content.trim().toLowerCase()
@@ -2066,7 +2090,7 @@ export default function ReviewCards() {
       }
     }
     if (pending.length === 0) {
-      setSaveNotice(dup > 0 ? `全部已存在，跳过重复 ${dup} 条` : '暂无可存入的词根派生')
+      showSaveNotice(dup > 0 ? `全部已存在，跳过重复 ${dup} 条` : '暂无可存入的词根派生', 'warning')
       return
     }
     const baseWf = ensureWordFamilyForSave(card, ai, latest)
@@ -2076,14 +2100,14 @@ export default function ReviewCards() {
     const ok = await updateNote(card.id, { wordFamily: merged })
     if (ok) {
       for (let i = 0; i < pending.length; i++) incrementSavedExtensions()
-      setSaveNotice(
+      showSaveNotice(
         dup > 0
           ? `存入 ${pending.length} 条，跳过重复 ${dup} 条`
           : `已存入 ${pending.length} 条词根派生`,
       )
     } else {
       setSavedWordFamilyKeys((p) => p.filter((x) => !newKeys.includes(x)))
-      setSaveNotice(`失败 ${pending.length} 条，可重试`)
+      showSaveNotice(`失败 ${pending.length} 条，可重试`)
     }
   }
 
@@ -2093,7 +2117,7 @@ export default function ReviewCards() {
     if (savedSyn.includes(syn)) return
     const existing = noteRow?.synonyms ?? card.synonyms ?? []
     if (associationDisplaySaved(syn, existing)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const conflicts = findConflictingAssociationEntries(syn, existing)
@@ -2110,7 +2134,7 @@ export default function ReviewCards() {
     if (savedAnt.includes(ant)) return
     const existing = noteRow?.antonyms ?? card.antonyms ?? []
     if (associationDisplaySaved(ant, existing)) {
-      setSaveNotice('已存在')
+      showSaveNotice('已存在')
       return
     }
     const conflicts = findConflictingAssociationEntries(ant, existing)
@@ -2153,9 +2177,13 @@ export default function ReviewCards() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
             className="fixed top-4 right-4 z-50 px-3.5 py-2 rounded-lg border text-sm font-medium"
-            style={{ background: '#2e1418', borderColor: '#fb718599', color: '#fecdd3' }}
+            style={{
+              background: SAVE_NOTICE_STYLE[saveNotice.tone].bg,
+              borderColor: SAVE_NOTICE_STYLE[saveNotice.tone].border,
+              color: SAVE_NOTICE_STYLE[saveNotice.tone].text,
+            }}
           >
-            {saveNotice}
+            {saveNotice.text}
           </motion.div>
         )}
       </AnimatePresence>

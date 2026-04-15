@@ -70,7 +70,7 @@ export function NoteCard({ note }: NoteCardProps) {
 
           {/* Content */}
           <div className="relative flex flex-col items-center justify-center text-center gap-2.5 px-5 py-5 flex-1 min-w-0">
-            <Badge category={note.category} />
+            <Badge category={note.category} showEmoji />
             <div
               className="font-bold text-white w-full truncate leading-tight"
               style={{ fontSize: '24px' }}
@@ -149,7 +149,7 @@ export function NoteCard({ note }: NoteCardProps) {
           >
             {/* Category badge + hint */}
             <div className="flex items-center justify-between shrink-0">
-              <Badge category={note.category} />
+              <Badge category={note.category} showEmoji />
               <span style={{ fontSize: 11, color: '#52525b' }}>点击查看详情 →</span>
             </div>
 

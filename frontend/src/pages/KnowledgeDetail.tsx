@@ -303,7 +303,7 @@ export default function KnowledgeDetail() {
           ) : (
             <>
               <div className="flex items-center justify-between mb-4">
-                <Badge category={note.category} size="md" />
+                <Badge category={note.category} size="md" showEmoji />
                 <span className="text-xs text-text-subtle">创建于 {note.createdAt}</span>
               </div>
               <h1 className="text-[36px] font-bold text-text-primary leading-tight mb-2">{note.content}</h1>
@@ -821,7 +821,7 @@ export default function KnowledgeDetail() {
                 <ChevronLeft size={14} className="shrink-0 text-text-dim" />
                 <span className="text-text-dim">上一个</span>
                 <span className="max-w-[180px] truncate text-text-muted">{prevNote.content}</span>
-                <Badge category={prevNote.category} />
+                <Badge category={prevNote.category} showEmoji />
               </button>
             ) : <span />}
             {nextNote ? (
@@ -832,7 +832,7 @@ export default function KnowledgeDetail() {
               >
                 <span className="text-text-dim">下一个</span>
                 <span className="max-w-[180px] truncate text-text-muted">{nextNote.content}</span>
-                <Badge category={nextNote.category} />
+                <Badge category={nextNote.category} showEmoji />
                 <ChevronRight size={14} className="shrink-0 text-text-dim" />
               </button>
             ) : <span />}

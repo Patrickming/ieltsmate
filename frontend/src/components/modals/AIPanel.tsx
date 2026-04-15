@@ -659,7 +659,7 @@ export function AIPanel() {
                                   style={{ background: '#1a2e22', border: '1px solid #34d39966', color: '#34d399' }}
                                   title={n.translation}
                                 >
-                                  <Badge category={n.category as Category} size="sm" />
+                                  <Badge category={n.category as Category} size="sm" showEmoji />
                                   <span className="max-w-[120px] truncate">{n.content}</span>
                                 </button>
                               ))}

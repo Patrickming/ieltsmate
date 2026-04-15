@@ -253,7 +253,7 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
                       {aiDetecting ? (
                         <div className="h-5 w-12 bg-[#27272a] rounded animate-pulse" />
                       ) : (
-                        <Badge category={aiCategory} />
+                        <Badge category={aiCategory} showEmoji />
                       )}
                       <span className="text-[13px] text-text-secondary truncate max-w-[220px]">
                         {text.split('—')[0]?.trim() || text}

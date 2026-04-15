@@ -16,7 +16,10 @@ import type {
 
 /**
  * 仅接受 { word, meaning }[]：二者均为 string，trim 后均非空；否则返回 null。
+ * 解析成功后统一截断为最多 6 项，避免学习内容过长。
  */
+const MAX_ASSOCIATION_ITEMS = 6
+
 function parseAssociationItems(x: unknown): AssociationItem[] | null {
   if (!Array.isArray(x)) {
     return null
@@ -37,7 +40,7 @@ function parseAssociationItems(x: unknown): AssociationItem[] | null {
     }
     out.push({ word, meaning })
   }
-  return out
+  return out.slice(0, MAX_ASSOCIATION_ITEMS)
 }
 
 function cleanOptionalString(x: unknown): string | undefined {

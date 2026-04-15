@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
-import { CATEGORY_BAR, CATEGORIES } from '../../data/mockData'
+import { CATEGORIES } from '../../data/mockData'
 
 const NAV_ITEMS = [
   { path: '/', icon: LayoutDashboard, label: '首页' },
@@ -23,6 +23,16 @@ const GROUP_SLUG: Record<string, string> = {
 const GROUP_EMOJI: Record<string, string> = {
   '杂笔记': '📒',
   '写作': '✍',
+}
+
+const CATEGORY_EMOJI: Record<string, string> = {
+  '口语': '🎤',
+  '短语': '🧩',
+  '句子': '💬',
+  '同义替换': '🔁',
+  '拼写': '✍️',
+  '单词': '📘',
+  '写作': '📝',
 }
 
 const navMotionTransition = { duration: 0.2, ease: 'easeOut' as const }
@@ -165,10 +175,12 @@ export function Sidebar() {
                 className={`flex h-7 w-full items-center gap-2 rounded-sm border border-transparent text-text-dim hover:border-border/80 hover:bg-[#27272a]/45 hover:text-text-muted ${surfaceHoverTransition}`}
                 style={{ paddingLeft: '2.75rem', paddingRight: '1rem' }}
               >
-                <div
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: CATEGORY_BAR[name] ?? '#71717a' }}
-                />
+                <span
+                  aria-hidden="true"
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center text-[13px] leading-none"
+                >
+                  {CATEGORY_EMOJI[name] ?? '•'}
+                </span>
                 <span className="text-xs">{name}</span>
               </button>
             ))
