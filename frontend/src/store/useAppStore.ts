@@ -213,7 +213,7 @@ function normalizeReviewPrepareTimeoutMs(raw: unknown): number {
 
 const REVIEW_PREPARE_DEFAULT_POLL_MS = 120
 /** 首次请求失败（fallback 或网络错误）后，额外自动重试次数（总尝试次数 = 1 + 本值）。 */
-const AI_GENERATE_AUTO_RETRIES = 5
+export const AI_GENERATE_AUTO_RETRIES = 5
 const AI_GENERATE_RETRY_BACKOFF_MS = 400
 
 function mapReviewCardType(category: string): string {

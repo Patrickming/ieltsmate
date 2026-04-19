@@ -26,7 +26,7 @@ import {
   mergeWordFamilyItems,
   wordFamilyItemDedupKey,
 } from '../lib/wordFamilyDedup'
-import { useAppStore } from '../store/useAppStore'
+import { AI_GENERATE_AUTO_RETRIES, useAppStore } from '../store/useAppStore'
 import { apiUrl } from '../lib/apiBase'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import type { Note } from '../data/mockData'
@@ -1324,7 +1324,7 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying,
       <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40">
         <div className="flex items-center gap-2 text-[12px] text-yellow-400">
           <span>⚠</span>
-          <span>AI 内容生成失败（已自动重试 3 次），显示基础内容</span>
+          <span>AI 内容生成失败（已自动重试 {AI_GENERATE_AUTO_RETRIES} 次），显示基础内容</span>
         </div>
         {onRetry && (
           <button

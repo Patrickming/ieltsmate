@@ -9,6 +9,9 @@ import {
   FallbackResponse,
 } from './types/card-ai-content'
 
+/** 单张复习卡 AI 生成在服务端等待 LLM 的上限（毫秒）。 */
+const REVIEW_AI_GENERATION_TIMEOUT_MS = 30_000
+
 @Injectable()
 export class ReviewAiService {
   private readonly logger = new Logger(ReviewAiService.name)
@@ -223,7 +226,7 @@ export class ReviewAiService {
           slot: 'review',
         }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('AI generation timeout')), 15_000),
+          setTimeout(() => reject(new Error('AI generation timeout')), REVIEW_AI_GENERATION_TIMEOUT_MS),
         ),
       ])
 
