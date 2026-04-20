@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { Note } from '../../data/mockData'
 
 interface MasteryRingProps {
@@ -17,7 +18,17 @@ const SEGMENTS = [
   { key: 'new'      as const, label: '新词',   color: '#52525b', bg: '#27272a' },
 ]
 
+/** 圆心轮换：与 SEGMENTS 的 key 对应，文案为「未复习 / 未掌握 / 已掌握」 */
+const CENTER_MODES = [
+  { key: 'new' as const, label: '未复习' },
+  { key: 'learning' as const, label: '未掌握' },
+  { key: 'mastered' as const, label: '已掌握' },
+] as const
+
+const CENTER_ROTATE_MS = 10_000
+
 export function MasteryRing({ notes }: MasteryRingProps) {
+  const [centerIdx, setCenterIdx] = useState(0)
   const total = notes.length
 
   const counts = {
@@ -35,7 +46,20 @@ export function MasteryRing({ notes }: MasteryRingProps) {
     return arc
   })
 
-  const masteredPct = total > 0 ? Math.round((counts.mastered / total) * 100) : 0
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setCenterIdx((i) => (i + 1) % CENTER_MODES.length)
+    }, CENTER_ROTATE_MS)
+    return () => clearInterval(id)
+  }, [])
+
+  const centerMode = CENTER_MODES[centerIdx]
+  const centerPct =
+    total > 0 ? Math.round((counts[centerMode.key] / total) * 100) : 0
+  const centerAccent =
+    centerMode.key === 'new'
+      ? '#a1a1aa'
+      : SEGMENTS.find((s) => s.key === centerMode.key)?.color ?? '#fafafa'
 
   return (
     <div className="flex flex-col gap-4">
@@ -63,8 +87,18 @@ export function MasteryRing({ notes }: MasteryRingProps) {
             )}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[20px] font-bold text-text-primary leading-none">{masteredPct}%</span>
-            <span className="text-[10px] text-text-subtle mt-0.5">已掌握</span>
+            <div
+              key={centerIdx}
+              className="flex flex-col items-center justify-center animate-fade-in"
+            >
+              <span
+                className="text-[20px] font-bold leading-none tabular-nums"
+                style={{ color: centerAccent }}
+              >
+                {centerPct}%
+              </span>
+              <span className="text-[10px] text-text-subtle mt-0.5">{centerMode.label}</span>
+            </div>
           </div>
         </div>
       </div>

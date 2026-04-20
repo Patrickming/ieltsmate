@@ -46,8 +46,9 @@ function getCSTDateString(d: Date): string {
 function getCellColor(count: number, allDone: boolean): string {
   if (allDone) return '#fbbf24'      // 任务全完成 → 黄色
   if (count === 0) return '#27272a'
-  if (count <= 3)  return '#312e81'
-  if (count <= 7)  return '#4338ca'
+  if (count <= 25) return '#312e81'
+  if (count <= 75) return '#4338ca'
+  if (count <= 150) return '#6366f1'
   return '#818cf8'
 }
 
@@ -474,7 +475,7 @@ export function ActivityHeatmap({
       {/* 图例 */}
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-text-subtle">少</span>
-        {[0, 2, 5, 9].map(v => (
+        {[0, 12, 50, 100, 200].map(v => (
           <div
             key={v}
             style={{ width: 10, height: 10, borderRadius: 2, background: getCellColor(v, false), flexShrink: 0 }}
