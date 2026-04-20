@@ -5,6 +5,8 @@ import { Layout } from '../components/layout/Layout'
 import { StatCard } from '../components/ui/StatCard'
 import { ActivityHeatmap } from '../components/ui/ActivityHeatmap'
 import { MasteryRing } from '../components/ui/MasteryRing'
+import { ExamCountdown } from '../components/ui/ExamCountdown'
+import { DashboardInsight } from '../components/ui/DashboardInsight'
 import { TodoList } from '../components/ui/TodoList'
 import { Button } from '../components/ui/Button'
 import { useAppStore } from '../store/useAppStore'
@@ -39,6 +41,7 @@ export default function Dashboard() {
   }, [])
 
   const handleAllDone = useCallback((_done: boolean) => {
+    void _done
     // 热力图直接从 store activity 读取 allTodosDone，此处无需处理
   }, [])
 
@@ -78,6 +81,8 @@ export default function Dashboard() {
             </Button>
           </div>
         </div>
+
+        <DashboardInsight />
 
         <div className="grid grid-cols-4 gap-4">
           <StatCard
@@ -122,8 +127,13 @@ export default function Dashboard() {
               />
             </div>
           </div>
-          <div className="bg-surface-card border border-border rounded-xl p-5">
-            <MasteryRing notes={notes} />
+          <div className="flex flex-col gap-5 min-w-0">
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <MasteryRing notes={notes} />
+            </div>
+            <div className="bg-surface-card border border-border rounded-xl p-5">
+              <ExamCountdown />
+            </div>
           </div>
         </div>
       </div>

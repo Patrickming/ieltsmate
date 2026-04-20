@@ -27,6 +27,33 @@ describe('Dashboard', () => {
 
   beforeEach(() => {
     vi.mocked(framerMotion.useReducedMotion).mockReturnValue(false)
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof Request
+            ? input.url
+            : input.toString()
+      const iso = new Date().toISOString()
+      if (url.includes('/dashboard/insight')) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              summary: '测试洞察摘要',
+              encouragement: '测试鼓励语',
+              ieltsTip: '测试雅思干货',
+              generatedAt: iso,
+              nextRefreshAt: new Date(Date.now() + 3_600_000).toISOString(),
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      return new Response(JSON.stringify({ data: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
   })
 
   it('renders 仪表盘 heading', () => {
@@ -55,6 +82,22 @@ describe('Dashboard', () => {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         })
+      }
+
+      if (url.includes('/dashboard/insight')) {
+        const iso = new Date().toISOString()
+        return new Response(
+          JSON.stringify({
+            data: {
+              summary: '测试洞察摘要',
+              encouragement: '测试鼓励语',
+              ieltsTip: '测试雅思干货',
+              generatedAt: iso,
+              nextRefreshAt: new Date(Date.now() + 3_600_000).toISOString(),
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )
       }
 
       return new Response(JSON.stringify({ data: {} }), {
