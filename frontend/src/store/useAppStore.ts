@@ -202,8 +202,8 @@ const QUICK_NOTE_REQUEST_TIMEOUT_MS = 4000
 export const REVIEW_PREPARE_DEFAULT_BATCH_SIZE = 3
 /** 预热首批 AI 的等待上限（毫秒），与设置页「超时时间」可选项一致 */
 export const REVIEW_PREPARE_DEFAULT_TIMEOUT_MS = 30_000
-/** 设置页可选的预热超时（秒档 15 / 30 / 60） */
-export const REVIEW_PREPARE_TIMEOUT_CHOICES_MS = [15_000, 30_000, 60_000] as const
+/** 设置页可选的预热超时（秒档 15 / 30 / 60 / 120 / 180） */
+export const REVIEW_PREPARE_TIMEOUT_CHOICES_MS = [15_000, 30_000, 60_000, 120_000, 180_000] as const
 
 function normalizeReviewPrepareTimeoutMs(raw: unknown): number {
   const n = Number(raw)
@@ -212,7 +212,9 @@ function normalizeReviewPrepareTimeoutMs(raw: unknown): number {
   if (!Number.isFinite(n) || n <= 0) return REVIEW_PREPARE_DEFAULT_TIMEOUT_MS
   if (n <= 22_500) return 15_000
   if (n <= 45_000) return 30_000
-  return 60_000
+  if (n <= 90_000) return 60_000
+  if (n <= 150_000) return 120_000
+  return 180_000
 }
 
 const REVIEW_PREPARE_DEFAULT_POLL_MS = 120

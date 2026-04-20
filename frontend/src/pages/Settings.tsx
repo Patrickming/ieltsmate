@@ -306,7 +306,7 @@ export default function Settings() {
                   onChange={(e) => { void setReviewPrepareBatchSize(Number(e.target.value)) }}
                   className="h-9 bg-[#232328] border border-border rounded-sm px-2 text-xs text-text-muted hover:border-border-strong transition-colors outline-none appearance-none cursor-pointer"
                 >
-                  {[1, 2, 3, 4, 5].map((n) => (
+                  {[1, 2, 3, 4, 5, 10, 15].map((n) => (
                     <option key={n} value={n}>{n} 张</option>
                   ))}
                 </select>

@@ -73,7 +73,7 @@ describe('ReviewCards user notes on card back', () => {
     const user = userEvent.setup()
     renderWithRouter(<ReviewCards />)
 
-    await user.click(screen.getByText('hostel'))
+    await user.click(screen.getByRole('heading', { name: 'hostel' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
 
     expect(await screen.findByText('我的备注')).toBeInTheDocument()
@@ -90,7 +90,7 @@ describe('ReviewCards user notes on card back', () => {
     const user = userEvent.setup()
     renderWithRouter(<ReviewCards />)
 
-    await user.click(screen.getByText('hostel'))
+    await user.click(screen.getByRole('heading', { name: 'hostel' }))
     await waitFor(() => {
       expect(screen.queryByText('我的备注')).not.toBeInTheDocument()
     })
@@ -102,7 +102,7 @@ describe('ReviewCards user notes on card back', () => {
     const user = userEvent.setup()
     renderWithRouter(<ReviewCards />)
 
-    await user.click(screen.getByText('hostel'))
+    await user.click(screen.getByRole('heading', { name: 'hostel' }))
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '😊 记得' })).toBeInTheDocument()

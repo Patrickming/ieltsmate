@@ -50,7 +50,19 @@ describe('ReviewSelection', () => {
     })
 
     const startReviewSession = vi.fn().mockResolvedValue(true)
-    const prepareInitialAIBatch = vi.fn().mockReturnValue(preparePromise)
+    // mock 需同步真实 store 行为，否则 reviewPreparing 不会为 true，按钮会显示「正在进入...」而非「AI 生成中...」
+    const prepareInitialAIBatch = vi.fn().mockImplementation(async () => {
+      useAppStore.setState({
+        reviewPreparing: true,
+        reviewPreparingProgress: { done: 0, total: 3 },
+      })
+      const result = await preparePromise
+      useAppStore.setState({
+        reviewPreparing: false,
+        reviewPreparingProgress: { done: result.done, total: result.total },
+      })
+      return result
+    })
     useAppStore.setState({
       startReviewSession,
       prepareInitialAIBatch,
