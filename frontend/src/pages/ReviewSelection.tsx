@@ -61,11 +61,14 @@ export default function ReviewSelection() {
   })
   const [starting, setStarting] = useState(false)
   const [prepareHint, setPrepareHint] = useState<string | null>(null)
+  /** 仅对「重新开始」生效；继续上次沿用已保存的 sessionParams.skipAi */
+  const [skipAiReview, setSkipAiReview] = useState(false)
 
   const continueProgress = loadContinueProgress()
   const continueRemaining = continueProgress
     ? continueProgress.cardOrder.length - continueProgress.completedIds.length
     : 0
+  const continueSkipAi = continueProgress?.sessionParams?.skipAi === true
 
   const toggleSub = (cat: Category | '全部') => {
     if (cat === '全部') { setSubCats(new Set(['全部'])); return }
@@ -111,6 +114,7 @@ export default function ReviewSelection() {
         range,
         mode,
         order,
+        skipAi: skipAiReview,
       }
       if (bigCat === '杂笔记' && !subCats.has('全部')) {
         params.categories = Array.from(subCats).filter((c) => c !== '全部') as string[]
@@ -124,14 +128,16 @@ export default function ReviewSelection() {
       return
     }
 
-    const warmup = await prepareInitialAIBatch({
-      batchSize: reviewPrepareBatchSize,
-      timeoutMs: reviewPrepareTimeoutMs,
-      pollIntervalMs: 120,
-    })
+    if (!params.skipAi) {
+      const warmup = await prepareInitialAIBatch({
+        batchSize: reviewPrepareBatchSize,
+        timeoutMs: reviewPrepareTimeoutMs,
+        pollIntervalMs: 120,
+      })
 
-    if (warmup.timedOut) {
-      setPrepareHint('AI 生成较慢，已进入复习页，联想内容会在卡片内继续补全')
+      if (warmup.timedOut) {
+        setPrepareHint('AI 生成较慢，已进入复习页，联想内容会在卡片内继续补全')
+      }
     }
 
     setStarting(false)
@@ -346,6 +352,44 @@ export default function ReviewSelection() {
                 })()}
               </div>
 
+              {/* 快速复习：始终显示（仅「重新开始」时可切换；「继续上次」沿用已保存会话） */}
+              <div
+                className={`flex items-start gap-3 p-3.5 rounded-xl border border-[#27272a] bg-[#141418]/80 ${
+                  mode === 'continue' ? 'opacity-[0.92]' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={mode === 'continue' ? continueSkipAi : skipAiReview}
+                  aria-disabled={mode === 'continue'}
+                  disabled={mode === 'continue'}
+                  onClick={() => {
+                    if (mode === 'continue') return
+                    setSkipAiReview((v) => !v)
+                  }}
+                  className="mt-0.5 w-9 h-5 rounded-full shrink-0 transition-colors relative disabled:cursor-not-allowed"
+                  style={{
+                    background: (mode === 'continue' ? continueSkipAi : skipAiReview)
+                      ? 'linear-gradient(135deg, #4f46e5, #6366f1)'
+                      : '#3f3f46',
+                  }}
+                >
+                  <span
+                    className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
+                    style={{ left: (mode === 'continue' ? continueSkipAi : skipAiReview) ? '18px' : '2px' }}
+                  />
+                </button>
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-text-primary">快速复习（不生成 AI）</div>
+                  <p className="text-[11px] text-text-dim mt-0.5 leading-relaxed">
+                    {mode === 'continue'
+                      ? `继续上次将沿用断点会话已保存的方式（${continueSkipAi ? '上次为快速复习，无 AI 联想' : '上次为含 AI 联想的复习'}）。若要重新选择，请先点「重新开始」。`
+                      : '仅展示知识库已有内容，背面为单页无 Tab，适合已扩展充分的笔记。'}
+                  </p>
+                </div>
+              </div>
+
               {/* 重新开始的子选项：范围 + 顺序 */}
               <AnimatePresence>
                 {mode !== 'continue' && (
@@ -506,7 +550,9 @@ export default function ReviewSelection() {
                         <p className="text-[11px] text-[#fbbf24]">{prepareHint}</p>
                       ) : (
                         <p className="text-[11px] text-text-subtle">
-                          {isContinue ? '继续上次 · 断点续复' : `${bigCat} · ${range === 'all' ? '全部' : '仅错题'} · 随机`}
+                          {isContinue
+                            ? `继续上次 · 断点续复${continueSkipAi ? ' · 快速' : ''}`
+                            : `${bigCat} · ${range === 'all' ? '全部' : '仅错题'} · 随机${skipAiReview ? ' · 快速' : ''}`}
                         </p>
                       )}
                     </div>
@@ -531,7 +577,11 @@ export default function ReviewSelection() {
                 })()}
               >
                 <Play size={15} fill="currentColor" />
-                {starting || reviewPreparing ? 'AI 生成中...' : '开始复习'}
+                {reviewPreparing
+                  ? 'AI 生成中...'
+                  : starting
+                    ? '正在进入...'
+                    : '开始复习'}
                 {!starting && !reviewPreparing && <ChevronRight size={15} strokeWidth={2.5} />}
               </motion.button>
             </motion.div>

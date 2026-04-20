@@ -4,11 +4,10 @@
 
 **智能雅思备考助手 — 笔记管理 · AI 复习 · 词汇深度拓展**
 
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
-![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-4169E1?logo=postgresql&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)
+[![Security Check](https://img.shields.io/badge/Security%20Check-passing-brightgreen?style=flat&logo=github&logoColor=white&labelColor=555555)](SECURITY.md)
+[![release](https://img.shields.io/github/v/release/Patrickming/ieltsmate?style=flat&sort=semver&label=release&labelColor=555555&color=orange)](https://github.com/Patrickming/ieltsmate/releases)
+[![License](https://img.shields.io/static/v1?style=flat&label=License&message=MIT&color=yellow&labelColor=555555)](LICENSE)
+[![pnpm](https://img.shields.io/badge/pnpm-workspace-f69220?style=flat&logo=pnpm&logoColor=white&labelColor=555555)](https://pnpm.io/)
 
 </div>
 
@@ -63,11 +62,11 @@
 
 ### 前置条件
 
-| 依赖 | 版本 |
-|------|------|
-| Node.js | 20+ |
-| PostgreSQL | 14+ |
-| pnpm | 9+ (推荐) |
+| 依赖       | 版本      |
+| ---------- | --------- |
+| Node.js    | 20+       |
+| PostgreSQL | 14+       |
+| pnpm       | 9+ (推荐) |
 
 ### 1. 克隆仓库
 
@@ -156,38 +155,38 @@ ieltsmate/
 
 ### 前端
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm dev` | 启动开发服务器 |
-| `pnpm build` | 生产构建 |
-| `pnpm lint` | ESLint 代码检查 |
-| `pnpm test` | 监听模式运行测试 |
-| `pnpm test:run` | 单次运行全部测试 |
+| 命令                 | 说明               |
+| -------------------- | ------------------ |
+| `pnpm dev`           | 启动开发服务器     |
+| `pnpm build`         | 生产构建           |
+| `pnpm lint`          | ESLint 代码检查    |
+| `pnpm test`          | 监听模式运行测试   |
+| `pnpm test:run`      | 单次运行全部测试   |
 | `pnpm test:coverage` | 生成测试覆盖率报告 |
 
 ### 后端
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm dev` | 启动开发服务器 |
-| `pnpm test:e2e` | 运行端到端测试 |
-| `pnpm prisma:migrate` | 执行数据库迁移 |
+| 命令                   | 说明               |
+| ---------------------- | ------------------ |
+| `pnpm dev`             | 启动开发服务器     |
+| `pnpm test:e2e`        | 运行端到端测试     |
+| `pnpm prisma:migrate`  | 执行数据库迁移     |
 | `pnpm prisma:generate` | 生成 Prisma Client |
 
 ## 环境变量
 
 ### 后端 (`backend/.env`)
 
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `DATABASE_URL` | PostgreSQL 连接字符串 | `postgresql://postgres:postgres@localhost:5432/ieltsmate?schema=public` |
-| `PORT` | 服务端口（可选，默认 3000） | `3000` |
-| `NOTES_ROOT` | 写作笔记 Markdown 文件根目录（可选） | `/path/to/notes` |
+| 变量           | 说明                                 | 示例                                                                    |
+| -------------- | ------------------------------------ | ----------------------------------------------------------------------- |
+| `DATABASE_URL` | PostgreSQL 连接字符串                | `postgresql://postgres:postgres@localhost:5432/ieltsmate?schema=public` |
+| `PORT`         | 服务端口（可选，默认 3000）          | `3000`                                                                  |
+| `NOTES_ROOT`   | 写作笔记 Markdown 文件根目录（可选） | `/path/to/notes`                                                        |
 
 ### 前端（可选）
 
-| 变量 | 说明 | 示例 |
-|------|------|------|
+| 变量                | 说明                               | 示例                    |
+| ------------------- | ---------------------------------- | ----------------------- |
 | `VITE_API_BASE_URL` | 后端地址覆盖（开发模式一般不需要） | `http://localhost:3000` |
 
 ## 一键启动

@@ -47,6 +47,7 @@ describe('ReviewCards user notes on card back', () => {
         current: 0,
         results: [],
         params: { source: 'notes', range: 'all', mode: 'random', order: 'random' },
+        skipAi: false,
         aiContent: { 'n-1': { fallback: true } },
         aiLoading: {},
         savedExtensionCount: 0,

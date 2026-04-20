@@ -159,6 +159,8 @@ export interface StartReviewParams {
   range: 'all' | 'wrong' | 'exclude_mastered'
   mode: 'random' | 'continue'
   order?: 'random' | 'sequential'
+  /** 为 true 时不请求复习 AI，背面仅展示知识库已有内容（单页布局） */
+  skipAi?: boolean
 }
 
 interface CardAIContent {
@@ -172,6 +174,8 @@ interface ReviewSession {
   current: number
   results: { id: string; rating: 'easy' | 'again' }[]
   params: StartReviewParams
+  /** 与 params.skipAi 一致，便于组件直接读取 */
+  skipAi: boolean
   aiContent: Record<string, CardAIContent | null>
   aiLoading: Record<string, boolean>
   savedExtensionCount: number
@@ -1047,6 +1051,7 @@ export const useAppStore = create<AppState>((set, get) => {
         })
       }
 
+      const skipAi = params.skipAi === true
       set({
         reviewPreparing: false,
         reviewPreparingProgress: { done: 0, total: 0 },
@@ -1056,13 +1061,16 @@ export const useAppStore = create<AppState>((set, get) => {
           current: 0,
           results: [],
           params,
+          skipAi,
           aiContent: {},
           aiLoading: {},
           savedExtensionCount: 0,
           completedOffset,
         },
       })
-      setTimeout(() => get().ensureAIWindow(0), 0)
+      if (!skipAi) {
+        setTimeout(() => get().ensureAIWindow(0), 0)
+      }
       return true
     } catch {
       return false
@@ -1076,6 +1084,10 @@ export const useAppStore = create<AppState>((set, get) => {
 
     const session = get().reviewSession
     if (!session) {
+      set({ reviewPreparing: false, reviewPreparingProgress: { done: 0, total: 0 } })
+      return { timedOut: false, done: 0, total: 0 }
+    }
+    if (session.skipAi) {
       set({ reviewPreparing: false, reviewPreparingProgress: { done: 0, total: 0 } })
       return { timedOut: false, done: 0, total: 0 }
     }
@@ -1127,7 +1139,9 @@ export const useAppStore = create<AppState>((set, get) => {
   nextCard: () => set((s) => {
     if (!s.reviewSession) return s
     const newCurrent = s.reviewSession.current + 1
-    setTimeout(() => get().ensureAIWindow(newCurrent), 0)
+    if (!s.reviewSession.skipAi) {
+      setTimeout(() => get().ensureAIWindow(newCurrent), 0)
+    }
     return { reviewSession: { ...s.reviewSession, current: newCurrent } }
   }),
 
@@ -1235,6 +1249,8 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   fetchAIContent: async (noteId, cardType) => {
+    if (get().reviewSession?.skipAi) return
+
     set((s) => {
       if (!s.reviewSession) return s
       return {
@@ -1289,6 +1305,7 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   retryAIContent: (noteId, cardType) => {
+    if (get().reviewSession?.skipAi) return
     // 清除旧的 fallback 结果，使卡片重新显示加载动画，然后重新请求
     set((s) => {
       if (!s.reviewSession) return s
@@ -1302,7 +1319,7 @@ export const useAppStore = create<AppState>((set, get) => {
   /** 从当前卡片起，为后续 `reviewPrepareBatchSize` 张（含当前索引）补齐 AI；需与 prepareInitialAIBatch 窗口一致。 */
   ensureAIWindow: (currentIdx) => {
     const session = get().reviewSession
-    if (!session) return
+    if (!session || session.skipAi) return
     const batch = Math.max(1, get().reviewPrepareBatchSize)
     const end = Math.min(currentIdx + batch, session.cards.length)
 

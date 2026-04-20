@@ -38,6 +38,7 @@ describe('ReviewCards slash action', () => {
         current: 0,
         results: [],
         params: { source: 'notes', range: 'all', mode: 'random', order: 'random' },
+        skipAi: false,
         aiContent: {},
         aiLoading: {},
         savedExtensionCount: 0,

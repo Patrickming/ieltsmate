@@ -407,11 +407,14 @@ function PosConfusablePanel({
   storedNote,
   savedConfKeys,
   onSaveConf,
+  readOnly = false,
 }: {
   aiConf?: ConfusableGroup[]
   storedNote: Note
   savedConfKeys: string[]
   onSaveConf: (g: ConfusableGroup) => void
+  /** 快速复习：仅展示，不显示存入按钮 */
+  readOnly?: boolean
 }) {
   const mergedConf = mergeUniqueConfusables(storedNote.confusables ?? [], aiConf ?? [])
   const confSurfaceCount = mergedConf.reduce<Record<string, number>>((acc, g) => {
@@ -445,16 +448,18 @@ function PosConfusablePanel({
                         </span>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      data-testid={`review-conf-save-${gi}`}
-                      onClick={() => onSaveConf(group)}
-                      className="flex items-center gap-1 shrink-0"
-                      style={{ color: saved ? '#34d399' : '#818cf8' }}
-                    >
-                      {saved ? <Check size={10} /> : <Plus size={10} />}
-                      <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        data-testid={`review-conf-save-${gi}`}
+                        onClick={() => onSaveConf(group)}
+                        className="flex items-center gap-1 shrink-0"
+                        style={{ color: saved ? '#34d399' : '#818cf8' }}
+                      >
+                        {saved ? <Check size={10} /> : <Plus size={10} />}
+                        <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+                      </button>
+                    )}
                   </div>
                   {group.kind === 'meaning' && (
                     <p className="text-[13px] text-text-secondary leading-relaxed mb-3 border-b border-[#27272a] pb-3">
@@ -511,6 +516,7 @@ function WordFamilyPanel({
   onSaveAll,
   onSaveRootItem,
   onSaveRootAll,
+  readOnly = false,
 }: {
   note: Note
   aiPos?: PartOfSpeechItem[]
@@ -523,6 +529,7 @@ function WordFamilyPanel({
   onSaveAll: () => void
   onSaveRootItem: (item: WordFamilyItem) => void
   onSaveRootAll: () => void
+  readOnly?: boolean
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
   const storedWf = storedNote.wordFamily
@@ -607,16 +614,18 @@ function WordFamilyPanel({
                       </span>
                       <span className="text-[12px] text-text-subtle font-mono">{item.pos}</span>
                     </div>
-                    <button
-                      type="button"
-                      data-testid={`review-pos-save-${idx}`}
-                      onClick={() => onSavePos(item)}
-                      className="flex items-center gap-1 shrink-0"
-                      style={{ color: saved ? '#34d399' : '#818cf8' }}
-                    >
-                      {saved ? <Check size={10} /> : <Plus size={10} />}
-                      <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        data-testid={`review-pos-save-${idx}`}
+                        onClick={() => onSavePos(item)}
+                        className="flex items-center gap-1 shrink-0"
+                        style={{ color: saved ? '#34d399' : '#818cf8' }}
+                      >
+                        {saved ? <Check size={10} /> : <Plus size={10} />}
+                        <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+                      </button>
+                    )}
                   </div>
                   <p className="text-[15px] text-text-primary leading-relaxed">{item.meaning}</p>
                   {item.phonetic && (
@@ -662,16 +671,18 @@ function WordFamilyPanel({
                         <span className="text-[16px] font-semibold text-text-primary">{item.word}</span>
                         <span className="text-[11px] text-text-subtle font-mono">{item.pos}</span>
                       </div>
-                      <button
-                        type="button"
-                        data-testid={`review-wf-save-${pk}-${idx}`}
-                        onClick={() => onSaveItem(item)}
-                        className="flex items-center gap-1 shrink-0"
-                        style={{ color: saved ? '#34d399' : '#818cf8' }}
-                      >
-                        {saved ? <Check size={10} /> : <Plus size={10} />}
-                        <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
-                      </button>
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          data-testid={`review-wf-save-${pk}-${idx}`}
+                          onClick={() => onSaveItem(item)}
+                          className="flex items-center gap-1 shrink-0"
+                          style={{ color: saved ? '#34d399' : '#818cf8' }}
+                        >
+                          {saved ? <Check size={10} /> : <Plus size={10} />}
+                          <span className="text-[11px]">{saved ? '✓ 已存入' : '存入'}</span>
+                        </button>
+                      )}
                     </div>
                     <p className="text-[14px] text-text-secondary leading-relaxed">{item.meaning}</p>
                     {ph ? <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">{ph}</p> : null}
@@ -683,16 +694,18 @@ function WordFamilyPanel({
         </div>
       ))}
 
-      <div className="pt-1">
-        <button
-          type="button"
-          data-testid="review-wf-save-all"
-          onClick={() => onSaveAll()}
-          className="w-full py-2.5 rounded-lg text-[13px] font-semibold border border-primary/50 text-primary hover:bg-primary/10 transition-colors"
-        >
-          一键存入本组派生
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="pt-1">
+          <button
+            type="button"
+            data-testid="review-wf-save-all"
+            onClick={() => onSaveAll()}
+            className="w-full py-2.5 rounded-lg text-[13px] font-semibold border border-primary/50 text-primary hover:bg-primary/10 transition-colors"
+          >
+            一键存入本组派生
+          </button>
+        </div>
+      )}
 
       <div className="h-px bg-border my-4" />
 
@@ -716,16 +729,18 @@ function WordFamilyPanel({
                       <span className="text-[16px] font-semibold text-text-primary">{item.word}</span>
                       <span className="text-[11px] text-text-subtle font-mono">{item.pos}</span>
                     </div>
-                    <button
-                      type="button"
-                      data-testid={`review-root-save-${idx}`}
-                      onClick={() => onSaveRootItem(item)}
-                      className="flex items-center gap-1 shrink-0"
-                      style={{ color: saved ? '#34d399' : '#818cf8' }}
-                    >
-                      {saved ? <Check size={10} /> : <Plus size={10} />}
-                      <span className="text-[11px]">{saved ? '已存入' : '存入'}</span>
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        data-testid={`review-root-save-${idx}`}
+                        onClick={() => onSaveRootItem(item)}
+                        className="flex items-center gap-1 shrink-0"
+                        style={{ color: saved ? '#34d399' : '#818cf8' }}
+                      >
+                        {saved ? <Check size={10} /> : <Plus size={10} />}
+                        <span className="text-[11px]">{saved ? '已存入' : '存入'}</span>
+                      </button>
+                    )}
                   </div>
                   <p className="text-[14px] text-text-secondary leading-relaxed">{item.meaning}</p>
                   {ph ? <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">{ph}</p> : null}
@@ -735,16 +750,18 @@ function WordFamilyPanel({
         </div>
       )}
 
-      <div className="pt-1">
-        <button
-          type="button"
-          data-testid="review-root-save-all"
-          onClick={() => onSaveRootAll()}
-          className="w-full py-2.5 rounded-lg text-[13px] font-semibold border border-primary/50 text-primary hover:bg-primary/10 transition-colors"
-        >
-          一键存入词根派生
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="pt-1">
+          <button
+            type="button"
+            data-testid="review-root-save-all"
+            onClick={() => onSaveRootAll()}
+            className="w-full py-2.5 rounded-lg text-[13px] font-semibold border border-primary/50 text-primary hover:bg-primary/10 transition-colors"
+          >
+            一键存入词根派生
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -1432,6 +1449,176 @@ function CardBackFallback({ note, cardType, spellingAnswer, onRetry, isRetrying,
   )
 }
 
+/** 快速复习：无 AI、无 Tab，纵向展示知识库已有内容 */
+function CardBackFastReview({
+  note,
+  cardType,
+  storedNote,
+  userNotes,
+  spellingAnswer,
+}: {
+  note: Note
+  cardType: ReturnType<typeof getCardType>
+  storedNote: Note
+  userNotes: string[]
+  spellingAnswer?: string
+}) {
+  const barColor = CATEGORY_BAR[note.category] ?? '#818cf8'
+  const n = storedNote
+  const showExt = cardType === 'word-speech' || cardType === 'spelling'
+  const spellingCorrect = cardType === 'spelling' && spellingAnswer
+    ? spellingAnswer.trim().toLowerCase() === note.content.trim().toLowerCase()
+    : null
+
+  return (
+    <div className="flex flex-col gap-5 p-7 overflow-y-auto h-full" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between gap-2">
+        <Badge category={note.category} size="md" showEmoji />
+        <div className="flex items-center gap-2 text-right shrink-0">
+          <span className="text-[10px] text-text-subtle px-2 py-0.5 rounded-md border border-border bg-[#1a1a22]">快速复习</span>
+          <span className="text-sm text-text-dim">已翻转</span>
+        </div>
+      </div>
+
+      {cardType === 'spelling' && spellingAnswer && (
+        <div
+          className="flex items-center gap-3 px-4 py-3 rounded-xl border"
+          style={{
+            background: spellingCorrect ? '#0d2b1f' : '#2e0f0f',
+            borderColor: spellingCorrect ? '#34d399' : '#fb7185',
+          }}
+        >
+          <span className="text-2xl">{spellingCorrect ? '✓' : '✗'}</span>
+          <div>
+            <p className="text-sm text-text-dim mb-0.5">你的答案</p>
+            <p
+              className="text-[17px] font-mono font-semibold"
+              style={{ color: spellingCorrect ? '#34d399' : '#fb7185' }}
+            >
+              {spellingAnswer}
+            </p>
+          </div>
+          {!spellingCorrect && (
+            <>
+              <div className="w-px h-10 bg-border mx-1" />
+              <div>
+                <p className="text-sm text-text-dim mb-0.5">正确答案</p>
+                <p className="text-[17px] font-mono font-semibold text-[#34d399]">{note.content}</p>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      <UserNotesSection userNotes={userNotes} />
+
+      {cardType === 'synonym' && (
+        <div>
+          <div className="text-sm font-semibold text-text-dim mb-1.5">同义替换组</div>
+          <p className="text-[17px] text-text-primary leading-snug font-mono">{note.content}</p>
+        </div>
+      )}
+
+      {cardType === 'sentence' && (
+        <div>
+          <div className="text-sm font-semibold text-text-dim mb-1.5">句子</div>
+          <p className="text-[15px] text-text-secondary italic leading-relaxed">"{note.content}"</p>
+        </div>
+      )}
+
+      {n.phonetic && (
+        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
+          <Volume2 size={16} className="text-primary" />
+          <span className="text-[16px] text-[#a5b4fc]">{n.phonetic}</span>
+        </div>
+      )}
+
+      <div>
+        <div className="text-sm font-semibold text-text-dim mb-1.5">中文意思</div>
+        <p className="text-[17px] text-text-primary leading-snug">{n.translation}</p>
+      </div>
+
+      {(((n.synonyms?.length ?? 0) > 0) || ((n.antonyms?.length ?? 0) > 0)) && <div className="h-px bg-border" />}
+      {n.synonyms && n.synonyms.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold text-text-dim mb-2">🔄 同义词/短语</div>
+          <div className="flex flex-wrap gap-2">
+            {n.synonyms.map((s) => (
+              <span
+                key={s}
+                className="px-3 py-1.5 rounded-full text-[13px] border"
+                style={{ background: '#1a1a28', borderColor: '#27272a', color: '#a5b4fc' }}
+              >
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+      {n.antonyms && n.antonyms.length > 0 && (
+        <div>
+          <div className="text-sm font-semibold text-text-dim mb-2">🔀 反义词/短语</div>
+          <div className="flex flex-wrap gap-2">
+            {n.antonyms.map((s) => (
+              <span
+                key={s}
+                className="px-3 py-1.5 rounded-full text-[13px] border"
+                style={{ background: '#1a1a28', borderColor: '#27272a', color: '#fca5a5' }}
+              >
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {n.memoryTip && (
+        <div className="rounded-lg border px-4 py-3.5" style={{ background: '#1e1a2e', borderColor: barColor + '40' }}>
+          <div className="text-sm font-semibold text-text-dim mb-1">✨ 记忆技巧</div>
+          <p className="text-[13px] text-[#c4b5fd] leading-relaxed">{n.memoryTip}</p>
+        </div>
+      )}
+
+      {n.example && (
+        <div>
+          <div className="h-px bg-border mb-4" />
+          <div className="text-sm font-semibold text-text-muted mb-2">💬 例句</div>
+          <div className="bg-[#141420] border border-[#27272a] rounded-md px-4 py-3.5">
+            <p className="text-[14px] text-text-secondary italic leading-relaxed">"{n.example}"</p>
+          </div>
+        </div>
+      )}
+
+      {showExt && (
+        <>
+          <div className="h-px bg-border my-2" />
+          <WordFamilyPanel
+            note={note}
+            aiPos={undefined}
+            aiWordFamily={undefined}
+            storedNote={storedNote}
+            savedPosKeys={[]}
+            savedKeys={[]}
+            onSavePos={() => {}}
+            onSaveItem={() => {}}
+            onSaveAll={() => {}}
+            onSaveRootItem={() => {}}
+            onSaveRootAll={() => {}}
+            readOnly
+          />
+          <PosConfusablePanel
+            aiConf={undefined}
+            storedNote={storedNote}
+            savedConfKeys={[]}
+            onSaveConf={() => {}}
+            readOnly
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Main CardBack dispatcher ──────────────────────────────────────────────────
 function CardBack({
   note,
@@ -1457,6 +1644,7 @@ function CardBack({
   savedPosKeys,
   savedConfKeys,
   savedWordFamilyKeys,
+  skipAi,
 }: {
   note: Note
   cardType: ReturnType<typeof getCardType>
@@ -1481,8 +1669,21 @@ function CardBack({
   savedPosKeys: string[]
   savedConfKeys: string[]
   savedWordFamilyKeys: string[]
+  skipAi?: boolean
 }) {
   const showWordFamilyTab = cardType === 'spelling' || note.category === '单词'
+
+  if (skipAi) {
+    return (
+      <CardBackFastReview
+        note={note}
+        cardType={cardType}
+        storedNote={storedNote}
+        userNotes={userNotes}
+        spellingAnswer={spellingAnswer}
+      />
+    )
+  }
 
   if (aiContent === undefined || aiContent === null) {
     return <AILoadingAnimation />
@@ -1741,15 +1942,15 @@ export default function ReviewCards() {
 
   // 进入复习页后兜底补一次滑动窗口（避免预热完成判定与展示条件不一致时首张背面仍缺 aiContent）
   useEffect(() => {
-    if (!session?.sessionId || session.cards.length === 0) return
+    if (!session?.sessionId || session.cards.length === 0 || session.skipAi) return
     const sid = session.sessionId
     const tid = window.setTimeout(() => {
       const s = useAppStore.getState().reviewSession
-      if (!s || s.sessionId !== sid) return
+      if (!s || s.sessionId !== sid || s.skipAi) return
       useAppStore.getState().ensureAIWindow(s.current)
     }, 0)
     return () => window.clearTimeout(tid)
-  }, [session?.sessionId, session?.cards.length])
+  }, [session?.sessionId, session?.cards.length, session?.skipAi])
 
   useEffect(() => {
     if (!card?.id) return
@@ -2429,6 +2630,7 @@ export default function ReviewCards() {
                       savedPosKeys={savedPosKeys}
                       savedConfKeys={savedConfKeys}
                       savedWordFamilyKeys={savedWordFamilyKeys}
+                      skipAi={session.skipAi}
                     />
                   </div>
                 </motion.div>

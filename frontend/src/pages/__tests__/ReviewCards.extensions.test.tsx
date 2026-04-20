@@ -125,6 +125,7 @@ function seedReviewState(updateNoteMock: ReturnType<typeof vi.fn>, opts?: {
       current: 0,
       results: [],
       params: { source: 'notes', range: 'all', mode: 'random', order: 'random' },
+      skipAi: false,
       aiContent: { 'n-1': opts?.aiContent ?? defaultAI },
       aiLoading: {},
       savedExtensionCount: 0,

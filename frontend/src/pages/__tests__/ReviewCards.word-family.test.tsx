@@ -108,6 +108,7 @@ function seedWordFamilyReview(
       current: 0,
       results: [],
       params: { source: 'notes', range: 'all', mode: 'random', order: 'random' },
+      skipAi: false,
       aiContent: { 'n-wf': defaultAI },
       aiLoading: {},
       savedExtensionCount: 0,
@@ -201,6 +202,7 @@ describe('ReviewCards 词性派生', () => {
         current: 0,
         results: [],
         params: { source: 'notes', range: 'all', mode: 'random', order: 'random' },
+        skipAi: false,
         aiContent: {
           'n-ph': {
             fallback: false,
@@ -536,6 +538,7 @@ describe('ReviewCards 词性派生', () => {
         current: 0,
         results: [],
         params: { source: 'notes', range: 'all', mode: 'random', order: 'random' },
+        skipAi: false,
         aiContent: {
           'n-syn': {
             fallback: false,
