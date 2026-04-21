@@ -53,8 +53,8 @@ async function classifyWithAI(text: string): Promise<Category | null> {
 function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
   const { addQuickNote } = useAppStore()
   const [text, setText] = useState('')
-  const [mode, setMode] = useState<'ai' | 'manual'>('ai')
-  const [manualCat, setManualCat] = useState<Category>('短语')
+  const [mode, setMode] = useState<'ai' | 'manual'>('manual')
+  const [manualCat, setManualCat] = useState<Category>('单词')
   const [saved, setSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveHint, setSaveHint] = useState('')

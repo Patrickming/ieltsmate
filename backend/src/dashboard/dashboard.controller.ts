@@ -12,7 +12,7 @@ export class DashboardController {
 
   /**
    * 默认：按冷却返回缓存或自动生成。
-   * `?refresh=1` / `?refresh=true`：手动重新生成并重置 15 分钟冷却（与 POST /dashboard/insight/refresh 等价，便于仅放行 GET 的代理）。
+   * `?refresh=1` / `?refresh=true`：手动重新生成并重置 1 小时冷却（与 POST /dashboard/insight/refresh 等价，便于仅放行 GET 的代理）。
    */
   @Get('dashboard/insight')
   insight(@Query('refresh') refresh?: string) {

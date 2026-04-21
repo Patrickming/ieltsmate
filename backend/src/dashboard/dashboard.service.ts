@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import { SettingsService } from '../settings/settings.service'
 
 const DASHBOARD_INSIGHT_KEY = 'dashboardInsightV1'
-const INSIGHT_REFRESH_MS = 15 * 60 * 1000
+const INSIGHT_REFRESH_MS = 60 * 60 * 1000
 
 export type DashboardInsightPayload = {
   summary: string
@@ -104,7 +104,7 @@ export class DashboardService {
   }
 
   /**
-   * 仪表盘 AI 洞察：使用设置里「AI 助手」对应的 chat 模型；每 15 分钟最多重新生成一次（由服务端持久化 nextRefreshAt）。
+   * 仪表盘 AI 洞察：使用设置里「AI 助手」对应的 chat 模型；每 1 小时最多重新生成一次（由服务端持久化 nextRefreshAt）。
    */
   async getOrRefreshInsight(): Promise<DashboardInsightPayload> {
     const settings = await this.settings.getAll()
@@ -117,7 +117,7 @@ export class DashboardService {
   }
 
   /**
-   * 手动刷新：忽略冷却时间，基于当前缓存内容作为「上一次」生成新版本，并写入新的 nextRefreshAt（+15 分钟）。
+   * 手动刷新：忽略冷却时间，基于当前缓存内容作为「上一次」生成新版本，并写入新的 nextRefreshAt（+1 小时）。
    */
   async forceRegenerateInsight(): Promise<DashboardInsightPayload> {
     const settings = await this.settings.getAll()

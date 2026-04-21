@@ -352,7 +352,7 @@ export function DashboardInsight() {
 
           {data.nextRefreshAt && (
             <p className="text-xs text-text-subtle pt-1">
-              下次自动刷新（东八区，约 15 分钟一轮）：{formatCST(data.nextRefreshAt)}
+              下次自动刷新（东八区，约 1 小时一轮）：{formatCST(data.nextRefreshAt)}
             </p>
           )}
         </div>
