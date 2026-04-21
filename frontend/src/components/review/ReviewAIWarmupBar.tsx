@@ -8,7 +8,6 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useId, useMemo, useState } from "react";
-import type { ReactNode } from "react";
 import type { Category } from "../../data/mockData";
 import type { Note } from "../../data/mockData";
 import { useAppStore } from "../../store/useAppStore";
@@ -406,6 +405,20 @@ export function ReviewAIWarmupBar({
     );
   };
 
+  const anyFailedLoading = failedNotes.some(
+    (n) => reviewSession!.aiLoading[n.id] === true,
+  );
+
+  const retryAllFailed = () => {
+    for (const note of failedNotes) {
+      if (reviewSession!.aiLoading[note.id]) continue;
+      retryAIContent(
+        note.id,
+        categoryToCardType(note.category as Category),
+      );
+    }
+  };
+
   const failedSection = failedNotes.length > 0 && (
     <div
       className={
@@ -414,6 +427,30 @@ export function ReviewAIWarmupBar({
           : "flex flex-col gap-2 mt-3"
       }
     >
+      {failedNotes.length > 1 && (
+        <button
+          type="button"
+          onClick={retryAllFailed}
+          aria-label="一键重试全部降级项"
+          className={
+            variant === "floating"
+              ? "mb-0.5 flex w-full items-center justify-center gap-1 rounded-md border border-amber-400/35 bg-amber-500/20 py-1.5 text-[10px] font-semibold text-amber-100 transition-colors hover:bg-amber-500/30"
+              : "mb-1 flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/35 bg-amber-500/15 py-2 text-[11px] font-semibold text-amber-100 shadow-sm transition-colors hover:bg-amber-500/25"
+          }
+        >
+          {anyFailedLoading ? (
+            <>
+              <Loader2 size={variant === "floating" ? 11 : 12} className="animate-spin shrink-0" />
+              重试中…
+            </>
+          ) : (
+            <>
+              <RefreshCw size={variant === "floating" ? 11 : 12} className="shrink-0" />
+              一键重试（{failedNotes.length}）
+            </>
+          )}
+        </button>
+      )}
       {failedNotes.map((note) => {
         const retrying = reviewSession!.aiLoading[note.id] ?? false;
 

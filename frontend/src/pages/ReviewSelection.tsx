@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   NotebookPen, Heart, Play, Shuffle, RotateCcw,
-  AlertCircle, CheckCheck, XCircle, ChevronRight, GraduationCap, ArrowDownUp,
+  AlertCircle, CheckCheck, XCircle, ChevronRight, GraduationCap, ArrowDownUp, Sparkles,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
@@ -13,7 +13,7 @@ import { useAppStore, type StartReviewParams } from '../store/useAppStore'
 
 const SUB_CATS: Category[] = ['口语', '短语', '同义替换', '拼写', '单词']
 
-type Range = 'all' | 'wrong' | 'exclude_mastered'
+type Range = 'all' | 'wrong' | 'exclude_mastered' | 'new_only'
 type Order = 'random' | 'sequential'
 type Mode = 'random' | 'continue'
 
@@ -91,6 +91,7 @@ export default function ReviewSelection() {
       pool = pool.filter((n) => subCats.has(n.category as Category))
     if (range === 'wrong') pool = pool.filter((n) => (n.wrongCount ?? 0) > 0)
     if (range === 'exclude_mastered') pool = pool.filter((n) => n.reviewStatus !== 'mastered')
+    if (range === 'new_only') pool = pool.filter((n) => n.reviewStatus === 'new')
     return pool
   }
 
@@ -407,11 +408,12 @@ export default function ReviewSelection() {
                         <span className="text-[10px] font-bold tracking-[1.5px] uppercase text-text-subtle">复习范围</span>
                         <div className="flex-1 h-px" style={{ background: 'linear-gradient(90deg, #27272a, transparent)' }} />
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         {([
                           { key: 'all' as const, icon: CheckCheck, label: '全部复习', desc: '复习所有内容' },
                           { key: 'wrong' as const, icon: XCircle, label: '仅复习错题', desc: '上次标记错误的' },
                           { key: 'exclude_mastered' as const, icon: GraduationCap, label: '剔除已掌握', desc: '跳过已掌握内容' },
+                          { key: 'new_only' as const, icon: Sparkles, label: '仅新添加', desc: '仍为「新词」未开始复习' },
                         ]).map(({ key, icon: Icon, label, desc }) => {
                           const active = range === key
                           return (
@@ -552,7 +554,12 @@ export default function ReviewSelection() {
                         <p className="text-[11px] text-text-subtle">
                           {isContinue
                             ? `继续上次 · 断点续复${continueSkipAi ? ' · 快速' : ''}`
-                            : `${bigCat} · ${range === 'all' ? '全部' : '仅错题'} · 随机${skipAiReview ? ' · 快速' : ''}`}
+                            : `${bigCat} · ${(
+                              range === 'all' ? '全部'
+                                : range === 'wrong' ? '仅错题'
+                                  : range === 'exclude_mastered' ? '剔除已掌握'
+                                    : '仅新词'
+                            )} · ${order === 'sequential' ? '按添加顺序' : '随机'}${skipAiReview ? ' · 快速' : ''}`}
                         </p>
                       )}
                     </div>

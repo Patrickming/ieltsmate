@@ -158,7 +158,7 @@ function clearContinueState() {
 export interface StartReviewParams {
   source: 'notes' | 'favorites'
   categories?: string[]
-  range: 'all' | 'wrong' | 'exclude_mastered'
+  range: 'all' | 'wrong' | 'exclude_mastered' | 'new_only'
   mode: 'random' | 'continue'
   order?: 'random' | 'sequential'
   /** 为 true 时不请求复习 AI，背面仅展示知识库已有内容（单页布局） */
@@ -991,8 +991,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
   startReviewSession: async (params) => {
     try {
-      // Backend only accepts 'all' | 'wrong' for range; exclude_mastered is applied client-side
-      const backendParams = { ...params, range: params.range === 'exclude_mastered' ? 'all' : params.range }
+      // Backend only accepts 'all' | 'wrong' for range; exclude_mastered / new_only are applied client-side
+      const backendParams = {
+        ...params,
+        range: params.range === 'exclude_mastered' || params.range === 'new_only' ? 'all' : params.range,
+      }
       const res = await fetch(apiUrl('/review/sessions/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1004,9 +1007,12 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!d?.sessionId) return false
       let cards = d.cards.map(mapBackendNote)
 
-      // Apply exclude_mastered filter for fresh sessions
+      // Apply exclude_mastered / new_only filters for fresh sessions
       if (params.mode !== 'continue' && params.range === 'exclude_mastered') {
         cards = cards.filter(c => c.reviewStatus !== 'mastered')
+      }
+      if (params.mode !== 'continue' && params.range === 'new_only') {
+        cards = cards.filter(c => c.reviewStatus === 'new')
       }
 
       // Apply order for fresh sessions
