@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useReducedMotion } from 'framer-motion'
 import { BookOpen, RefreshCw, Sparkles } from 'lucide-react'
 import { apiUrl } from '../../lib/apiBase'
@@ -13,7 +13,7 @@ export type DashboardInsightData = {
   nextRefreshAt: string
 }
 
-/** 自动刷新完全由服务端 nextRefreshAt + 单次 setTimeout 驱动，不再用短间隔轮询（避免与 15 分钟冷却不一致） */
+/** 每次请求成功后按服务端返回的 nextRefreshAt 安排下一次 setTimeout（若早触发仍返回同一冷却点，也会继续排队，避免停在首页不刷新） */
 
 function formatCST(iso: string): string {
   const d = new Date(iso)
@@ -150,6 +150,7 @@ export function DashboardInsight() {
   const [error, setError] = useState<string | null>(null)
   const [regenerateOk, setRegenerateOk] = useState(false)
   const prefersReducedMotion = useReducedMotion()
+  const insightRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async (opts?: { force?: boolean }) => {
     const force = opts?.force ?? false
@@ -183,6 +184,17 @@ export function DashboardInsight() {
           ieltsTip: typeof json.data.ieltsTip === 'string' ? json.data.ieltsTip : '',
         })
         if (force) setRegenerateOk(true)
+
+        if (insightRefreshTimerRef.current) {
+          clearTimeout(insightRefreshTimerRef.current)
+          insightRefreshTimerRef.current = null
+        }
+        const ms = new Date(json.data.nextRefreshAt).getTime() - Date.now()
+        const delay = ms <= 0 ? 500 : ms + 800
+        insightRefreshTimerRef.current = window.setTimeout(() => {
+          insightRefreshTimerRef.current = null
+          void load()
+        }, delay)
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -202,16 +214,15 @@ export function DashboardInsight() {
     void load()
   }, [load])
 
-  useEffect(() => {
-    if (!data?.nextRefreshAt) return
-    const ms = new Date(data.nextRefreshAt).getTime() - Date.now()
-    if (ms <= 0) {
-      const t = window.setTimeout(() => void load(), 500)
-      return () => clearTimeout(t)
-    }
-    const t = window.setTimeout(() => void load(), ms + 800)
-    return () => clearTimeout(t)
-  }, [data?.nextRefreshAt, load])
+  useEffect(
+    () => () => {
+      if (insightRefreshTimerRef.current) {
+        clearTimeout(insightRefreshTimerRef.current)
+        insightRefreshTimerRef.current = null
+      }
+    },
+    [],
+  )
 
   const typingEnabled =
     !prefersReducedMotion && !loading && !regenerating && !!data

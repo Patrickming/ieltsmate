@@ -6,20 +6,17 @@ import { apiUrl } from '../lib/apiBase'
 import { normalizeWordFamilyForUI } from '../lib/wordFamilyDedup'
 import { normalizeConfusablesForUI, normalizePartOfSpeechForUI } from '../lib/noteExtensionsDedup'
 
-// ── 上海当日 YYYY-MM-DD ───────────────────────────────────────────
-function getTodayCSTString(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(new Date())
-}
-
 interface TodoItem {
   id: string
   text: string
   done: boolean
   sortOrder: number
   taskDate: string
+}
+
+function allTodosDoneForTaskDate(todos: TodoItem[], taskDate: string): boolean {
+  const forDay = todos.filter((t) => t.taskDate === taskDate)
+  return forDay.length > 0 && forDay.every((t) => t.done)
 }
 
 interface DashboardStats {
@@ -1387,13 +1384,12 @@ export const useAppStore = create<AppState>((set, get) => {
       if (json.data) {
         set((s) => ({ todos: s.todos.map((t) => t.id === optimisticId ? json.data! : t) }))
       }
-      const today = getTodayCSTString()
       const todos = get().todos
-      const allDone = todos.length > 0 && todos.every((t) => t.done)
+      const allDone = allTodosDoneForTaskDate(todos, date)
       set((s) => ({
         activity: {
           ...s.activity,
-          [today]: { studyCount: s.activity[today]?.studyCount ?? 0, allTodosDone: allDone },
+          [date]: { studyCount: s.activity[date]?.studyCount ?? 0, allTodosDone: allDone },
         },
       }))
     } catch { set({ todos: prevTodos }) }
@@ -1412,13 +1408,13 @@ export const useAppStore = create<AppState>((set, get) => {
         body: JSON.stringify({ done: newDone }),
       })
       if (!res.ok) { set({ todos: prevTodos }); return }
-      const today = getTodayCSTString()
+      const taskDate = todo.taskDate
       const todos = get().todos
-      const allDone = todos.length > 0 && todos.every((t) => t.done)
+      const allDone = allTodosDoneForTaskDate(todos, taskDate)
       set((s) => ({
         activity: {
           ...s.activity,
-          [today]: { studyCount: s.activity[today]?.studyCount ?? 0, allTodosDone: allDone },
+          [taskDate]: { studyCount: s.activity[taskDate]?.studyCount ?? 0, allTodosDone: allDone },
         },
       }))
     } catch { set({ todos: prevTodos }) }
@@ -1426,17 +1422,19 @@ export const useAppStore = create<AppState>((set, get) => {
 
   deleteTodo: async (id) => {
     const prevTodos = get().todos
+    const removed = prevTodos.find((t) => t.id === id)
+    if (!removed) return
+    const taskDate = removed.taskDate
     set((s) => ({ todos: s.todos.filter((t) => t.id !== id) }))
     try {
       const res = await fetch(apiUrl(`/todos/${id}`), { method: 'DELETE' })
       if (!res.ok) { set({ todos: prevTodos }); return }
-      const today = getTodayCSTString()
       const todos = get().todos
-      const allDone = todos.length > 0 && todos.every((t) => t.done)
+      const allDone = allTodosDoneForTaskDate(todos, taskDate)
       set((s) => ({
         activity: {
           ...s.activity,
-          [today]: { studyCount: s.activity[today]?.studyCount ?? 0, allTodosDone: allDone },
+          [taskDate]: { studyCount: s.activity[taskDate]?.studyCount ?? 0, allTodosDone: allDone },
         },
       }))
     } catch { set({ todos: prevTodos }) }
