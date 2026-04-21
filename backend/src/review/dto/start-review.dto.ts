@@ -12,8 +12,8 @@ export class StartReviewDto {
   @MaxLength(100, { each: true })
   categories?: string[]
 
-  @IsIn(['all', 'wrong'])
-  range!: 'all' | 'wrong'
+  @IsIn(['all', 'wrong', 'exclude_mastered', 'new_only'])
+  range!: 'all' | 'wrong' | 'exclude_mastered' | 'new_only'
 
   @IsIn(['random', 'continue'])
   mode!: 'random' | 'continue'

@@ -23,6 +23,8 @@ export class ReviewService {
       deletedAt: null,
       ...(dto.categories?.length ? { category: { in: dto.categories } } : {}),
       ...(dto.range === 'wrong' ? { wrongCount: { gt: 0 } } : {}),
+      ...(dto.range === 'exclude_mastered' ? { reviewStatus: { not: 'mastered' } } : {}),
+      ...(dto.range === 'new_only' ? { reviewStatus: 'new' } : {}),
       ...(dto.source === 'favorites' ? { favorites: { some: {} } } : {}),
     }
 
@@ -80,6 +82,8 @@ export class ReviewService {
       const ratedCards = cards.filter((c) => c.isDone)
       const easyCount = ratedCards.filter((c) => c.rating === 'easy').length
       const againCount = ratedCards.filter((c) => c.rating === 'again').length
+      /** 本轮实际完成评分的张数（会话内可能含未评分的冗余行时以该值为准） */
+      const totalReviewed = ratedCards.length
 
       const savedExtensionCount = await tx.note.count({
         where: {
@@ -89,18 +93,18 @@ export class ReviewService {
       })
 
       if (session.endedAt) {
-        return this.buildSummary(session, easyCount, againCount, savedExtensionCount)
+        return this.buildSummary(session, easyCount, againCount, savedExtensionCount, totalReviewed)
       }
 
       const updatedSession = await tx.reviewSession.update({
         where: { id: sessionId },
         data: {
           endedAt: new Date(),
-          totalCards: cards.length,
+          totalCards: totalReviewed,
         },
       })
 
-      return this.buildSummary(updatedSession, easyCount, againCount, savedExtensionCount)
+      return this.buildSummary(updatedSession, easyCount, againCount, savedExtensionCount, totalReviewed)
     })
   }
 
@@ -126,10 +130,11 @@ export class ReviewService {
     easyCount: number,
     againCount: number,
     savedExtensionCount: number,
+    totalReviewed: number,
   ) {
     return {
       sessionId: session.id,
-      totalCards: session.totalCards,
+      totalCards: totalReviewed,
       results: { easy: easyCount, again: againCount },
       savedExtensionCount,
       startedAt: session.startedAt,

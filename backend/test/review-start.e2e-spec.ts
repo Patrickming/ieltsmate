@@ -114,4 +114,39 @@ describe('Review Start API', () => {
     expect(startFav.body.data.totalCards).toBe(1)
     createdSessionIds.push(startFav.body.data.sessionId as string)
   })
+
+  it('POST /review/sessions/start range new_only returns only notes with reviewStatus new', async () => {
+    const c1 = await request(app.getHttpServer())
+      .post('/notes')
+      .send({ content: 'r3-new', translation: '新', category: 'Task4.1C' })
+      .expect(201)
+    const idNew = c1.body.data.id as string
+    createdIds.push(idNew)
+
+    const c2 = await request(app.getHttpServer())
+      .post('/notes')
+      .send({ content: 'r3-learning', translation: '学', category: 'Task4.1C' })
+      .expect(201)
+    const idLearning = c2.body.data.id as string
+    createdIds.push(idLearning)
+
+    await prisma.note.update({
+      where: { id: idLearning },
+      data: { reviewStatus: 'learning' },
+    })
+
+    const start = await request(app.getHttpServer())
+      .post('/review/sessions/start')
+      .send({
+        source: 'notes',
+        categories: ['Task4.1C'],
+        range: 'new_only',
+        mode: 'continue',
+      })
+      .expect(201)
+
+    expect(start.body.data.totalCards).toBe(1)
+    expect((start.body.data.cards as { id: string }[]).map((n) => n.id)).toEqual([idNew])
+    createdSessionIds.push(start.body.data.sessionId as string)
+  })
 })

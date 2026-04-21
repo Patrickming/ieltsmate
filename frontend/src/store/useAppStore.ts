@@ -991,29 +991,16 @@ export const useAppStore = create<AppState>((set, get) => {
 
   startReviewSession: async (params) => {
     try {
-      // Backend only accepts 'all' | 'wrong' for range; exclude_mastered / new_only are applied client-side
-      const backendParams = {
-        ...params,
-        range: params.range === 'exclude_mastered' || params.range === 'new_only' ? 'all' : params.range,
-      }
       const res = await fetch(apiUrl('/review/sessions/start'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backendParams),
+        body: JSON.stringify(params),
       })
       if (!res.ok) return false
       const json = (await res.json()) as { data?: { sessionId: string; totalCards: number; cards: BackendNote[] } }
       const d = json.data
       if (!d?.sessionId) return false
       let cards = d.cards.map(mapBackendNote)
-
-      // Apply exclude_mastered / new_only filters for fresh sessions
-      if (params.mode !== 'continue' && params.range === 'exclude_mastered') {
-        cards = cards.filter(c => c.reviewStatus !== 'mastered')
-      }
-      if (params.mode !== 'continue' && params.range === 'new_only') {
-        cards = cards.filter(c => c.reviewStatus === 'new')
-      }
 
       // Apply order for fresh sessions
       if (params.mode !== 'continue') {
