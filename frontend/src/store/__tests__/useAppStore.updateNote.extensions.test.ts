@@ -300,4 +300,45 @@ describe('useAppStore updateNote extensions', () => {
       },
     ])
   })
+
+  it('loadNotes 会把有效 userNotes 映射到 note.userNotes', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input)
+      if (url.includes('/notes')) {
+        return Promise.resolve(
+          jsonResponse({
+            data: {
+              items: [
+                {
+                  id: 'n-user-notes',
+                  content: 'strip',
+                  translation: '剥离',
+                  category: '单词',
+                  phonetic: null,
+                  synonyms: [],
+                  antonyms: [],
+                  userNotes: [
+                    { content: ' striped-stripe注意e ' },
+                    { content: '   ' },
+                  ],
+                  example: null,
+                  memoryTip: null,
+                  reviewStatus: 'new',
+                  reviewCount: 0,
+                  correctCount: 0,
+                  wrongCount: 0,
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            },
+          }),
+        )
+      }
+      return Promise.resolve(new Response('', { status: 404 }))
+    })
+
+    await expect(useAppStore.getState().loadNotes()).resolves.toBeUndefined()
+    const updated = useAppStore.getState().notes.find((n) => n.id === 'n-user-notes')
+    expect(updated?.userNotes).toEqual(['striped-stripe注意e'])
+  })
 })

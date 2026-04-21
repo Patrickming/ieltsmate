@@ -236,6 +236,10 @@ describe('Notes API', () => {
     expect(listed.body.data.items).toHaveLength(1)
     expect(listed.body.data.items[0].id).toBe(userNoteId)
 
+    const noteList = await request(app.getHttpServer()).get('/notes').expect(200)
+    const listedParent = noteList.body.data.items.find((item: { id: string }) => item.id === noteId)
+    expect(listedParent.userNotes).toEqual([{ content: 'first remark' }])
+
     await request(app.getHttpServer())
       .delete(`/notes/${noteId}/user-notes/${userNoteId}`)
       .expect(200)

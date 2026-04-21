@@ -7,6 +7,13 @@ import { UpdateNoteDto } from './dto/update-note.dto'
 import { normalizeConfusableGroups, normalizePartOfSpeechList } from './types/note-extensions'
 import { normalizeWordFamily } from './types/word-family'
 
+const noteInclude = {
+  userNotes: {
+    where: { deletedAt: null },
+    select: { content: true },
+  },
+} satisfies Prisma.NoteInclude
+
 @Injectable()
 export class NotesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -45,6 +52,7 @@ export class NotesService {
             })()
           : {}),
       },
+      include: noteInclude,
     })
   }
 
@@ -65,6 +73,7 @@ export class NotesService {
     const items = await this.prisma.note.findMany({
       where,
       orderBy: { createdAt: 'desc' },
+      include: noteInclude,
     })
 
     return { items }
@@ -73,6 +82,7 @@ export class NotesService {
   async detail(id: string) {
     const note = await this.prisma.note.findFirst({
       where: { id, deletedAt: null },
+      include: noteInclude,
     })
     if (!note) {
       throw new NotFoundException('Note not found')
@@ -113,6 +123,7 @@ export class NotesService {
     return this.prisma.note.update({
       where: { id },
       data,
+      include: noteInclude,
     })
   }
 

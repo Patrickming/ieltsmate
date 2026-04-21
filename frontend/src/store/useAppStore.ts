@@ -53,6 +53,7 @@ interface BackendNote {
   wordFamily?: unknown
   example: string | null
   memoryTip: string | null
+  userNotes?: Array<{ content: string }>
   reviewStatus: 'new' | 'learning' | 'mastered'
   reviewCount: number
   correctCount: number
@@ -78,6 +79,9 @@ function mapBackendNote(n: BackendNote): Note {
   const normalizedWordFamily = normalizeWordFamilyForUI(n.wordFamily)
   const normalizedPartsOfSpeech = normalizePartOfSpeechForUI(n.partsOfSpeech)
   const normalizedConfusables = normalizeConfusablesForUI(n.confusables)
+  const normalizedUserNotes = (n.userNotes ?? [])
+    .map((item) => item.content.trim())
+    .filter(Boolean)
   return {
     id: n.id,
     content: n.content,
@@ -90,6 +94,7 @@ function mapBackendNote(n: BackendNote): Note {
     ...(normalizedPartsOfSpeech.length > 0 ? { partsOfSpeech: normalizedPartsOfSpeech } : {}),
     ...(normalizedConfusables.length > 0 ? { confusables: normalizedConfusables } : {}),
     ...(normalizedWordFamily ? { wordFamily: normalizedWordFamily } : {}),
+    ...(normalizedUserNotes.length > 0 ? { userNotes: normalizedUserNotes } : {}),
     example: n.example ?? undefined,
     memoryTip: n.memoryTip ?? undefined,
     createdAt: formatNoteDate(n.createdAt),

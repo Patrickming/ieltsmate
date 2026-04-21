@@ -6,7 +6,7 @@ interface BadgeProps {
   showEmoji?: boolean
 }
 
-const CATEGORY_EMOJI: Record<string, string> = {
+export const CATEGORY_EMOJI: Record<string, string> = {
   '口语': '🎤',
   '短语': '🧩',
   '句子': '💬',

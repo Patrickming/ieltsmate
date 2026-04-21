@@ -3,8 +3,9 @@ import { Search } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../../store/useAppStore'
+import { buildSearchModalResults } from '../../lib/searchModalResults'
 import { adjustSearchHighlight } from '../../utils/searchHighlight'
-import { Badge } from '../ui/Badge'
+import { Badge, CATEGORY_EMOJI } from '../ui/Badge'
 import { ModalShell } from '../ui/ModalShell'
 
 function SearchModalPanel() {
@@ -19,20 +20,14 @@ function SearchModalPanel() {
     return () => window.clearTimeout(t)
   }, [])
 
-  const results = query.trim()
-    ? notes.filter(
-        (n) =>
-          n.content.toLowerCase().includes(query.toLowerCase()) ||
-          n.translation.includes(query)
-      ).slice(0, 8)
-    : notes.slice(0, 6)
+  const results = buildSearchModalResults(notes, query)
 
   const handleSelect = useCallback(
     (idx: number) => {
-      const note = results[idx]
-      if (!note) return
-      setSelectedNote(note)
-      navigate(`/kb/${note.id}`)
+      const result = results[idx]
+      if (!result) return
+      setSelectedNote(result.note)
+      navigate(`/kb/${result.note.id}`)
       closeSearch()
     },
     [results, setSelectedNote, navigate, closeSearch]
@@ -85,23 +80,38 @@ function SearchModalPanel() {
 
       {/* Results */}
       <div className="p-1.5">
-        {results.map((note, i) => (
+        {results.map((result, i) => (
           <motion.button
-            key={note.id}
+            key={result.id}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: i * 0.03 }}
             type="button"
             onClick={() => handleSelect(i)}
             onMouseEnter={() => setHighlighted(i)}
+            aria-label={result.kind === 'association' ? `${result.token} 关联内容` : undefined}
             className={`w-full flex items-center gap-3 h-15 px-3 rounded-md transition-colors ${
               i === highlighted ? 'bg-[#1e1e2e]' : 'hover:bg-[#27272a]/50'
             }`}
           >
-            <Badge category={note.category} showEmoji />
+            {result.kind === 'note' ? (
+              <Badge category={result.note.category} showEmoji />
+            ) : (
+              <span
+                className="w-fit inline-flex items-center rounded font-medium tracking-wide whitespace-nowrap px-1.5 py-0 text-[10px] leading-4"
+                style={{ color: '#a5b4fc', background: '#1e1b4b', border: '1px solid #3730a3' }}
+              >
+                <span className="mr-1">{CATEGORY_EMOJI[result.note.category] ?? '📒'}</span>
+                关联内容
+              </span>
+            )}
             <div className="flex-1 text-left min-w-0">
-              <div className="text-[14px] font-medium text-text-primary truncate">{note.content}</div>
-              <div className="text-xs text-text-dim truncate">{note.translation}</div>
+              <div className="text-[14px] font-medium text-text-primary truncate">
+                {result.kind === 'note' ? result.note.content : result.token}
+              </div>
+              <div className="text-xs text-text-dim truncate">
+                {result.kind === 'note' ? result.note.translation : result.note.content}
+              </div>
             </div>
           </motion.button>
         ))}
