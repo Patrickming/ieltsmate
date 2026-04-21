@@ -3348,53 +3348,39 @@ export default function ReviewCards() {
               </AnimatePresence>
             </div>
 
-            {/* Rating buttons + favorite */}
-            <div className="shrink-0 pb-6 flex items-center justify-center gap-10">
-              {/* Favorite stroke toggle — always visible */}
+            {/* Rating buttons + favorite — 翻转前后布局一致 */}
+            <div className="shrink-0 pb-6 flex flex-wrap items-center justify-center gap-10">
               <ReviewFavButton noteId={card.id} />
-
-              <AnimatePresence>
-                {flipped && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.18 }}
-                    className="flex items-center gap-10"
-                  >
-                    <StrokeButton
-                      disabled={slashState === "slashing"}
-                      color="#fb7185"
-                      onClick={() => handleRate("again")}
-                    >
-                      😞 不记得
-                    </StrokeButton>
-                    <StrokeButton
-                      disabled={slashState === "slashing"}
-                      color="#34d399"
-                      onClick={() => handleRate("easy")}
-                    >
-                      😊 记得
-                    </StrokeButton>
-                    <motion.button
-                      disabled={slashState === "slashing"}
-                      onClick={() => {
-                        void handleSlashMaster();
-                      }}
-                      whileTap={{ scale: 0.96 }}
-                      className="h-11 px-6 rounded-full border text-[15px] font-semibold transition-all disabled:opacity-60"
-                      style={{
-                        color: "#fda4af",
-                        borderColor: "#fb7185aa",
-                        background: "linear-gradient(135deg, #2e0f18, #3b111d)",
-                        boxShadow: "0 0 20px rgba(244,63,94,0.28)",
-                      }}
-                    >
-                      {slashState === "slashing" ? "🔪 斩击中..." : "🔪 斩！"}
-                    </motion.button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <StrokeButton
+                disabled={slashState === "slashing"}
+                color="#fb7185"
+                onClick={() => handleRate("again")}
+              >
+                😞 不记得
+              </StrokeButton>
+              <StrokeButton
+                disabled={slashState === "slashing"}
+                color="#34d399"
+                onClick={() => handleRate("easy")}
+              >
+                😊 记得
+              </StrokeButton>
+              <motion.button
+                disabled={slashState === "slashing"}
+                onClick={() => {
+                  void handleSlashMaster();
+                }}
+                whileTap={{ scale: 0.96 }}
+                className="h-11 px-6 rounded-full border text-[15px] font-semibold transition-all disabled:opacity-60"
+                style={{
+                  color: "#fda4af",
+                  borderColor: "#fb7185aa",
+                  background: "linear-gradient(135deg, #2e0f18, #3b111d)",
+                  boxShadow: "0 0 20px rgba(244,63,94,0.28)",
+                }}
+              >
+                {slashState === "slashing" ? "🔪 斩击中..." : "🔪 斩！"}
+              </motion.button>
             </div>
           </div>
 
