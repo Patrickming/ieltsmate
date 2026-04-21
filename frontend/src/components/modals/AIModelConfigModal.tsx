@@ -99,6 +99,23 @@ export function AIModelConfigModal() {
     setTimeout(() => { setTestStatus('idle'); setTestProgress(null) }, 3000)
   }
 
+  const handleTestSingleModel = async (providerId: string, modelId: string) => {
+    setModelTestResults((prev) => ({ ...prev, [modelId]: 'testing' }))
+    const result = await testModelInBackend(providerId, modelId)
+    const status: 'ok' | 'fail' = result.ok ? 'ok' : 'fail'
+    setModelTestResults((prev) => ({ ...prev, [modelId]: status }))
+
+    if (result.ok) {
+      setProviders((prev) =>
+        prev.map((p) =>
+          p.id === providerId
+            ? { ...p, models: p.models.map((mo) => mo.id === modelId ? { ...mo, verified: true } : mo) }
+            : p,
+        ),
+      )
+    }
+  }
+
   const handleAddProvider = async (presetId: string) => {
     const preset = PRESET_PROVIDERS.find((p) => p.id === presetId)
     if (!preset) return
@@ -451,36 +468,44 @@ export function AIModelConfigModal() {
                                 borderColor: mResult === 'ok' ? '#34d399' : mResult === 'fail' ? '#fb7185' : mResult === 'testing' ? '#818cf8' : '#27272a',
                               }}
                             >
-                              {/* Test result or default verified state */}
-                              <AnimatePresence mode="wait">
-                                {mResult === 'testing' ? (
-                                  <motion.div
-                                    key="testing"
-                                    initial={{ scale: 0 }}
-                                    animate={{ scale: 1, rotate: 360 }}
-                                    transition={{ rotate: { repeat: Infinity, duration: 0.8, ease: 'linear' }, scale: { duration: 0.15 } }}
-                                    className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent shrink-0"
-                                  />
-                                ) : mResult === 'ok' ? (
-                                  <motion.div key="ok" initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                    className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center shrink-0">
-                                    <Check size={11} className="text-[#34d399]" />
-                                  </motion.div>
-                                ) : mResult === 'fail' ? (
-                                  <motion.div key="fail" initial={{ scale: 0 }} animate={{ scale: 1 }}
-                                    className="w-5 h-5 rounded-full bg-[#2e0f0f] border border-[#fb7185] flex items-center justify-center shrink-0">
-                                    <X size={11} className="text-[#fb7185]" />
-                                  </motion.div>
-                                ) : m.verified ? (
-                                  <div key="verified" className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center shrink-0">
-                                    <Check size={11} className="text-[#34d399]" />
-                                  </div>
-                                ) : (
-                                  <div key="unverified" className="w-5 h-5 rounded-full bg-[#1a1a0d] border border-[#fbbf24] flex items-center justify-center shrink-0">
-                                    <Zap size={10} className="text-[#fbbf24]" />
-                                  </div>
-                                )}
-                              </AnimatePresence>
+                              {/* Test result or default verified state（点击可单独测试） */}
+                              <button
+                                type="button"
+                                disabled={mResult === 'testing' || !current.apiKey}
+                                onClick={() => { void handleTestSingleModel(current.id, m.id) }}
+                                title={!current.apiKey ? '请先填写 API 密钥' : '点击单独测试该模型'}
+                                className="shrink-0 rounded-full disabled:cursor-not-allowed focus:outline-none"
+                              >
+                                <AnimatePresence mode="wait">
+                                  {mResult === 'testing' ? (
+                                    <motion.div
+                                      key="testing"
+                                      initial={{ scale: 0 }}
+                                      animate={{ scale: 1, rotate: 360 }}
+                                      transition={{ rotate: { repeat: Infinity, duration: 0.8, ease: 'linear' }, scale: { duration: 0.15 } }}
+                                      className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent"
+                                    />
+                                  ) : mResult === 'ok' ? (
+                                    <motion.div key="ok" initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                      className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center">
+                                      <Check size={11} className="text-[#34d399]" />
+                                    </motion.div>
+                                  ) : mResult === 'fail' ? (
+                                    <motion.div key="fail" initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                      className="w-5 h-5 rounded-full bg-[#2e0f0f] border border-[#fb7185] flex items-center justify-center">
+                                      <X size={11} className="text-[#fb7185]" />
+                                    </motion.div>
+                                  ) : m.verified ? (
+                                    <div key="verified" className="w-5 h-5 rounded-full bg-[#0d2b1f] border border-[#34d399] flex items-center justify-center">
+                                      <Check size={11} className="text-[#34d399]" />
+                                    </div>
+                                  ) : (
+                                    <div key="unverified" className="w-5 h-5 rounded-full bg-[#1a1a0d] border border-[#fbbf24] flex items-center justify-center">
+                                      <Zap size={10} className="text-[#fbbf24]" />
+                                    </div>
+                                  )}
+                                </AnimatePresence>
+                              </button>
                               <span className="flex-1 text-sm text-text-primary font-mono truncate">{m.id}</span>
                               {mResult === 'ok' && <span className="text-[10px] text-[#34d399] shrink-0">通过</span>}
                               {mResult === 'fail' && <span className="text-[10px] text-[#fb7185] shrink-0">失败</span>}
