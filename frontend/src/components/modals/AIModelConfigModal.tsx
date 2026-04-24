@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import {
   X, Cpu, Check, ChevronDown, ChevronRight, Eye, EyeOff,
   Plus, Trash2, Zap, GitBranch, Sparkles, Brain, Globe,
-  Bot, Server, Star, Camera, Hexagon,
+  Bot, Server, Star, Camera, Hexagon, Layers,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
@@ -11,6 +11,20 @@ import { useAppStore } from '../../store/useAppStore'
 const PRESET_PROVIDERS = [
   { id: 'siliconflow', name: 'SiliconFlow', icon: Zap, color: '#818cf8', baseUrl: 'https://api.siliconflow.cn/v1', recommended: ['Pro/zai-org/GLM-5', 'Pro/MiniMaxAI/MiniMax-M2.5', 'deepseek-ai/DeepSeek-V3', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct'] },
   { id: 'openrouter', name: 'OpenRouter', icon: GitBranch, color: '#60a5fa', baseUrl: 'https://openrouter.ai/api/v1', recommended: ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'google/gemini-2.0-flash', 'meta-llama/llama-3.3-70b-instruct'] },
+  // OpenAI Chat Completions 兼容聚合，见 https://docs.zenmux.ai/guide/quickstart.html
+  {
+    id: 'zenmux',
+    name: 'ZenMux',
+    icon: Layers,
+    color: '#c084fc',
+    baseUrl: 'https://zenmux.ai/api/v1',
+    recommended: [
+      'anthropic/claude-sonnet-4.5',
+      'openai/gpt-4o',
+      'deepseek/deepseek-chat',
+      'google/gemini-2.0-flash',
+    ],
+  },
   { id: 'openai', name: 'OpenAI', icon: Bot, color: '#34d399', baseUrl: 'https://api.openai.com/v1', recommended: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
   { id: 'anthropic', name: 'Anthropic', icon: Brain, color: '#fb7185', baseUrl: 'https://api.anthropic.com/v1', recommended: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'] },
   { id: 'gemini', name: 'Google Gemini', icon: Sparkles, color: '#fbbf24', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', recommended: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'] },
