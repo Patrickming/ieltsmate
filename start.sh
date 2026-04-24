@@ -172,9 +172,10 @@ run_startup() {
     fi
     cd "$FRONTEND_DIR" || exit 1
     : > "$FRONTEND_LOG"
-    info "启动前端进程 (pnpm dev, PORT=${FRONTEND_PORT}, API=${BACKEND_PORT})..."
-    nohup env VITE_API_BASE_URL="http://localhost:${BACKEND_PORT}" \
-      pnpm dev --host localhost --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
+    info "启动前端进程 (pnpm dev, PORT=${FRONTEND_PORT}, API=http://127.0.0.1:${BACKEND_PORT})..."
+    # API 用 127.0.0.1 避免 localhost→::1 而后端仅监听 IPv4 时请求失败；不写 --host 以使用 vite.config 的 host: ::
+    nohup env VITE_API_BASE_URL="http://127.0.0.1:${BACKEND_PORT}" \
+      pnpm dev --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
     if wait_for_port "$FRONTEND_PORT" 15; then
       ok "前端启动成功 (http://localhost:${FRONTEND_PORT})"
     else

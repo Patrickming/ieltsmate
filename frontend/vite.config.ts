@@ -37,6 +37,8 @@ export default defineConfig({
     },
   },
   server: {
+    // [::] 同时接受 IPv4/IPv6 的 localhost，避免浏览器优先走 ::1 时连不上 dev server
+    host: '::',
     proxy: {
       '/notes': {
         target: 'http://127.0.0.1:3000',
