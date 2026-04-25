@@ -10,7 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useId, useMemo, useState } from "react";
 import type { Category } from "../../data/mockData";
 import type { Note } from "../../data/mockData";
-import { useAppStore } from "../../store/useAppStore";
+import { useAppStore, type ProviderConfig } from "../../store/useAppStore";
 
 function categoryToCardType(
   category: Category,
@@ -25,6 +25,40 @@ function categoryToCardType(
 
 interface AiContentShape {
   fallback?: boolean;
+}
+
+function resolveReviewModelLabel(
+  reviewModel: string,
+  providers: ProviderConfig[],
+): { label: string; title: string } {
+  const fallbackModel = providers[0]?.models[0]?.id ?? "";
+  const configuredModel = reviewModel || fallbackModel;
+
+  if (!configuredModel) {
+    return { label: "未配置模型", title: "当前没有可用的 AI 模型配置" };
+  }
+
+  for (const provider of providers) {
+    const matched = provider.models.find((model) => {
+      if (model.id === configuredModel) return true;
+      if (model.id.endsWith(`/${configuredModel}`)) return true;
+      return model.id.split("/").pop() === configuredModel;
+    });
+
+    if (matched) {
+      const shortModel = matched.id.split("/").pop() || matched.id;
+      const providerName = provider.displayName || provider.name;
+      return {
+        label: `${shortModel}（${providerName}）`,
+        title: `${providerName} / ${matched.id}`,
+      };
+    }
+  }
+
+  return {
+    label: configuredModel.split("/").pop() || configuredModel,
+    title: configuredModel,
+  };
 }
 
 function cellStatus(
@@ -230,6 +264,10 @@ export function ReviewAIWarmupBar({
   const reviewSession = useAppStore((s) => s.reviewSession);
   const reviewPrepareBatchSize = useAppStore((s) => s.reviewPrepareBatchSize);
   const retryAIContent = useAppStore((s) => s.retryAIContent);
+  const reviewModel = useAppStore((s) => s.reviewModel);
+  const providers = useAppStore((s) => s.providers);
+  const [isHovered, setIsHovered] = useState(false);
+  const [isSticky, setIsSticky] = useState(false);
 
   const snapshot = useMemo(() => {
     if (
@@ -308,6 +346,7 @@ export function ReviewAIWarmupBar({
   const ringR = 15.5;
   const ringC = 2 * Math.PI * ringR;
   const sidebarSegH = getSidebarSegmentBarClass(total);
+  const modelLabel = resolveReviewModelLabel(reviewModel, providers);
 
   const bgDecor = (
     <>
@@ -539,8 +578,6 @@ export function ReviewAIWarmupBar({
       </motion.div>
     );
 
-  const [isHovered, setIsHovered] = useState(false);
-  const [isSticky, setIsSticky] = useState(false);
   const isExpanded = isHovered || isSticky || failed > 0;
 
   if (variant === "floating") {
@@ -598,6 +635,12 @@ export function ReviewAIWarmupBar({
                       "flex flex-wrap justify-center gap-1",
                       true,
                     )}
+                  </div>
+                  <div
+                    className="max-w-full truncate text-[10px] leading-none text-text-subtle"
+                    title={modelLabel.title}
+                  >
+                    模型：<span className="text-text-dim">{modelLabel.label}</span>
                   </div>
                 </div>
 

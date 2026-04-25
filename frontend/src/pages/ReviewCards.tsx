@@ -517,7 +517,7 @@ function ReviewBackTabBar({
     >
       {btn("learning", "review-back-tab-learning", "学习内容")}
       {showWordFamily
-        ? btn("wordFamily", "review-back-tab-word-family", "词性&词根派生")
+        ? btn("wordFamily", "review-back-tab-word-family", "词义&词根派生")
         : null}
       {btn("posConfusable", "review-back-tab-pos-confusable", "易混淆词")}
     </div>
@@ -561,6 +561,145 @@ function isPosSaved(
   const k = posDedupKey(item);
   if (sessionKeys.includes(k)) return true;
   return (stored?.partsOfSpeech ?? []).some((p) => posDedupKey(p) === k);
+}
+
+function getMergedPartOfSpeechItems({
+  note,
+  aiPos,
+  aiWordFamily,
+  storedNote,
+}: {
+  note: Note;
+  aiPos?: PartOfSpeechItem[];
+  aiWordFamily?: WordFamily;
+  storedNote: Note;
+}): PartOfSpeechItem[] {
+  const sourceWf = aiWordFamily ?? storedNote.wordFamily;
+  const allAiPos = aiPos ?? [];
+  const allStoredPos = storedNote.partsOfSpeech ?? [];
+  const basePosFromWordFamily: PartOfSpeechItem[] = (() => {
+    if (!sourceWf) return [];
+    const baseWord = sourceWf.base.word.trim().toLowerCase();
+    const currentWord = note.content.trim().toLowerCase();
+    if (baseWord !== currentWord) return [];
+    if (sourceWf.base.pos === "other") return [];
+    const meaning = sourceWf.base.meaning.trim();
+    if (!meaning) return [];
+    const targetPosAbbr = POS4_TO_POS_ABBR[sourceWf.base.pos];
+    const alreadyHasPos = [...allStoredPos, ...allAiPos].some(
+      (p) => canonicalizePos(p.pos) === canonicalizePos(targetPosAbbr),
+    );
+    if (alreadyHasPos) return [];
+    return [
+      {
+        pos: targetPosAbbr,
+        label: POS4_LABEL[sourceWf.base.pos],
+        meaning,
+        ...(sourceWf.base.phonetic?.trim()
+          ? { phonetic: sourceWf.base.phonetic.trim() }
+          : {}),
+      },
+    ];
+  })();
+
+  return mergeUniquePos(
+    allStoredPos,
+    mergeUniquePos(allAiPos, basePosFromWordFamily),
+  );
+}
+
+function PartOfSpeechMeaningBlock({
+  note,
+  aiPos,
+  aiWordFamily,
+  storedNote,
+  savedPosKeys,
+  onSavePos,
+  readOnly = false,
+}: {
+  note: Note;
+  aiPos?: PartOfSpeechItem[];
+  aiWordFamily?: WordFamily;
+  storedNote: Note;
+  savedPosKeys: string[];
+  onSavePos: (item: PartOfSpeechItem) => void;
+  readOnly?: boolean;
+}) {
+  const barColor = CATEGORY_BAR[note.category] ?? "#818cf8";
+  const mergedPos = getMergedPartOfSpeechItems({
+    note,
+    aiPos,
+    aiWordFamily,
+    storedNote,
+  });
+
+  if (mergedPos.length === 0) return null;
+
+  return (
+    <div>
+      <div className="text-sm font-semibold text-text-muted mb-2">完整词义</div>
+      <div className="flex flex-col gap-3">
+        {mergedPos.map((item, idx) => {
+          const saved = isPosSaved(item, storedNote, savedPosKeys);
+          return (
+            <div
+              key={`${posDedupKey(item)}-${idx}`}
+              className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="text-[11px] font-bold px-2 py-0.5 rounded-md border"
+                    style={{
+                      borderColor: barColor + "66",
+                      color: barColor,
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                  <span className="text-[12px] text-text-subtle font-mono">
+                    {item.pos}
+                  </span>
+                </div>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    data-testid={`review-pos-save-${idx}`}
+                    onClick={() => onSavePos(item)}
+                    className="flex items-center gap-1 shrink-0"
+                    style={{ color: saved ? "#34d399" : "#818cf8" }}
+                  >
+                    {saved ? <Check size={10} /> : <Plus size={10} />}
+                    <span className="text-[11px]">
+                      {saved ? "✓ 已存入" : "存入"}
+                    </span>
+                  </button>
+                )}
+              </div>
+              <p className="text-[15px] text-text-primary leading-relaxed">
+                {item.meaning}
+              </p>
+              {item.phonetic && (
+                <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">
+                  {item.phonetic}
+                </p>
+              )}
+              {item.example && (
+                <p className="text-[13px] text-text-secondary italic mt-2 leading-relaxed">
+                  "{item.example}"
+                </p>
+              )}
+              {item.exampleTranslation && (
+                <p className="text-[12px] text-text-dim mt-1 leading-relaxed">
+                  {item.exampleTranslation}
+                </p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function isConfusableSaved(
@@ -701,12 +840,9 @@ function isWordFamilyItemSaved(
 
 function WordFamilyPanel({
   note,
-  aiPos,
   aiWordFamily,
   storedNote,
-  savedPosKeys,
   savedKeys,
-  onSavePos,
   onSaveItem,
   onSaveAll,
   onSaveRootItem,
@@ -714,51 +850,16 @@ function WordFamilyPanel({
   readOnly = false,
 }: {
   note: Note;
-  aiPos?: PartOfSpeechItem[];
   aiWordFamily?: WordFamily;
   storedNote: Note;
-  savedPosKeys: string[];
   savedKeys: string[];
-  onSavePos: (item: PartOfSpeechItem) => void;
   onSaveItem: (item: WordFamilyItem) => void;
   onSaveAll: () => void;
   onSaveRootItem: (item: WordFamilyItem) => void;
   onSaveRootAll: () => void;
   readOnly?: boolean;
 }) {
-  const barColor = CATEGORY_BAR[note.category] ?? "#818cf8";
   const storedWf = storedNote.wordFamily;
-  const sourceWf = aiWordFamily ?? storedWf;
-  const allAiPos = aiPos ?? [];
-  const allStoredPos = storedNote.partsOfSpeech ?? [];
-  const basePosFromWordFamily: PartOfSpeechItem[] = (() => {
-    if (!sourceWf) return [];
-    const baseWord = sourceWf.base.word.trim().toLowerCase();
-    const currentWord = note.content.trim().toLowerCase();
-    if (baseWord !== currentWord) return [];
-    if (sourceWf.base.pos === "other") return [];
-    const meaning = sourceWf.base.meaning.trim();
-    if (!meaning) return [];
-    const targetPosAbbr = POS4_TO_POS_ABBR[sourceWf.base.pos];
-    const alreadyHasPos = [...allStoredPos, ...allAiPos].some(
-      (p) => canonicalizePos(p.pos) === canonicalizePos(targetPosAbbr),
-    );
-    if (alreadyHasPos) return [];
-    return [
-      {
-        pos: targetPosAbbr,
-        label: POS4_LABEL[sourceWf.base.pos],
-        meaning,
-        ...(sourceWf.base.phonetic?.trim()
-          ? { phonetic: sourceWf.base.phonetic.trim() }
-          : {}),
-      },
-    ];
-  })();
-  const mergedPos = mergeUniquePos(
-    allStoredPos,
-    mergeUniquePos(allAiPos, basePosFromWordFamily),
-  );
   const aiFlat = aiWordFamily ? flattenWordFamilyItems(aiWordFamily) : [];
   const seed: WordFamily = storedWf
     ? storedWf
@@ -792,73 +893,6 @@ function WordFamilyPanel({
 
   return (
     <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
-      {mergedPos.length > 0 ? (
-        <div>
-          <div className="text-sm font-semibold text-text-muted mb-2">词性</div>
-          <div className="flex flex-col gap-3">
-            {mergedPos.map((item, idx) => {
-              const saved = isPosSaved(item, storedNote, savedPosKeys);
-              return (
-                <div
-                  key={`${posDedupKey(item)}-${idx}`}
-                  className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className="text-[11px] font-bold px-2 py-0.5 rounded-md border"
-                        style={{
-                          borderColor: barColor + "66",
-                          color: barColor,
-                        }}
-                      >
-                        {item.label}
-                      </span>
-                      <span className="text-[12px] text-text-subtle font-mono">
-                        {item.pos}
-                      </span>
-                    </div>
-                    {!readOnly && (
-                      <button
-                        type="button"
-                        data-testid={`review-pos-save-${idx}`}
-                        onClick={() => onSavePos(item)}
-                        className="flex items-center gap-1 shrink-0"
-                        style={{ color: saved ? "#34d399" : "#818cf8" }}
-                      >
-                        {saved ? <Check size={10} /> : <Plus size={10} />}
-                        <span className="text-[11px]">
-                          {saved ? "✓ 已存入" : "存入"}
-                        </span>
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-[15px] text-text-primary leading-relaxed">
-                    {item.meaning}
-                  </p>
-                  {item.phonetic && (
-                    <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">
-                      {item.phonetic}
-                    </p>
-                  )}
-                  {item.example && (
-                    <p className="text-[13px] text-text-secondary italic mt-2 leading-relaxed">
-                      "{item.example}"
-                    </p>
-                  )}
-                  {item.exampleTranslation && (
-                    <p className="text-[12px] text-text-dim mt-1 leading-relaxed">
-                      {item.exampleTranslation}
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="h-px bg-border my-4" />
       <div className="text-base font-bold text-text-secondary mb-2">
         词义派生
       </div>
@@ -1146,12 +1180,9 @@ function CardBackWordPhrase({
       onSaveWordFamilyAll ? (
         <WordFamilyPanel
           note={note}
-          aiPos={extPos}
           aiWordFamily={speechAi.wordFamily}
           storedNote={storedNote}
-          savedPosKeys={savedPosKeys}
           savedKeys={savedWordFamilyKeys}
-          onSavePos={onSavePos}
           onSaveItem={onSaveWordFamilyItem}
           onSaveAll={onSaveWordFamilyAll}
           onSaveRootItem={onSaveRootItem ?? (() => {})}
@@ -1185,6 +1216,16 @@ function CardBackWordPhrase({
               {note.translation}
             </p>
           </div>
+          {showReviewTabs && showWordFamilyTab && storedNote && onSavePos && (
+            <PartOfSpeechMeaningBlock
+              note={note}
+              aiPos={extPos}
+              aiWordFamily={speechAi.wordFamily}
+              storedNote={storedNote}
+              savedPosKeys={savedPosKeys}
+              onSavePos={onSavePos}
+            />
+          )}
           <div className="h-px bg-border" />
           {ai.synonyms.length > 0 && (
             <div>
@@ -1575,12 +1616,9 @@ function CardBackSpelling({
       onSaveWordFamilyAll ? (
         <WordFamilyPanel
           note={note}
-          aiPos={ai.partsOfSpeech}
           aiWordFamily={ai.wordFamily}
           storedNote={storedNote}
-          savedPosKeys={savedPosKeys}
           savedKeys={savedWordFamilyKeys}
-          onSavePos={onSavePos}
           onSaveItem={onSaveWordFamilyItem}
           onSaveAll={onSaveWordFamilyAll}
           onSaveRootItem={onSaveRootItem ?? (() => {})}
@@ -1645,6 +1683,16 @@ function CardBackSpelling({
               {note.translation}
             </p>
           </div>
+          {showReviewTabs && showWordFamilyTab && storedNote && onSavePos && (
+            <PartOfSpeechMeaningBlock
+              note={note}
+              aiPos={ai.partsOfSpeech}
+              aiWordFamily={ai.wordFamily}
+              storedNote={storedNote}
+              savedPosKeys={savedPosKeys}
+              onSavePos={onSavePos}
+            />
+          )}
           <div className="h-px bg-border" />
           {ai.synonyms.length > 0 && (
             <div>
@@ -1824,12 +1872,9 @@ function CardBackFallback({
       onSaveWordFamilyAll ? (
         <WordFamilyPanel
           note={note}
-          aiPos={undefined}
           aiWordFamily={undefined}
           storedNote={storedNote}
-          savedPosKeys={savedPosKeys}
           savedKeys={savedWordFamilyKeys}
-          onSavePos={onSavePos}
           onSaveItem={onSaveWordFamilyItem}
           onSaveAll={onSaveWordFamilyAll}
           onSaveRootItem={onSaveRootItem ?? (() => {})}
@@ -1896,6 +1941,16 @@ function CardBackFallback({
               {note.translation}
             </p>
           </div>
+          {showExtTabs && showWordFamilyTab && storedNote && onSavePos && (
+            <PartOfSpeechMeaningBlock
+              note={note}
+              aiPos={undefined}
+              aiWordFamily={undefined}
+              storedNote={storedNote}
+              savedPosKeys={savedPosKeys}
+              onSavePos={onSavePos}
+            />
+          )}
           {((note.synonyms?.length ?? 0) > 0 ||
             (note.antonyms?.length ?? 0) > 0) && (
             <div className="h-px bg-border" />
@@ -2084,6 +2139,18 @@ function CardBackFastReview({
         </p>
       </div>
 
+      {showExt && (
+        <PartOfSpeechMeaningBlock
+          note={note}
+          aiPos={undefined}
+          aiWordFamily={undefined}
+          storedNote={storedNote}
+          savedPosKeys={[]}
+          onSavePos={() => {}}
+          readOnly
+        />
+      )}
+
       {((n.synonyms?.length ?? 0) > 0 || (n.antonyms?.length ?? 0) > 0) && (
         <div className="h-px bg-border" />
       )}
@@ -2165,12 +2232,9 @@ function CardBackFastReview({
           <div className="h-px bg-border my-2" />
           <WordFamilyPanel
             note={note}
-            aiPos={undefined}
             aiWordFamily={undefined}
             storedNote={storedNote}
-            savedPosKeys={[]}
             savedKeys={[]}
-            onSavePos={() => {}}
             onSaveItem={() => {}}
             onSaveAll={() => {}}
             onSaveRootItem={() => {}}
@@ -3108,7 +3172,7 @@ export default function ReviewCards() {
               exit={{ scale: 0.92, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               onClick={(e) => e.stopPropagation()}
-              className="w-80 rounded-2xl border p-6 flex flex-col gap-4"
+              className="w-[min(100vw-2rem,22rem)] max-w-md rounded-2xl border p-6 flex flex-col gap-4"
               style={{
                 background: "#1c1c20",
                 borderColor: "#3f3f46",
@@ -3116,14 +3180,17 @@ export default function ReviewCards() {
               }}
             >
               <div>
-                <div className="text-base font-bold text-text-primary mb-1">
-                  退出复习？
+                <div className="text-base font-bold text-text-primary mb-2">
+                  确定退出本次复习？
                 </div>
-                <div className="text-sm text-text-dim">
-                  当前进度将不会保存，已评分的记录仍然有效。
-                </div>
+                <p className="text-sm text-text-dim leading-relaxed">
+                  退出后，当前这一轮复习会话会结束；已经评分（完成翻卡后你的选择）的卡片会照常计入复习与统计。
+                </p>
+                <p className="text-sm text-text-dim leading-relaxed mt-2">
+                  尚未评分的卡片不会记作本轮结果，之后仍可在「复习」里再次开始。
+                </p>
               </div>
-              <div className="flex gap-2 justify-end">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
                 <button
                   type="button"
                   onClick={() => setShowExitConfirm(false)}
@@ -3143,7 +3210,7 @@ export default function ReviewCards() {
                     boxShadow: "0 4px 12px rgba(239,68,68,0.3)",
                   }}
                 >
-                  确认退出
+                  退出到复习首页
                 </button>
               </div>
             </motion.div>
