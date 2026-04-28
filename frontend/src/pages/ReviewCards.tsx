@@ -353,6 +353,7 @@ interface SpellingAI extends AIContentBase {
 }
 interface FallbackAI extends AIContentBase {
   fallback: true;
+  reason?: string;
   phonetic: string | null;
   translation: string;
   synonyms: string[];

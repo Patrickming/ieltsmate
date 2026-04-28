@@ -221,20 +221,18 @@ export class ReviewAiService {
     const prompt = this.buildPrompt(note, cardType)
 
     try {
-      const result = await Promise.race([
-        this.aiService.chat({
-          messages: [{ role: 'user', content: prompt }],
-          slot: 'review',
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('AI generation timeout')), REVIEW_AI_GENERATION_TIMEOUT_MS),
-        ),
-      ])
+      // 使用 complete（无 tools）：chat() 会附带 tools 与多轮 function calling，
+      // 易出现非纯 JSON / 占位文案导致 parseAIResponse 解析失败。
+      const raw = await this.aiService.complete({
+        messages: [{ role: 'user', content: prompt }],
+        slot: 'review',
+        timeoutMs: REVIEW_AI_GENERATION_TIMEOUT_MS,
+      })
 
-      return this.parseAIResponse(result.content, cardType, note)
+      return this.parseAIResponse(raw, cardType, note)
     } catch (err) {
       this.logger.warn(`AI generation failed for note ${noteId}: ${String(err)}`)
-      return this.buildFallback(note, 'AI generation failed or timed out')
+      return this.buildFallback(note, 'AI 调用失败或超时')
     }
   }
 
@@ -481,9 +479,14 @@ synonyms 与 antonyms 须为对象数组 [{ "word": "…", "meaning": "…" }]�
         }
       }
 
-      return this.buildFallback(note, 'AI returned unexpected format')
-    } catch {
-      return this.buildFallback(note, 'Failed to parse AI response')
+      return this.buildFallback(note, 'AI 返回格式不符合要求')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      const preview = content.slice(0, 500).replace(/\s+/g, ' ')
+      this.logger.warn(
+        `Review AI JSON parse/extract failed: ${msg} · cardType=${cardType} · preview=${preview || '(empty)'}`,
+      )
+      return this.buildFallback(note, '无法解析 AI 输出')
     }
   }
 
@@ -496,10 +499,11 @@ synonyms 与 antonyms 须为对象数组 [{ "word": "…", "meaning": "…" }]�
       example?: string | null
       memoryTip?: string | null
     } | null,
-    _reason: string,
+    reason: string,
   ): FallbackResponse {
     return {
       fallback: true,
+      reason,
       phonetic: note?.phonetic ?? null,
       translation: note?.translation ?? '',
       synonyms: note?.synonyms ?? [],

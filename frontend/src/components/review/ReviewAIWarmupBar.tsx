@@ -74,6 +74,16 @@ function cellStatus(
   return "ok";
 }
 
+/** 降级结果上可能带有后端/前端写入的 `reason` */
+function readFallbackReason(raw: unknown): string {
+  if (!raw || typeof raw !== "object") {
+    return "暂无失败说明（已降级为基础内容）";
+  }
+  const r = (raw as { reason?: unknown }).reason;
+  if (typeof r === "string" && r.trim()) return r.trim();
+  return "暂无失败说明（已降级为基础内容）";
+}
+
 /** 根据滑动窗口张数 (通常 1–15) 调整密度，避免格条过挤或留白过多 */
 function getDensityLayout(total: number) {
   if (total <= 4) {
@@ -268,6 +278,9 @@ export function ReviewAIWarmupBar({
   const providers = useAppStore((s) => s.providers);
   const [isHovered, setIsHovered] = useState(false);
   const [isSticky, setIsSticky] = useState(false);
+  const [expandedFailNoteId, setExpandedFailNoteId] = useState<string | null>(
+    null,
+  );
 
   const snapshot = useMemo(() => {
     if (
@@ -492,32 +505,61 @@ export function ReviewAIWarmupBar({
       )}
       {failedNotes.map((note) => {
         const retrying = reviewSession!.aiLoading[note.id] ?? false;
+        const failReason = readFallbackReason(
+          reviewSession!.aiContent[note.id],
+        );
+        const failExpanded = expandedFailNoteId === note.id;
 
         if (variant === "floating") {
           return (
             <div
               key={note.id}
-              className="flex items-center justify-between gap-2 rounded bg-amber-500/10 px-1.5 py-1"
+              className="flex flex-col gap-1 rounded bg-amber-500/10 px-1.5 py-1"
             >
-              <span
-                className="min-w-0 flex-1 truncate text-[10px] text-amber-200"
-                title={note.content}
-              >
-                {note.content.trim() || note.id}
-              </span>
-              <button
-                type="button"
-                disabled={retrying}
-                onClick={() =>
-                  retryAIContent(
-                    note.id,
-                    categoryToCardType(note.category as Category),
-                  )
-                }
-                className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-medium text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
-              >
-                {retrying ? "..." : "重试"}
-              </button>
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedFailNoteId((id) =>
+                      id === note.id ? null : note.id,
+                    )
+                  }
+                  className="min-w-0 flex-1 truncate text-left text-[10px] font-medium text-amber-200 underline decoration-dotted decoration-amber-400/35 underline-offset-2 hover:bg-amber-500/15 hover:text-amber-50"
+                  aria-expanded={failExpanded}
+                  title="点击查看降级原因"
+                >
+                  {note.content.trim() || note.id}
+                </button>
+                <button
+                  type="button"
+                  disabled={retrying}
+                  onClick={() =>
+                    retryAIContent(
+                      note.id,
+                      categoryToCardType(note.category as Category),
+                    )
+                  }
+                  className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-medium text-amber-100 hover:bg-amber-500/30 disabled:opacity-50"
+                >
+                  {retrying ? "..." : "重试"}
+                </button>
+              </div>
+              <AnimatePresence initial={false}>
+                {failExpanded && (
+                  <motion.div
+                    key="detail"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="overflow-hidden"
+                  >
+                    <p className="border-t border-amber-500/20 pt-1.5 text-[9px] leading-relaxed text-amber-100/90">
+                      {failReason}
+                    </p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         }
@@ -527,14 +569,22 @@ export function ReviewAIWarmupBar({
             key={note.id}
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className="group flex w-full max-w-full items-center gap-2 rounded-xl border border-amber-500/25 bg-gradient-to-r from-amber-950/40 to-amber-950/10 px-2.5 py-1.5 shadow-sm backdrop-blur-sm"
+            className="group flex w-full max-w-full flex-col gap-1.5 rounded-xl border border-amber-500/25 bg-gradient-to-r from-amber-950/40 to-amber-950/10 px-2.5 py-1.5 shadow-sm backdrop-blur-sm"
           >
-            <span
-              className="min-w-0 flex-1 truncate text-[11px] font-medium text-amber-50/95"
-              title={note.content}
-            >
-              {note.content.trim() || note.id}
-            </span>
+            <div className="flex w-full max-w-full items-center gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setExpandedFailNoteId((id) =>
+                    id === note.id ? null : note.id,
+                  )
+                }
+                className="min-w-0 flex-1 truncate text-left text-[11px] font-medium text-amber-50/95 underline decoration-dotted decoration-amber-400/30 underline-offset-2 hover:text-amber-50"
+                aria-expanded={failExpanded}
+                title="点击查看降级原因"
+              >
+                {note.content.trim() || note.id}
+              </button>
             <button
               type="button"
               disabled={retrying}
@@ -558,6 +608,23 @@ export function ReviewAIWarmupBar({
                 </>
               )}
             </button>
+            </div>
+            <AnimatePresence initial={false}>
+              {failExpanded && (
+                <motion.div
+                  key="detail"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="overflow-hidden"
+                >
+                  <p className="border-t border-amber-500/20 pt-1.5 text-[10px] leading-relaxed text-amber-100/85">
+                    {failReason}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         );
       })}

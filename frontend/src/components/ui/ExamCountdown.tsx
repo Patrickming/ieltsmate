@@ -3,9 +3,9 @@ import { Calendar, X } from 'lucide-react'
 import { motion, useReducedMotion } from 'framer-motion'
 
 const STORAGE_KEY = 'ieltsmate-exam-date'
-/** 考试日目标时间：当日 09:00（东八区），与常见上午场次一致 */
+/** 考试日目标时间：该日 00:00（东八区自然日界），按满 24 小时为「一天」 */
 function examTargetMs(dateStr: string): number {
-  return new Date(`${dateStr}T09:00:00+08:00`).getTime()
+  return new Date(`${dateStr}T00:00:00+08:00`).getTime()
 }
 
 function loadStoredDate(): string | null {
@@ -168,7 +168,7 @@ export function ExamCountdown() {
           className="rounded-xl border border-dashed border-border/60 bg-[#141416]/60 py-8 px-3 text-center transition-colors hover:border-primary/35 hover:bg-primary/[0.04]"
         >
           <p className="text-[13px] text-text-muted">点击选择你的 IELTS 考试日期</p>
-          <p className="text-[11px] text-text-subtle mt-1.5">默认以考试日 09:00（北京时间）为截止</p>
+          <p className="text-[11px] text-text-subtle mt-1.5">默认以考试日当天 00:00（北京时间，自然日界）为截止</p>
         </button>
       ) : (
         <>

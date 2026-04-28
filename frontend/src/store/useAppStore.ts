@@ -167,6 +167,8 @@ export interface StartReviewParams {
 
 interface CardAIContent {
   fallback: boolean
+  /** Present when fallback is true — why the full AI payload could not be used */
+  reason?: string
   [key: string]: unknown
 }
 
@@ -1259,6 +1261,7 @@ export const useAppStore = create<AppState>((set, get) => {
     })
 
     const maxAttempts = 1 + AI_GENERATE_AUTO_RETRIES
+    let lastFallbackReason: string | undefined
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         const res = await fetch(apiUrl('/review/ai/generate'), {
@@ -1281,8 +1284,10 @@ export const useAppStore = create<AppState>((set, get) => {
           })
           return
         }
+        const r = (content as CardAIContent).reason
+        if (typeof r === 'string' && r.trim()) lastFallbackReason = r.trim()
       } catch {
-        /* retry below */
+        lastFallbackReason = lastFallbackReason ?? '网络或接口异常'
       }
       if (attempt < maxAttempts - 1) {
         await waitMs(AI_GENERATE_RETRY_BACKOFF_MS)
@@ -1294,7 +1299,15 @@ export const useAppStore = create<AppState>((set, get) => {
       return {
         reviewSession: {
           ...s.reviewSession,
-          aiContent: { ...s.reviewSession.aiContent, [noteId]: { fallback: true } as CardAIContent },
+          aiContent: {
+            ...s.reviewSession.aiContent,
+            [noteId]: {
+              fallback: true,
+              reason:
+                lastFallbackReason ??
+                '多次重试后仍未生成完整联想（已降级为基础内容）',
+            } as CardAIContent,
+          },
           aiLoading: { ...s.reviewSession.aiLoading, [noteId]: false },
         },
       }

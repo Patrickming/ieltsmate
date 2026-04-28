@@ -71,6 +71,8 @@ export interface SpellingAI {
 
 export interface FallbackResponse {
   fallback: true
+  /** User-facing explanation for why the model output was degraded (Chinese or short English) */
+  reason?: string
   phonetic: string | null
   translation: string
   synonyms: string[]
