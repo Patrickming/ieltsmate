@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Send, Plus, AlignJustify, ChevronDown, Sparkles, Paperclip, HelpCircle, AlertCircle, Zap, ImageIcon, FileText, XCircle, Camera } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { X, Send, Plus, AlignJustify, ChevronDown, Sparkles, Paperclip, HelpCircle, AlertCircle, Zap, ImageIcon, FileText, XCircle, Camera, Trash2 } from 'lucide-react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useAppStore } from '../../store/useAppStore'
@@ -94,6 +94,7 @@ function loadConversations(): Conversation[] | null {
 
 export function AIPanel() {
   const navigate = useNavigate()
+  const prefersReducedMotion = useReducedMotion()
   const { showAIPanel, closeAIPanel, providers, chatModel } = useAppStore()
 
   // All available models from configured providers
@@ -114,7 +115,7 @@ export function AIPanel() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [showModelPicker, setShowModelPicker] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
   const [historyWidth, setHistoryWidth] = useState(DEFAULT_HISTORY_WIDTH)
   const [showTip, setShowTip] = useState(false)
   // Use the chat slot model from settings, fallback to first available model
@@ -163,8 +164,9 @@ export function AIPanel() {
   const panelWidth = showHistory ? historyWidth + CHAT_WIDTH : CHAT_WIDTH
 
   useEffect(() => {
+    if (!showAIPanel) return
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, loading, showAIPanel])
 
   // Drag resize logic
   const onDragStart = useCallback((e: React.MouseEvent) => {
@@ -195,6 +197,34 @@ export function AIPanel() {
     const newConv: Conversation = { id, title: '新对话', messages: [WELCOME], createdAt: '刚刚' }
     setConversations((prev) => [...prev, newConv])
     setCurrentConvId(id)
+  }
+
+  const deleteConversation = (convId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setConversations((prev) => {
+      const idx = prev.findIndex((c) => c.id === convId)
+      if (idx < 0) return prev
+      const filtered = prev.filter((c) => c.id !== convId)
+
+      if (filtered.length === 0) {
+        const fresh: Conversation = {
+          id: Date.now().toString(),
+          title: '新对话',
+          messages: [WELCOME],
+          createdAt: '今天',
+        }
+        setCurrentConvId(fresh.id)
+        return [fresh]
+      }
+
+      setCurrentConvId((cur) => {
+        if (cur !== convId) return cur
+        const pickIdx = idx > 0 ? idx - 1 : 0
+        return filtered[pickIdx]!.id
+      })
+
+      return filtered
+    })
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -356,24 +386,35 @@ export function AIPanel() {
     }
   }
 
+  const drawerTransition = prefersReducedMotion
+    ? { duration: 0 }
+    : ({ type: 'tween', duration: 0.26, ease: [0.32, 0.72, 0, 1] } as const)
+  const backdropTransition = prefersReducedMotion ? { duration: 0 } : { duration: 0.2 }
+
   return (
-    <AnimatePresence>
-      {showAIPanel && (
-        <>
+    <>
+      {/* 始终挂载：避免开关一次就整棵树重建 + Markdown 全量重装；仅用 transform / opacity（不驱动 width）做动画 */}
+      <div
+        className={`fixed inset-0 z-[30] ${showAIPanel ? 'pointer-events-auto' : 'pointer-events-none'}`}
+        aria-hidden={!showAIPanel}
+        inert={!showAIPanel ? true : undefined}
+      >
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/30 z-30"
+            animate={{ opacity: showAIPanel ? 1 : 0 }}
+            transition={backdropTransition}
+            className="fixed inset-0 bg-black/30 z-[31]"
             onClick={closeAIPanel}
           />
           <motion.div
-            initial={{ x: panelWidth }}
-            animate={{ x: 0, width: panelWidth }}
-            exit={{ x: panelWidth }}
-            transition={{ type: 'spring', stiffness: 260, damping: 30 }}
-            className="fixed right-0 top-0 bottom-0 bg-surface-sidebar border-l border-border z-40 flex flex-col shadow-modal overflow-hidden"
-            style={{ width: panelWidth }}
+            initial={false}
+            animate={{
+              x: showAIPanel ? 0 : '100%',
+            }}
+            transition={drawerTransition}
+            className="fixed right-0 top-0 bottom-0 bg-surface-sidebar border-l border-border z-40 flex flex-col shadow-modal overflow-hidden [will-change:transform]"
+            style={{
+              width: panelWidth,
+            }}
           >
             {/* Header */}
             <div className="border-b border-border shrink-0">
@@ -522,21 +563,35 @@ export function AIPanel() {
                           localStorage.removeItem(STORAGE_KEY)
                         }}
                         className="text-[10px] text-text-subtle hover:text-[#fb7185] transition-colors"
-                        title="清除所有对话记录"
+                        title="清空所有对话记录"
                       >
-                        清除
+                        清空全部
                       </button>
                     </div>
                     <div className="flex-1 overflow-y-auto py-1">
                       {conversations.map((conv) => (
-                        <button
+                        <div
                           key={conv.id}
-                          onClick={() => setCurrentConvId(conv.id)}
-                          className={`w-full text-left px-3 py-2.5 hover:bg-[#27272a] transition-colors ${conv.id === currentConvId ? 'bg-[#1e1e2e]' : ''}`}
+                          className={`group flex items-stretch gap-0 border-b border-transparent last:border-0 hover:bg-[#27272a]/80 transition-colors ${conv.id === currentConvId ? 'bg-[#1e1e2e]' : ''}`}
                         >
-                          <div className="text-xs text-text-secondary truncate">{conv.title}</div>
-                          <div className="text-[10px] text-text-subtle mt-0.5">{conv.createdAt}</div>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => setCurrentConvId(conv.id)}
+                            className="flex-1 min-w-0 text-left px-3 py-2.5"
+                          >
+                            <div className="text-xs text-text-secondary truncate">{conv.title}</div>
+                            <div className="text-[10px] text-text-subtle mt-0.5">{conv.createdAt}</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => deleteConversation(conv.id, e)}
+                            className="shrink-0 px-2 flex items-center justify-center text-text-subtle/70 hover:text-[#fb7185] hover:bg-[#27272a]/90 transition-colors rounded-sm"
+                            title="删除此对话"
+                            aria-label="删除此对话"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </motion.div>
@@ -771,8 +826,7 @@ export function AIPanel() {
               </div>
             </div>
           </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+      </div>
+    </>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Check, X, ClipboardList, ChevronLeft, ChevronRight, CalendarDays, Calendar } from 'lucide-react'
+import { Plus, Check, X, ClipboardList, ChevronLeft, ChevronRight, CalendarDays, Calendar, Pencil } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
 
@@ -14,11 +14,20 @@ function getCSTDateString(offset = 0): string {
 
 function formatDateLabel(dateStr: string, todayStr: string): string {
   const diff = Math.round(
-    (new Date(todayStr).getTime() - new Date(dateStr).getTime()) / 86_400_000,
+    (new Date(todayStr + 'T12:00:00+08:00').getTime() - new Date(dateStr + 'T12:00:00+08:00').getTime()) / 86_400_000,
   )
   if (diff === 0) return '今天'
   if (diff === 1) return '昨天'
   if (diff === 2) return '前天'
+  if (diff < 0) {
+    const ahead = -diff
+    if (ahead === 1) return '明天'
+    if (ahead === 2) return '后天'
+    if (ahead <= 6) return `${ahead} 天后`
+    return new Date(dateStr + 'T12:00:00+08:00').toLocaleDateString('zh-CN', {
+      month: 'numeric', day: 'numeric',
+    })
+  }
   if (diff <= 6) return `${diff} 天前`
   // 超过一周显示具体日期（月/日格式）
   return new Date(dateStr + 'T12:00:00+08:00').toLocaleDateString('zh-CN', {
@@ -33,8 +42,10 @@ interface TodoListProps {
 }
 
 export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelectedDateChange }: TodoListProps) {
-  const { todos, todosLoading, loadTodos, addTodo, toggleTodo, deleteTodo } = useAppStore()
+  const { todos, todosLoading, loadTodos, addTodo, updateTodoText, toggleTodo, deleteTodo } = useAppStore()
   const [modalOpen, setModalOpen] = useState(false)
+  const [taskModalMode, setTaskModalMode] = useState<'add' | 'edit'>('add')
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null)
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const dateInputRef = useRef<HTMLInputElement>(null)
@@ -43,6 +54,7 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
   const [internalSelectedDate, setInternalSelectedDate] = useState(today)
   const selectedDate = selectedDateProp ?? internalSelectedDate
   const isToday = selectedDate === today
+  const isFutureDay = selectedDate > today
 
   function updateSelectedDate(date: string) {
     if (selectedDateProp === undefined) {
@@ -74,8 +86,35 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
       setTimeout(() => inputRef.current?.focus(), 50)
     } else {
       setInput('')
+      setEditingTodoId(null)
+      setTaskModalMode('add')
     }
   }, [modalOpen])
+
+  function openAddModal() {
+    setTaskModalMode('add')
+    setEditingTodoId(null)
+    setInput('')
+    setModalOpen(true)
+  }
+
+  function openEditModal(todo: { id: string, text: string }) {
+    setTaskModalMode('edit')
+    setEditingTodoId(todo.id)
+    setInput(todo.text)
+    setModalOpen(true)
+  }
+
+  function confirmTaskModal() {
+    const text = input.trim()
+    if (!text) return
+    if (taskModalMode === 'add') {
+      void addTodo(text, selectedDate)
+    } else if (editingTodoId) {
+      void updateTodoText(editingTodoId, text)
+    }
+    setModalOpen(false)
+  }
 
   function prevDay() {
     const dt = new Date(selectedDate + 'T12:00:00+08:00')
@@ -84,7 +123,6 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
   }
 
   function nextDay() {
-    if (isToday) return
     const dt = new Date(selectedDate + 'T12:00:00+08:00')
     dt.setDate(dt.getDate() + 1)
     updateSelectedDate(dt.toISOString().slice(0, 10))
@@ -92,13 +130,6 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
 
   function goToday() {
     updateSelectedDate(today)
-  }
-
-  function confirmAdd() {
-    const text = input.trim()
-    if (!text) return
-    void addTodo(text, today)
-    setModalOpen(false)
   }
 
   if (todosLoading && dayTodos.length === 0) {
@@ -150,7 +181,6 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
                   ref={dateInputRef}
                   type="date"
                   value={selectedDate}
-                  max={today}
                   onChange={(e) => { if (e.target.value) updateSelectedDate(e.target.value) }}
                   className="absolute inset-0 opacity-0 w-full h-full cursor-pointer pointer-events-none"
                   style={{ colorScheme: 'dark' }}
@@ -161,9 +191,8 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
               <button
                 type="button"
                 onClick={nextDay}
-                disabled={isToday}
                 title="后一天"
-                className="w-5 h-5 rounded flex items-center justify-center text-text-subtle hover:text-text-muted hover:bg-[#27272a] transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+                className="w-5 h-5 rounded flex items-center justify-center text-text-subtle hover:text-text-muted hover:bg-[#27272a] transition-all"
               >
                 <ChevronRight size={13} />
               </button>
@@ -197,17 +226,15 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
             )}
           </div>
 
-          {/* 右侧：只有今天才能添加任务 */}
-          {isToday && (
-            <button
-              type="button"
-              onClick={() => setModalOpen(true)}
-              className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[12px] font-medium text-text-subtle border border-border bg-[#27272a]/50 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
-            >
-              <Plus size={12} strokeWidth={2.5} />
-              添加
-            </button>
-          )}
+          {/* 右侧：任意日期均可添加；未来日勾选完成在列表中禁用 */}
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[12px] font-medium text-text-subtle border border-border bg-[#27272a]/50 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
+          >
+            <Plus size={12} strokeWidth={2.5} />
+            添加
+          </button>
         </div>
 
         {/* 历史日期完成统计徽章 */}
@@ -221,17 +248,23 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
           </div>
         )}
 
-        {/* 进度条（今天才显示动态进度） */}
-        {isToday && total > 0 && (
+        {/* 进度条（未来日不可勾选，进度保持 0；仍显示条便于布局一致） */}
+        {total > 0 && (
           <div className="h-1 rounded-full bg-[#27272a] overflow-hidden">
             <motion.div
               className="h-full rounded-full"
               style={{ background: allDone ? '#34d399' : '#818cf8' }}
               initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
+              animate={{ width: `${isFutureDay ? 0 : progress}%` }}
               transition={{ duration: 0.4, ease: 'easeOut' }}
             />
           </div>
+        )}
+
+        {isFutureDay && total > 0 && (
+          <p className="text-[11px] text-text-subtle -mt-1">
+            未到该日不可勾选完成，可随时修改或删除任务。
+          </p>
         )}
 
         {/* 任务列表 */}
@@ -247,17 +280,15 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
               >
                 <ClipboardList size={24} className="text-border-strong" />
                 <p className="text-[12px] text-text-subtle">
-                  {isToday ? '今天还没有任务' : '这天没有任务记录'}
+                  {isToday ? '今天还没有任务' : isFutureDay ? '这一天还没有安排任务' : '这天没有任务记录'}
                 </p>
-                {isToday && (
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(true)}
-                    className="text-[12px] text-primary hover:underline"
-                  >
-                    添加第一个任务
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={openAddModal}
+                  className="text-[12px] text-primary hover:underline"
+                >
+                  添加任务
+                </button>
               </motion.div>
             ) : (
               dayTodos.map((todo, i) => (
@@ -271,8 +302,10 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
                 >
                   <button
                     type="button"
-                    onClick={() => void toggleTodo(todo.id)}
-                    className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 ${
+                    disabled={isFutureDay}
+                    title={isFutureDay ? '未到该日暂不可标记完成' : undefined}
+                    onClick={() => { if (!isFutureDay) void toggleTodo(todo.id) }}
+                    className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-[#3f3f46] ${
                       todo.done
                         ? 'bg-[#34d399] border-[#34d399] scale-95'
                         : 'border-[#3f3f46] bg-transparent hover:border-primary/70'
@@ -293,23 +326,31 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
                   </button>
 
                   <span
-                    onClick={() => void toggleTodo(todo.id)}
-                    className={`flex-1 text-[13px] leading-snug cursor-pointer select-none transition-all duration-200 ${
-                      todo.done ? 'line-through text-text-subtle opacity-50' : 'text-text-muted'
-                    }`}
+                    onClick={() => { if (!isFutureDay) void toggleTodo(todo.id) }}
+                    className={`flex-1 min-w-0 text-[13px] leading-snug select-none transition-all duration-200 ${
+                      isFutureDay ? 'cursor-default text-text-muted' : 'cursor-pointer text-text-muted'
+                    } ${todo.done ? 'line-through text-text-subtle opacity-50' : ''}`}
                   >
                     {todo.text}
                   </span>
 
-                  <motion.button
+                  <button
                     type="button"
+                    title="修改"
+                    onClick={() => openEditModal(todo)}
+                    className="opacity-0 group-hover:opacity-100 shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-text-subtle hover:text-primary hover:bg-primary/10 transition-all hover:scale-110"
+                  >
+                    <Pencil size={11} />
+                  </button>
+
+                  <button
+                    type="button"
+                    title="删除"
                     onClick={() => void deleteTodo(todo.id)}
-                    initial={{ opacity: 0 }}
-                    whileHover={{ scale: 1.1 }}
-                    className="opacity-0 group-hover:opacity-100 shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-text-subtle hover:text-red-400 hover:bg-red-500/10 transition-all"
+                    className="opacity-0 group-hover:opacity-100 shrink-0 w-5 h-5 rounded-md flex items-center justify-center text-text-subtle hover:text-red-400 hover:bg-red-500/10 transition-all hover:scale-110"
                   >
                     <X size={11} />
-                  </motion.button>
+                  </button>
                 </motion.div>
               ))
             )}
@@ -317,7 +358,7 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
         </div>
       </div>
 
-      {/* 添加任务弹窗（仅今天） */}
+      {/* 添加任务弹窗 */}
       <AnimatePresence>
         {modalOpen && (
           <>
@@ -340,8 +381,16 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-[15px] font-semibold text-text-primary">添加今日任务</h3>
-                  <p className="text-[12px] text-text-subtle mt-0.5">完成后点击左侧勾选框标记</p>
+                  <h3 className="text-[15px] font-semibold text-text-primary">
+                    {taskModalMode === 'add'
+                      ? `添加任务 · ${formatDateLabel(selectedDate, today)}`
+                      : '修改任务'}
+                  </h3>
+                  <p className="text-[12px] text-text-subtle mt-0.5">
+                    {taskModalMode === 'add'
+                      ? '任务将记在选中的这一天；未到该日不可勾选完成。'
+                      : '可重命名任务；未到任务日不可标记完成。'}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -359,7 +408,7 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') confirmAdd()
+                    if (e.key === 'Enter') confirmTaskModal()
                     if (e.key === 'Escape') setModalOpen(false)
                   }}
                   placeholder="例如：复习20个单词…"
@@ -377,11 +426,11 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
                 </button>
                 <button
                   type="button"
-                  onClick={confirmAdd}
+                  onClick={confirmTaskModal}
                   disabled={!input.trim()}
                   className="flex-1 h-9 rounded-xl text-[13px] font-medium bg-primary-btn text-white hover:bg-primary-btn-hover disabled:opacity-35 disabled:cursor-not-allowed transition-all"
                 >
-                  确认添加
+                  {taskModalMode === 'add' ? '确认添加' : '保存'}
                 </button>
               </div>
             </motion.div>

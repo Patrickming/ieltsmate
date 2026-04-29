@@ -19,6 +19,13 @@ function allTodosDoneForTaskDate(todos: TodoItem[], taskDate: string): boolean {
   return forDay.length > 0 && forDay.every((t) => t.done)
 }
 
+function todayCSTDateString(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+}
+
 interface DashboardStats {
   createdToday: number
   mastered: number
@@ -413,6 +420,7 @@ interface AppState {
   todosLoading: boolean
   loadTodos: (date: string) => Promise<void>
   addTodo: (text: string, date: string) => Promise<void>
+  updateTodoText: (id: string, text: string) => Promise<void>
   toggleTodo: (id: string) => Promise<void>
   deleteTodo: (id: string) => Promise<void>
 
@@ -1406,10 +1414,32 @@ export const useAppStore = create<AppState>((set, get) => {
     } catch { set({ todos: prevTodos }) }
   },
 
+  updateTodoText: async (id, text) => {
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const prevTodos = get().todos
+    const todo = prevTodos.find((t) => t.id === id)
+    if (!todo || todo.text === trimmed) return
+    set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, text: trimmed } : t) }))
+    try {
+      const res = await fetch(apiUrl(`/todos/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
+      })
+      if (!res.ok) { set({ todos: prevTodos }); return }
+      const json = (await res.json()) as { data?: TodoItem }
+      if (json.data) {
+        set((s) => ({ todos: s.todos.map((t) => t.id === id ? json.data! : t) }))
+      }
+    } catch { set({ todos: prevTodos }) }
+  },
+
   toggleTodo: async (id) => {
     const prevTodos = get().todos
     const todo = prevTodos.find((t) => t.id === id)
     if (!todo) return
+    if (todo.taskDate > todayCSTDateString()) return
     const newDone = !todo.done
     set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, done: newDone } : t) }))
     try {

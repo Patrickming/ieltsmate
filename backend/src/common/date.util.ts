@@ -17,6 +17,11 @@ export function todayCSTMidnight(): Date {
   return new Date(`${dateStr}T00:00:00+08:00`)
 }
 
+/** 任务日是否严格晚于上海「今天」（仅比较日历日） */
+export function isFutureTaskDateCST(taskDate: Date): boolean {
+  return taskDate.getTime() > todayCSTMidnight().getTime()
+}
+
 /**
  * 将 "YYYY-MM-DD" 解析为上海当日 00:00 的 UTC Date。
  * 格式非法或日期无效时抛 BadRequestException（400）。

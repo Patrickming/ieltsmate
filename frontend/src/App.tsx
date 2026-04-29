@@ -105,7 +105,7 @@ function AppInner() {
       <Suspense fallback={null}>
         {showQuickNote && <QuickNoteModal />}
         {showSearch && <SearchModal />}
-        {showAIPanel && <AIPanel />}
+        <AIPanel />
         {showAIConfig && <AIModelConfigModal />}
         {showImport && <ImportModal />}
       </Suspense>

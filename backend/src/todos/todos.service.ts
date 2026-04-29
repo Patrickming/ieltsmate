@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { parseCSTDate, formatCSTDate } from '../common/date.util'
+import { parseCSTDate, formatCSTDate, isFutureTaskDateCST } from '../common/date.util'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateTodoDto } from './dto/create-todo.dto'
 import { UpdateTodoDto } from './dto/update-todo.dto'
@@ -52,6 +52,10 @@ export class TodosService {
 
     if (dto.done === undefined && dto.text === undefined && dto.sortOrder === undefined) {
       return formatTodo(existing)
+    }
+
+    if (isFutureTaskDateCST(existing.taskDate) && dto.done !== undefined) {
+      throw new BadRequestException('未到任务日期的任务不能标记完成')
     }
 
     return this.prisma.$transaction(async (tx) => {
