@@ -85,11 +85,53 @@ backend_healthy() {
   curl -fsS --noproxy '*' "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1
 }
 
+# WSL / 冷启动时 PostgreSQL 可能晚于 systemd 返回值就绪；必须连上后再起后端（否则 Prisma 启动失败）。
+wait_for_postgres() {
+  local retry="${1:-45}" i=1
+  while [ "$i" -le "$retry" ]; do
+    if pg_isready -h "$DB_HOST" -p "$DB_PORT" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+# pnpm dev 首次编译可能数十秒；端口起来不等于 Nest 已对 DB 就绪并监听。
+wait_for_backend_healthy() {
+  local retry="${1:-90}" i=1
+  while [ "$i" -le "$retry" ]; do
+    if backend_healthy; then
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
 wait_for_port() {
   local port="$1" retry="$2" i=1
   while [ "$i" -le "$retry" ]; do
     port_is_open "$port" && return 0
     sleep 1; i=$((i + 1))
+  done
+  return 1
+}
+
+# 在 WSL 内请求「本机:前端端口/health」（经 Vite 代理转发到后端），与 Windows 浏览器里
+# 「同源 localhost:前端 → /dashboard/…」走代理的逻辑一致；不校验 Windows ↔ WSL 转发。
+vite_proxy_chain_ready() {
+  curl -fsS --noproxy '*' "http://127.0.0.1:${FRONTEND_PORT}/health" >/dev/null 2>&1
+}
+
+wait_for_vite_proxy_chain() {
+  local retry="${1:-45}" i=1
+  while [ "$i" -le "$retry" ]; do
+    vite_proxy_chain_ready && return 0
+    sleep 1
+    i=$((i + 1))
   done
   return 1
 }
@@ -112,10 +154,12 @@ run_startup() {
       warn "需要 sudo 权限，可能提示输入密码"
       sudo service postgresql start >/dev/null 2>&1 || true
     fi
-    if pg_isready -h "$DB_HOST" -p "$DB_PORT" >/dev/null 2>&1; then
-      ok "PostgreSQL 启动成功"
+    info "等待 PostgreSQL 就绪…"
+    if wait_for_postgres 60; then
+      ok "PostgreSQL 已就绪 (${DB_HOST}:${DB_PORT})"
     else
-      err "PostgreSQL 未就绪 → sudo service postgresql status"
+      err "PostgreSQL 在等待后仍未就绪（后端依赖数据库）；请执行: sudo service postgresql status"
+      return 1
     fi
   fi
 
@@ -141,22 +185,27 @@ run_startup() {
     : > "$BACKEND_LOG"
     info "启动后端进程 (pnpm dev, PORT=${BACKEND_PORT})..."
     nohup env PORT="$BACKEND_PORT" pnpm dev >"$BACKEND_LOG" 2>&1 &
-    if wait_for_port "$BACKEND_PORT" 20; then
-      backend_healthy \
-        && ok "后端启动成功 (http://localhost:${BACKEND_PORT})" \
-        || warn "端口已开启但健康检查未通过 → $BACKEND_LOG"
+    info "等待后端就绪（首次 pnpm dev 编译可能较慢，最多约 120s）..."
+    if wait_for_backend_healthy 120; then
+      ok "后端启动成功 (http://localhost:${BACKEND_PORT})"
     else
-      err "后端启动超时 → $BACKEND_LOG"
+      err "后端未及时通过 /health；请查看 $BACKEND_LOG"
+      return 1
     fi
   fi
 
   # Step 3: 前端
   echo ""
   echo -e "${Y}  [3/3]  前端 Vite${NC}"
-  # 判断前端是否真正健康（能返回 HTML）
+  # 已有进程：监听 + 主页可访问（若代理未对上后端端口，仍可后续用「全新启动」路径纠正）
   if port_is_open "$FRONTEND_PORT" && \
-     curl -fsS --noproxy '*' "http://localhost:${FRONTEND_PORT}/" >/dev/null 2>&1; then
-    ok "前端已在运行 (http://localhost:${FRONTEND_PORT})"
+     curl -fsS --noproxy '*' "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1; then
+    info "检测到前端已在监听，校验 Vite→后端代理…"
+    if wait_for_vite_proxy_chain 20; then
+      ok "前端已在运行：http://localhost:${FRONTEND_PORT}"
+    else
+      warn "当前前端的代理可能未连通后端（或仍为旧实例）；首页若报错请 Ctrl+C 后重新 ./start.sh"
+    fi
   else
     # 端口占用则自动切换到可用端口
     if port_is_open "$FRONTEND_PORT"; then
@@ -172,14 +221,21 @@ run_startup() {
     fi
     cd "$FRONTEND_DIR" || exit 1
     : > "$FRONTEND_LOG"
-    info "启动前端进程 (pnpm dev, PORT=${FRONTEND_PORT}, API=http://127.0.0.1:${BACKEND_PORT})..."
-    # API 用 127.0.0.1 避免 localhost→::1 而后端仅监听 IPv4 时请求失败；不写 --host 以使用 vite.config 的 host: ::
-    nohup env VITE_API_BASE_URL="http://127.0.0.1:${BACKEND_PORT}" \
+    info "启动前端进程 (pnpm dev, PORT=${FRONTEND_PORT}, 代理后端=http://127.0.0.1:${BACKEND_PORT})..."
+    # 不传 VITE_API_BASE_URL → 前端用同源相对路径，由 Vite 在 WSL 内代理后端，避免 Windows 浏览器直连 WSL API 端口时冷启动丢包。
+    nohup env IELTSMATE_BACKEND_PROXY_TARGET="http://127.0.0.1:${BACKEND_PORT}" \
       pnpm dev --port "$FRONTEND_PORT" >"$FRONTEND_LOG" 2>&1 &
-    if wait_for_port "$FRONTEND_PORT" 15; then
-      ok "前端启动成功 (http://localhost:${FRONTEND_PORT})"
+    if wait_for_port "$FRONTEND_PORT" 30; then
+      info "校验 Vite→后端代理（与同源 /dashboard 等路径一致）…"
+      if wait_for_vite_proxy_chain 60; then
+        ok "前端启动成功：http://localhost:${FRONTEND_PORT}"
+      else
+        err "Vite 已监听但 /health 经代理未到后端 → $FRONTEND_LOG（检查 IELTSMATE_BACKEND_PROXY_TARGET 是否与 BACKEND_PORT 一致）"
+        return 1
+      fi
     else
       err "前端启动失败 → $FRONTEND_LOG"
+      return 1
     fi
   fi
 
@@ -356,8 +412,11 @@ trap on_exit INT TERM
 # ═══════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════
-run_startup
+run_startup || exit $?
 
+echo ""
+echo -e "${G}  在 Windows 浏览器打开:${NC} ${BOLD}http://localhost:${FRONTEND_PORT}${NC}"
+echo -e "${DIM}  API 走后端仅经 Vite（不要给前端配置 VITE_API_BASE_URL=http://127.0.0.1:端口）${NC}"
 echo ""
 echo -e "${C}  进入实时监控面板 (每 ${REFRESH_INTERVAL}s 刷新)...  按 Ctrl+C 退出${NC}"
 sleep 1

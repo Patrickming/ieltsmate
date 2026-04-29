@@ -1,7 +1,22 @@
 /// <reference types="vitest/config" />
+import type { IncomingMessage } from 'http'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+
+/**
+ * Dev 代理目标：必须由 **Vite 进程所在环境**（WSL/Linux）解析，
+ * 不要依赖浏览器直连后端（若在 Windows 里打开 localhost:5173，fetch 127.0.0.1:3000 会走 Windows 环回，
+ * WSL localhost 端口转发尚未就绪时会偶发 Failed to fetch）。
+ *
+ * start.sh 会设置：`IELTSMATE_BACKEND_PROXY_TARGET=http://127.0.0.1:${BACKEND_PORT}`；
+ * 未设置时默认后端在 3000。
+ */
+const devBackendProxyTarget =
+  process.env.IELTSMATE_BACKEND_PROXY_TARGET?.trim() || 'http://127.0.0.1:3000'
+
+const devBackendProxyBypass = (req: IncomingMessage) =>
+  req.headers.accept?.includes('text/html') ? req.url : null
 
 export default defineConfig({
   plugins: [react()],
@@ -41,69 +56,69 @@ export default defineConfig({
     host: '::',
     proxy: {
       '/notes': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/favorites': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/review': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/settings': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/ai': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/health': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/todos': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/activity': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/dashboard': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/writing-notes': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/writing-assets': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/export': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
       '/import': {
-        target: 'http://127.0.0.1:3000',
+        target: devBackendProxyTarget,
         changeOrigin: true,
-        bypass: (req) => req.headers['accept']?.includes('text/html') ? req.url : null,
+        bypass: devBackendProxyBypass,
       },
     },
   },
