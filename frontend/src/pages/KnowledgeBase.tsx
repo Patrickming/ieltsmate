@@ -10,6 +10,7 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { LoadingState } from '../components/ui/LoadingState'
 import { CATEGORY_BAR, CATEGORY_COLORS, type Category } from '../data/mockData'
 import { useAppStore } from '../store/useAppStore'
+import { noteMatchesPrimarySearch, normalizeSearchQuery } from '../lib/searchModalResults'
 
 const SUB_CATS: (Category | '全部')[] = ['全部', '口语', '短语', '句子', '同义替换', '拼写', '单词']
 
@@ -108,23 +109,20 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
       if (statusFilter === 'mastered' && n.reviewStatus !== 'mastered') return false
       if (statusFilter === 'unmastered' && n.reviewStatus === 'mastered') return false
     }
-    const matchSearch = !search ||
-      n.content.toLowerCase().includes(search.toLowerCase()) ||
-      n.translation.includes(search)
+    const matchSearch = noteMatchesPrimarySearch(n, search)
     return matchSearch
   })
 
   const favNotes = notes.filter((n) => {
     if (!favorites.includes(n.id)) return false
-    const matchSearch = !search ||
-      n.content.toLowerCase().includes(search.toLowerCase()) ||
-      n.translation.includes(search)
+    const matchSearch = noteMatchesPrimarySearch(n, search)
     return matchSearch
   })
 
   const filteredWritingNotes = writingNotes.filter((w) => {
     if (writingSubFilter !== '全部' && w.writingType !== writingSubFilter) return false
-    const matchSearch = !search || w.name.toLowerCase().includes(search.toLowerCase())
+    const q = normalizeSearchQuery(search)
+    const matchSearch = !q || w.name.toLowerCase().includes(q)
     return matchSearch
   })
 
