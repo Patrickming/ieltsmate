@@ -87,15 +87,16 @@ export class DashboardService {
 
     const rows = await this.prisma.dailyActivity.findMany({
       where: { activityDate: { gte: start, lt: endNextDay } },
-      select: { activityDate: true, studyCount: true, allTodosDone: true },
+      select: { activityDate: true, studyCount: true, allTodosDone: true, hasTodos: true },
     })
 
-    const result: Record<string, { studyCount: number; allTodosDone: boolean }> = {}
+    const result: Record<string, { studyCount: number; allTodosDone: boolean; hasTodos: boolean }> = {}
     for (const row of rows) {
-      if (row.studyCount > 0 || row.allTodosDone) {
+      if (row.studyCount > 0 || row.hasTodos) {
         result[formatCSTDate(row.activityDate)] = {
           studyCount: row.studyCount,
           allTodosDone: row.allTodosDone,
+          hasTodos: row.hasTodos,
         }
       }
     }

@@ -89,11 +89,12 @@ export class TodosService {
     const todos = await tx.todo.findMany({
       where: { taskDate: { gte: taskDate, lt: nextDay } },
     })
-    const allDone = todos.length > 0 && todos.every((t) => t.done)
+    const hasTodos = todos.length > 0
+    const allDone = hasTodos && todos.every((t) => t.done)
     await tx.dailyActivity.upsert({
       where: { activityDate: taskDate },
-      create: { activityDate: taskDate, studyCount: 0, allTodosDone: allDone },
-      update: { allTodosDone: allDone },
+      create: { activityDate: taskDate, studyCount: 0, allTodosDone: allDone, hasTodos },
+      update: { allTodosDone: allDone, hasTodos },
     })
   }
 }

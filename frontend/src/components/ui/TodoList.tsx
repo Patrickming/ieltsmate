@@ -37,11 +37,12 @@ function formatDateLabel(dateStr: string, todayStr: string): string {
 
 interface TodoListProps {
   onAllDone: (done: boolean) => void
+  onHasTodos?: (has: boolean) => void
   selectedDate?: string
   onSelectedDateChange?: (date: string) => void
 }
 
-export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelectedDateChange }: TodoListProps) {
+export function TodoList({ onAllDone, onHasTodos, selectedDate: selectedDateProp, onSelectedDateChange }: TodoListProps) {
   const { todos, todosLoading, loadTodos, addTodo, updateTodoText, toggleTodo, deleteTodo } = useAppStore()
   const [modalOpen, setModalOpen] = useState(false)
   const [taskModalMode, setTaskModalMode] = useState<'add' | 'edit'>('add')
@@ -78,8 +79,9 @@ export function TodoList({ onAllDone, selectedDate: selectedDateProp, onSelected
   useEffect(() => {
     if (isToday) {
       onAllDone(total > 0 && dayTodos.every((t) => t.done))
+      onHasTodos?.(total > 0)
     }
-  }, [dayTodos, onAllDone, total, isToday])
+  }, [dayTodos, onAllDone, onHasTodos, total, isToday])
 
   useEffect(() => {
     if (modalOpen) {

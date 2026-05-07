@@ -425,7 +425,7 @@ interface AppState {
   deleteTodo: (id: string) => Promise<void>
 
   // Activity (heatmap)
-  activity: Record<string, { studyCount: number; allTodosDone: boolean }>
+  activity: Record<string, { studyCount: number; allTodosDone: boolean; hasTodos: boolean }>
   activityLoading: boolean
   loadActivity: (start: string, end: string) => Promise<void>
 
@@ -1404,11 +1404,17 @@ export const useAppStore = create<AppState>((set, get) => {
         set((s) => ({ todos: s.todos.map((t) => t.id === optimisticId ? json.data! : t) }))
       }
       const todos = get().todos
-      const allDone = allTodosDoneForTaskDate(todos, date)
+      const dayTodos = todos.filter(t => t.taskDate === date)
+      const hasTodos = dayTodos.length > 0
+      const allDone = hasTodos && dayTodos.every(t => t.done)
       set((s) => ({
         activity: {
           ...s.activity,
-          [date]: { studyCount: s.activity[date]?.studyCount ?? 0, allTodosDone: allDone },
+          [date]: { 
+            studyCount: s.activity[date]?.studyCount ?? 0, 
+            allTodosDone: allDone,
+            hasTodos: hasTodos
+          },
         },
       }))
     } catch { set({ todos: prevTodos }) }
@@ -1451,11 +1457,17 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!res.ok) { set({ todos: prevTodos }); return }
       const taskDate = todo.taskDate
       const todos = get().todos
-      const allDone = allTodosDoneForTaskDate(todos, taskDate)
+      const dayTodos = todos.filter(t => t.taskDate === taskDate)
+      const hasTodos = dayTodos.length > 0
+      const allDone = hasTodos && dayTodos.every(t => t.done)
       set((s) => ({
         activity: {
           ...s.activity,
-          [taskDate]: { studyCount: s.activity[taskDate]?.studyCount ?? 0, allTodosDone: allDone },
+          [taskDate]: { 
+            studyCount: s.activity[taskDate]?.studyCount ?? 0, 
+            allTodosDone: allDone,
+            hasTodos: hasTodos
+          },
         },
       }))
     } catch { set({ todos: prevTodos }) }
@@ -1471,11 +1483,17 @@ export const useAppStore = create<AppState>((set, get) => {
       const res = await fetch(apiUrl(`/todos/${id}`), { method: 'DELETE' })
       if (!res.ok) { set({ todos: prevTodos }); return }
       const todos = get().todos
-      const allDone = allTodosDoneForTaskDate(todos, taskDate)
+      const dayTodos = todos.filter(t => t.taskDate === taskDate)
+      const hasTodos = dayTodos.length > 0
+      const allDone = hasTodos && dayTodos.every(t => t.done)
       set((s) => ({
         activity: {
           ...s.activity,
-          [taskDate]: { studyCount: s.activity[taskDate]?.studyCount ?? 0, allTodosDone: allDone },
+          [taskDate]: { 
+            studyCount: s.activity[taskDate]?.studyCount ?? 0, 
+            allTodosDone: allDone,
+            hasTodos: hasTodos
+          },
         },
       }))
     } catch { set({ todos: prevTodos }) }
@@ -1490,7 +1508,7 @@ export const useAppStore = create<AppState>((set, get) => {
     try {
       const res = await fetch(apiUrl(`/activity?start=${start}&end=${end}`))
       if (!res.ok) return
-      const json = (await res.json()) as { data?: Record<string, { studyCount: number; allTodosDone: boolean }> }
+      const json = (await res.json()) as { data?: Record<string, { studyCount: number; allTodosDone: boolean; hasTodos: boolean }> }
       if (json.data && typeof json.data === 'object') {
         set({ activity: json.data })
       }

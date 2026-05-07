@@ -22,6 +22,7 @@ interface DayData {
   key: string
   count: number
   allDone: boolean
+  hasTodos: boolean
 }
 
 interface TooltipState {
@@ -32,6 +33,7 @@ interface TooltipState {
 
 interface ActivityHeatmapProps {
   todayAllDone?: boolean
+  todayHasTodos?: boolean
   selectedDate?: string
   onDateSelect?: (date: string) => void
 }
@@ -43,8 +45,9 @@ function getCSTDateString(d: Date): string {
   }).format(d)
 }
 
-function getCellColor(count: number, allDone: boolean): string {
+function getCellColor(count: number, allDone: boolean, hasTodos: boolean): string {
   if (allDone) return '#fbbf24'      // 任务全完成 → 黄色
+  if (hasTodos) return '#a1a1aa'     // 设定了任务但没全完成 → 灰白色
   if (count === 0) return '#27272a'
   if (count <= 25) return '#312e81'
   if (count <= 75) return '#4338ca'
@@ -96,6 +99,7 @@ function formatTooltipDate(key: string): string {
 
 export function ActivityHeatmap({
   todayAllDone: todayAllDoneProp = false,
+  todayHasTodos: todayHasTodosProp = false,
   selectedDate,
   onDateSelect,
 }: ActivityHeatmapProps) {
@@ -153,15 +157,18 @@ export function ActivityHeatmap({
 
   // ── activityMap ──
   const activityMap = useMemo(() => {
-    const map: Record<string, { count: number; allDone: boolean }> = {}
+    const map: Record<string, { count: number; allDone: boolean; hasTodos: boolean }> = {}
     for (const [key, val] of Object.entries(storeActivity)) {
-      map[key] = { count: val.studyCount, allDone: val.allTodosDone }
+      map[key] = { count: val.studyCount, allDone: val.allTodosDone, hasTodos: val.hasTodos }
     }
     return map
   }, [storeActivity])
 
   const todayAllDoneFromStore = storeActivity[todayKey]?.allTodosDone ?? false
   const todayAllDone = todayAllDoneFromStore || todayAllDoneProp
+
+  const todayHasTodosFromStore = storeActivity[todayKey]?.hasTodos ?? false
+  const todayHasTodos = todayHasTodosFromStore || todayHasTodosProp
 
   // 容器宽度监听
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -219,13 +226,14 @@ export function ActivityHeatmap({
           key,
           count: stored?.count ?? 0,
           allDone: isToday ? todayAllDone : (stored?.allDone ?? false),
+          hasTodos: isToday ? todayHasTodos : (stored?.hasTodos ?? false),
         })
         cur.setDate(cur.getDate() + 1)
       }
       cols.push(week)
     }
     return cols
-  }, [viewStart, weeksCount, activityMap, todayKey, todayAllDone])
+  }, [viewStart, weeksCount, activityMap, todayKey, todayAllDone, todayHasTodos])
 
   // 月份标记
   const monthMarkers = useMemo(() => {
@@ -401,7 +409,7 @@ export function ActivityHeatmap({
               const x = LEFT_LABEL_W + wi * (CELL + GAP)
               const y = TOP_LABEL_H + di * (CELL + GAP)
               const isToday = day.key === todayKey
-              const fill   = getCellColor(day.count, day.allDone)
+              const fill   = getCellColor(day.count, day.allDone, day.hasTodos)
               const isSelected = day.key === selectedDate
               const stroke = isToday
                 ? (day.allDone ? '#f59e0b' : '#a5b4fc')
@@ -478,10 +486,14 @@ export function ActivityHeatmap({
         {[0, 12, 50, 100, 200].map(v => (
           <div
             key={v}
-            style={{ width: 10, height: 10, borderRadius: 2, background: getCellColor(v, false), flexShrink: 0 }}
+            style={{ width: 10, height: 10, borderRadius: 2, background: getCellColor(v, false, false), flexShrink: 0 }}
           />
         ))}
         <span className="text-[10px] text-text-subtle">多</span>
+        <div className="ml-3 flex items-center gap-1.5">
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: '#a1a1aa', flexShrink: 0 }} />
+          <span className="text-[10px] text-text-subtle">任务未完成</span>
+        </div>
         <div className="ml-3 flex items-center gap-1.5">
           <div style={{ width: 10, height: 10, borderRadius: 2, background: '#fbbf24', flexShrink: 0 }} />
           <span className="text-[10px] text-text-subtle">任务全完成</span>

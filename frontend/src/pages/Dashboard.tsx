@@ -24,6 +24,8 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { notes, openQuickNote, dashboardStats, dashboardStatsLoading, loadDashboardStats } = useAppStore()
   const [selectedTodoDate, setSelectedTodoDate] = useState(() => getCSTDateString())
+  const [todayAllDone, setTodayAllDone] = useState(false)
+  const [todayHasTodos, setTodayHasTodos] = useState(false)
 
   useEffect(() => {
     void loadDashboardStats()
@@ -40,9 +42,12 @@ export default function Dashboard() {
     }
   }, [])
 
-  const handleAllDone = useCallback((_done: boolean) => {
-    void _done
-    // 热力图直接从 store activity 读取 allTodosDone，此处无需处理
+  const handleAllDone = useCallback((done: boolean) => {
+    setTodayAllDone(done)
+  }, [])
+
+  const handleHasTodos = useCallback((has: boolean) => {
+    setTodayHasTodos(has)
   }, [])
 
   const handleStartReview = () => navigate('/review')
@@ -115,6 +120,8 @@ export default function Dashboard() {
           <div className="flex flex-col gap-5">
             <div className="bg-surface-card border border-border rounded-xl p-5 min-w-0">
               <ActivityHeatmap
+                todayAllDone={todayAllDone}
+                todayHasTodos={todayHasTodos}
                 selectedDate={selectedTodoDate}
                 onDateSelect={setSelectedTodoDate}
               />
@@ -122,6 +129,7 @@ export default function Dashboard() {
             <div className="bg-surface-card border border-border rounded-xl p-5">
               <TodoList
                 onAllDone={handleAllDone}
+                onHasTodos={handleHasTodos}
                 selectedDate={selectedTodoDate}
                 onSelectedDateChange={setSelectedTodoDate}
               />

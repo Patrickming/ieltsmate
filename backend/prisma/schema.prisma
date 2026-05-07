@@ -123,6 +123,7 @@ model DailyActivity {
   activityDate DateTime @unique
   studyCount   Int      @default(0)
   allTodosDone Boolean  @default(false)
+  hasTodos     Boolean  @default(false)
   updatedAt    DateTime @updatedAt
 }
 
