@@ -36,7 +36,7 @@ export function UserNoteImageStrip({
               setOpenIndex(index)
             }}
           >
-            <img src={image} alt="" className="h-full w-full rounded-md object-cover" />
+            <img src={image} alt="" className="h-full w-full rounded-md bg-black/10 object-contain" />
           </button>
         ))}
         {hiddenCount > 0 && <div className="self-center text-xs text-text-dim">+{hiddenCount}</div>}

@@ -5,6 +5,17 @@ import { renderWithRouter } from '@/test/render'
 import { UserNoteImageStrip } from '@/components/ui/UserNoteImageStrip'
 
 describe('UserNoteImageStrip', () => {
+  it('缩略图使用完整展示模式而不是裁切模式', () => {
+    const { container } = renderWithRouter(
+      <UserNoteImageStrip
+        images={['/note-user-images/2026/05/a.png']}
+        thumbnailClassName="h-10 w-10"
+      />,
+    )
+
+    expect(container.querySelector('img')).toHaveClass('object-contain')
+  })
+
   it('为缩略图提供可区分名称，并在 maxVisible 截断时保留总数', () => {
     renderWithRouter(
       <UserNoteImageStrip
