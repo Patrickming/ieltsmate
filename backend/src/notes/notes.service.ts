@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateNoteDto } from './dto/create-note.dto'
 import { CreateUserNoteDto } from './dto/create-user-note.dto'
 import { UpdateNoteDto } from './dto/update-note.dto'
+import { UpdateUserNoteDto } from './dto/update-user-note.dto'
+import { NoteUserImageStorage } from './note-user-image.storage'
 import { normalizeConfusableGroups, normalizePartOfSpeechList } from './types/note-extensions'
 import { normalizeWordFamily } from './types/word-family'
 
@@ -13,10 +15,16 @@ const noteInclude = {
     select: { content: true },
   },
 } satisfies Prisma.NoteInclude
+const MAX_USER_NOTE_IMAGES = 10
 
 @Injectable()
 export class NotesService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NotesService.name)
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly noteUserImageStorage: NoteUserImageStorage,
+  ) {}
 
   async create(dto: CreateNoteDto) {
     const normalizedSynonyms =
@@ -128,11 +136,46 @@ export class NotesService {
   }
 
   async softDelete(id: string) {
-    await this.ensureActive(id)
-    return this.prisma.note.update({
-      where: { id },
-      data: { deletedAt: new Date() },
+    const deletedAt = new Date()
+    const { note, images } = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.note.findFirst({
+        where: { id, deletedAt: null },
+        select: {
+          id: true,
+          userNotes: {
+            where: { deletedAt: null },
+            select: { images: true },
+          },
+        },
+      })
+      if (!existing) {
+        throw new NotFoundException('Note not found')
+      }
+
+      await tx.noteUserNote.updateMany({
+        where: { noteId: id, deletedAt: null },
+        data: { deletedAt },
+      })
+      const note = await tx.note.update({
+        where: { id },
+        data: { deletedAt },
+      })
+
+      return {
+        note,
+        images: existing.userNotes.flatMap((userNote) => userNote.images),
+      }
     })
+
+    if (images.length > 0) {
+      try {
+        await this.noteUserImageStorage.removeMany([...new Set(images)])
+      } catch (error) {
+        this.logger.warn(`清理已删除笔记备注图片失败: noteId=${id} error=${this.describeError(error)}`)
+      }
+    }
+
+    return note
   }
 
   async listUserNotes(noteId: string) {
@@ -144,11 +187,77 @@ export class NotesService {
     return { items }
   }
 
-  async createUserNote(noteId: string, dto: CreateUserNoteDto) {
+  async createUserNote(noteId: string, dto: CreateUserNoteDto, files: Express.Multer.File[]) {
     await this.ensureActive(noteId)
-    return this.prisma.noteUserNote.create({
-      data: { noteId, content: dto.content },
+    const content = (dto.content ?? '').trim()
+    const images = await this.noteUserImageStorage.saveMany(files)
+    if (!content && images.length === 0) {
+      await this.noteUserImageStorage.removeMany(images)
+      throw new BadRequestException('备注内容和图片不能同时为空')
+    }
+
+    try {
+      return await this.prisma.noteUserNote.create({
+        data: { noteId, content, images },
+      })
+    } catch (error) {
+      await this.noteUserImageStorage.removeMany(images)
+      throw error
+    }
+  }
+
+  async updateUserNote(
+    noteId: string,
+    userNoteId: string,
+    dto: UpdateUserNoteDto,
+    files: Express.Multer.File[],
+  ) {
+    await this.ensureActive(noteId)
+    const existing = await this.prisma.noteUserNote.findFirst({
+      where: { id: userNoteId, noteId, deletedAt: null },
     })
+    if (!existing) {
+      throw new NotFoundException('User note not found')
+    }
+
+    const keepImages = this.parseKeepImages(dto.keepImages, existing.images)
+    const addedImages = await this.noteUserImageStorage.saveMany(files)
+    const nextImages = [...keepImages, ...addedImages]
+    const content = (dto.content ?? existing.content ?? '').trim()
+
+    if (nextImages.length > MAX_USER_NOTE_IMAGES) {
+      await this.noteUserImageStorage.removeMany(addedImages)
+      throw new BadRequestException(`备注图片最多只能保留 ${MAX_USER_NOTE_IMAGES} 张`)
+    }
+
+    if (!content && nextImages.length === 0) {
+      await this.noteUserImageStorage.removeMany(addedImages)
+      throw new BadRequestException('备注内容和图片不能同时为空')
+    }
+
+    let updated: Awaited<ReturnType<PrismaService['noteUserNote']['update']>>
+    try {
+      updated = await this.prisma.noteUserNote.update({
+        where: { id: userNoteId },
+        data: { content, images: nextImages },
+      })
+    } catch (error) {
+      await this.noteUserImageStorage.removeMany(addedImages)
+      throw error
+    }
+
+    const removedImages = existing.images.filter((path) => !keepImages.includes(path))
+    if (removedImages.length > 0) {
+      try {
+        await this.noteUserImageStorage.removeMany(removedImages)
+      } catch (error) {
+        this.logger.warn(
+          `清理已移除备注图片失败: noteId=${noteId} userNoteId=${userNoteId} error=${this.describeError(error)}`,
+        )
+      }
+    }
+
+    return updated
   }
 
   async softDeleteUserNote(noteId: string, userNoteId: string) {
@@ -159,10 +268,20 @@ export class NotesService {
     if (!existing) {
       throw new NotFoundException('User note not found')
     }
-    return this.prisma.noteUserNote.update({
+    const deleted = await this.prisma.noteUserNote.update({
       where: { id: userNoteId },
       data: { deletedAt: new Date() },
     })
+
+    try {
+      await this.noteUserImageStorage.removeMany(existing.images)
+    } catch (error) {
+      this.logger.warn(
+        `清理已删除备注图片失败: noteId=${noteId} userNoteId=${userNoteId} error=${this.describeError(error)}`,
+      )
+    }
+
+    return deleted
   }
 
   private async ensureActive(id: string) {
@@ -173,5 +292,36 @@ export class NotesService {
     if (!note) {
       throw new NotFoundException('Note not found')
     }
+  }
+
+  private parseKeepImages(rawKeepImages: string | undefined, existingImages: string[]) {
+    if (rawKeepImages === undefined) {
+      return existingImages
+    }
+
+    if (!rawKeepImages.trim()) {
+      return []
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(rawKeepImages)
+    } catch {
+      throw new BadRequestException('keepImages must be a JSON string array')
+    }
+
+    if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== 'string')) {
+      throw new BadRequestException('keepImages must be a JSON string array')
+    }
+
+    const requested = new Set(parsed)
+    return existingImages.filter((path) => requested.has(path))
+  }
+
+  private describeError(error: unknown) {
+    if (error instanceof Error) {
+      return error.message
+    }
+    return String(error)
   }
 }

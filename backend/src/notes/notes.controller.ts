@@ -8,10 +8,14 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common'
+import { FilesInterceptor } from '@nestjs/platform-express'
 import { CreateNoteDto } from './dto/create-note.dto'
 import { CreateUserNoteDto } from './dto/create-user-note.dto'
 import { UpdateNoteDto } from './dto/update-note.dto'
+import { UpdateUserNoteDto } from './dto/update-user-note.dto'
 import { NotesService } from './notes.service'
 
 @Controller('notes')
@@ -34,11 +38,24 @@ export class NotesController {
   }
 
   @Post(':id/user-notes')
+  @UseInterceptors(FilesInterceptor('images', 10, { limits: { fileSize: 5 * 1024 * 1024 } }))
   createUserNote(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: CreateUserNoteDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.notesService.createUserNote(id, dto)
+    return this.notesService.createUserNote(id, dto, files ?? [])
+  }
+
+  @Patch(':id/user-notes/:userNoteId')
+  @UseInterceptors(FilesInterceptor('images', 10, { limits: { fileSize: 5 * 1024 * 1024 } }))
+  updateUserNote(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('userNoteId', new ParseUUIDPipe()) userNoteId: string,
+    @Body() dto: UpdateUserNoteDto,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    return this.notesService.updateUserNote(id, userNoteId, dto, files ?? [])
   }
 
   @Delete(':id/user-notes/:userNoteId')

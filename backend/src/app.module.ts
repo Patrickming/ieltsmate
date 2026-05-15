@@ -1,5 +1,6 @@
 import { Controller, Get, Module } from '@nestjs/common'
 import { ServeStaticModule } from '@nestjs/serve-static'
+import { join } from 'node:path'
 import { AiModule } from './ai/ai.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { ExportModule } from './export/export.module'
@@ -23,11 +24,18 @@ class HealthController {
 
 @Module({
   imports: [
-    ServeStaticModule.forRoot({
-      rootPath: getNotesRoot(),
-      serveRoot: '/writing-assets',
-      serveStaticOptions: { index: false },
-    }),
+    ServeStaticModule.forRoot(
+      {
+        rootPath: getNotesRoot(),
+        serveRoot: '/writing-assets',
+        serveStaticOptions: { index: false },
+      },
+      {
+        rootPath: process.env.NOTE_USER_IMAGE_ROOT ?? join(process.cwd(), 'uploads', 'note-user-images'),
+        serveRoot: '/note-user-images',
+        serveStaticOptions: { index: false },
+      },
+    ),
     PrismaModule,
     NotesModule,
     FavoritesModule,

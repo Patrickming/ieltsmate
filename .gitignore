@@ -29,6 +29,7 @@ yarn-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+uploads/note-user-images/
 
 # Editor
 .vscode/settings.json

@@ -17,3 +17,9 @@ export function apiUrl(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`
   return base ? `${base}${p}` : p
 }
+
+export function backendAssetUrl(path: string): string {
+  if (!path) return path
+  if (/^(?:blob:|data:|https?:\/\/|\/\/)/i.test(path)) return path
+  return apiUrl(path)
+}

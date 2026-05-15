@@ -110,6 +110,11 @@ export default defineConfig({
         changeOrigin: true,
         bypass: devBackendProxyBypass,
       },
+      '/note-user-images': {
+        target: devBackendProxyTarget,
+        changeOrigin: true,
+        bypass: devBackendProxyBypass,
+      },
       '/export': {
         target: devBackendProxyTarget,
         changeOrigin: true,

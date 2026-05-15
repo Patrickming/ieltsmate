@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Check, X } from 'lucide-react'
 import { FavoriteButton } from '../components/ui/FavoriteButton'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, type ClipboardEvent, type Dispatch, type SetStateAction } from 'react'
 import { Layout } from '../components/layout/Layout'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -12,10 +12,101 @@ import { useAppStore } from '../store/useAppStore'
 import { apiUrl } from '../lib/apiBase'
 import { CATEGORIES, type Category } from '../data/mockData'
 import type { Pos4 } from '../types/wordFamily'
+import type { DraftUserNoteImage, UserNote } from '../types/userNote'
+import { UserNoteCard } from '../components/ui/UserNoteCard'
 
-interface UserNote {
+const MAX_USER_NOTE_IMAGES = 10
+const MAX_USER_NOTE_IMAGE_SIZE_BYTES = 5 * 1024 * 1024
+const ALLOWED_USER_NOTE_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+])
+
+function normalizeUserNote(note: {
   id: string
-  content: string
+  content?: string
+  images?: string[]
+  createdAt?: string
+  updatedAt?: string
+}): UserNote {
+  return {
+    id: note.id,
+    content: note.content ?? '',
+    images: Array.isArray(note.images) ? note.images : [],
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+  }
+}
+
+function draftFromFiles(files: File[]): DraftUserNoteImage[] {
+  return files.map((file) => ({
+    id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
+    file,
+    previewUrl: URL.createObjectURL(file),
+  }))
+}
+
+function revokeDraftImages(images: DraftUserNoteImage[]) {
+  for (const image of images) {
+    URL.revokeObjectURL(image.previewUrl)
+  }
+}
+
+function imageFileName(path: string) {
+  return path.split('/').pop() ?? path
+}
+
+function clipboardFiles(event: Pick<ClipboardEvent, 'clipboardData'>): File[] {
+  const items = Array.from(event.clipboardData?.items ?? [])
+
+  return items
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => Boolean(file))
+}
+
+function validatePastedUserNoteImages(files: File[], currentCount: number) {
+  const acceptedFiles: File[] = []
+  const invalidTypeCount = { value: 0 }
+  const oversizedCount = { value: 0 }
+  let overflowCount = 0
+  let remainingSlots = Math.max(0, MAX_USER_NOTE_IMAGES - currentCount)
+
+  for (const file of files) {
+    if (!ALLOWED_USER_NOTE_IMAGE_TYPES.has(file.type)) {
+      invalidTypeCount.value += 1
+      continue
+    }
+    if (file.size > MAX_USER_NOTE_IMAGE_SIZE_BYTES) {
+      oversizedCount.value += 1
+      continue
+    }
+    if (remainingSlots <= 0) {
+      overflowCount += 1
+      continue
+    }
+
+    acceptedFiles.push(file)
+    remainingSlots -= 1
+  }
+
+  const messages: string[] = []
+  if (invalidTypeCount.value > 0) {
+    messages.push('已忽略不支持的图片，仅支持 PNG、JPEG、WebP、GIF。')
+  }
+  if (oversizedCount.value > 0) {
+    messages.push('已忽略过大的图片，单张图片不能超过 5MB。')
+  }
+  if (overflowCount > 0) {
+    messages.push(`最多只能添加 ${MAX_USER_NOTE_IMAGES} 张图片，额外图片已忽略。`)
+  }
+
+  return {
+    acceptedFiles,
+    message: messages.length > 0 ? messages.join(' ') : null,
+  }
 }
 
 export default function KnowledgeDetail() {
@@ -23,9 +114,19 @@ export default function KnowledgeDetail() {
   const navigate = useNavigate()
   const { notes, deleteNote, updateNote } = useAppStore()
   const [newNote, setNewNote] = useState('')
+  const [draftImages, setDraftImages] = useState<DraftUserNoteImage[]>([])
   const [userNotes, setUserNotes] = useState<UserNote[]>([])
   const [addingNote, setAddingNote] = useState(false)
   const [savingNote, setSavingNote] = useState(false)
+  const [addNoteFeedback, setAddNoteFeedback] = useState<string | null>(null)
+  const [editingUserNoteId, setEditingUserNoteId] = useState<string | null>(null)
+  const [editNote, setEditNote] = useState('')
+  const [editExistingImages, setEditExistingImages] = useState<string[]>([])
+  const [editNewImages, setEditNewImages] = useState<DraftUserNoteImage[]>([])
+  const [savingEditedNote, setSavingEditedNote] = useState(false)
+  const [editUserNoteFeedback, setEditUserNoteFeedback] = useState<string | null>(null)
+  const [userNoteActionFeedback, setUserNoteActionFeedback] = useState<string | null>(null)
+  const [deletingUserNoteId, setDeletingUserNoteId] = useState<string | null>(null)
   const [pageLoading] = useState(false)
 
   // Edit state
@@ -55,17 +156,151 @@ export default function KnowledgeDetail() {
   const note = notes[noteIdx]
   const prevNote = noteIdx > 0 ? notes[noteIdx - 1] : null
   const nextNote = noteIdx < notes.length - 1 ? notes[noteIdx + 1] : null
+  const draftImagesRef = useRef<DraftUserNoteImage[]>([])
+  const editNewImagesRef = useRef<DraftUserNoteImage[]>([])
+
+  const replaceDraftImages = (
+    setter: Dispatch<SetStateAction<DraftUserNoteImage[]>>,
+    nextImages: DraftUserNoteImage[],
+  ) => {
+    setter((prev) => {
+      const nextIds = new Set(nextImages.map((image) => image.id))
+      revokeDraftImages(prev.filter((image) => !nextIds.has(image.id)))
+      return nextImages
+    })
+  }
+
+  const clearDraftImageState = (
+    setter: Dispatch<SetStateAction<DraftUserNoteImage[]>>,
+  ) => {
+    setter((prev) => {
+      revokeDraftImages(prev)
+      return []
+    })
+  }
+
+  const onPasteImages = (
+    event: ClipboardEvent<HTMLTextAreaElement>,
+    currentImages: DraftUserNoteImage[],
+    currentTotalImageCount: number,
+    setter: Dispatch<SetStateAction<DraftUserNoteImage[]>>,
+    setFeedback: Dispatch<SetStateAction<string | null>>,
+  ) => {
+    const files = clipboardFiles(event.nativeEvent)
+    if (files.length === 0) return
+
+    event.preventDefault()
+    const { acceptedFiles, message } = validatePastedUserNoteImages(files, currentTotalImageCount)
+    setFeedback(message)
+
+    if (acceptedFiles.length === 0) {
+      return
+    }
+
+    replaceDraftImages(
+      setter,
+      [...currentImages, ...draftFromFiles(acceptedFiles)],
+    )
+  }
+
+  const cancelAddingNote = () => {
+    setNewNote('')
+    setAddingNote(false)
+    setAddNoteFeedback(null)
+    clearDraftImageState(setDraftImages)
+  }
+
+  const cancelEditingUserNote = () => {
+    setEditingUserNoteId(null)
+    setEditNote('')
+    setEditExistingImages([])
+    setEditUserNoteFeedback(null)
+    clearDraftImageState(setEditNewImages)
+  }
+
+  const startEditUserNote = (userNote: UserNote) => {
+    setEditingUserNoteId(userNote.id)
+    setEditNote(userNote.content)
+    setEditExistingImages([...userNote.images])
+    setEditUserNoteFeedback(null)
+    clearDraftImageState(setEditNewImages)
+  }
+
+  const saveUserNote = async (
+    url: string,
+    method: 'POST' | 'PATCH',
+    payload: {
+      content: string
+      keepImages?: string[]
+      images: DraftUserNoteImage[]
+    },
+  ) => {
+    const form = new FormData()
+    form.append('content', payload.content)
+    if (payload.keepImages) {
+      form.append('keepImages', JSON.stringify(payload.keepImages))
+    }
+    for (const image of payload.images) {
+      form.append('images', image.file)
+    }
+
+    const res = await fetch(apiUrl(url), { method, body: form })
+    if (!res.ok) throw new Error('save failed')
+
+    const json = (await res.json()) as {
+      data?: {
+        id: string
+        content?: string
+        images?: string[]
+        createdAt?: string
+        updatedAt?: string
+      }
+    }
+
+    return json.data ? normalizeUserNote(json.data) : null
+  }
+
+  const canSaveNewNote = newNote.trim().length > 0 || draftImages.length > 0
+  const canSaveEditedUserNote =
+    editNote.trim().length > 0 || editExistingImages.length > 0 || editNewImages.length > 0
 
   // Load user notes from backend when note id changes
   useEffect(() => {
     if (!id) return
     fetch(apiUrl(`/notes/${id}/user-notes`))
       .then((r) => r.ok ? r.json() : null)
-      .then((json: { data?: { items?: UserNote[] } } | null) => {
-        if (json?.data?.items) setUserNotes(json.data.items)
+      .then((json: {
+        data?: {
+          items?: Array<{
+            id: string
+            content?: string
+            images?: string[]
+            createdAt?: string
+            updatedAt?: string
+          }>
+        }
+      } | null) => {
+        setUserNotes((json?.data?.items ?? []).map((item) => normalizeUserNote(item)))
       })
       .catch(() => { /* 静默失败 */ })
   }, [id])
+
+  useEffect(() => {
+    draftImagesRef.current = draftImages
+  }, [draftImages])
+
+  useEffect(() => {
+    editNewImagesRef.current = editNewImages
+  }, [editNewImages])
+
+  useEffect(() => {
+    return () => {
+      revokeDraftImages([
+        ...draftImagesRef.current,
+        ...editNewImagesRef.current,
+      ])
+    }
+  }, [])
 
   if (pageLoading) {
     return (
@@ -104,32 +339,74 @@ export default function KnowledgeDetail() {
   }
 
   const handleSaveNote = async () => {
-    if (!newNote.trim() || !id || savingNote) return
+    if (!id || savingNote || !canSaveNewNote) return
     setSavingNote(true)
+    setAddNoteFeedback(null)
+    setUserNoteActionFeedback(null)
     try {
-      const res = await fetch(apiUrl(`/notes/${id}/user-notes`), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: newNote.trim() }),
+      const savedNote = await saveUserNote(`/notes/${id}/user-notes`, 'POST', {
+        content: newNote.trim(),
+        images: draftImages,
       })
-      if (res.ok) {
-        const json = (await res.json()) as { data?: UserNote }
-        if (json.data?.id) {
-          setUserNotes((prev) => [...prev, json.data!])
-        }
+      if (savedNote) {
+        setUserNotes((prev) => [...prev, savedNote])
+        clearDraftImageState(setDraftImages)
         setNewNote('')
         setAddingNote(false)
       }
-    } catch { /* 静默失败 */ }
+    } catch {
+      setAddNoteFeedback('保存备注失败，请重试。')
+    }
     setSavingNote(false)
   }
 
   const handleDeleteUserNote = async (userNoteId: string) => {
-    if (!id) return
-    setUserNotes((prev) => prev.filter((n) => n.id !== userNoteId))
+    if (!id || deletingUserNoteId === userNoteId) return
+    setDeletingUserNoteId(userNoteId)
+    setUserNoteActionFeedback(null)
     try {
-      await fetch(apiUrl(`/notes/${id}/user-notes/${userNoteId}`), { method: 'DELETE' })
-    } catch { /* 静默失败 */ }
+      const res = await fetch(apiUrl(`/notes/${id}/user-notes/${userNoteId}`), { method: 'DELETE' })
+      if (!res.ok) {
+        throw new Error('delete failed')
+      }
+      if (editingUserNoteId === userNoteId) {
+        cancelEditingUserNote()
+      }
+      setUserNotes((prev) => prev.filter((n) => n.id !== userNoteId))
+    } catch {
+      setUserNoteActionFeedback('删除备注失败，请重试。')
+    } finally {
+      setDeletingUserNoteId(null)
+    }
+  }
+
+  const handleSaveEditedUserNote = async () => {
+    if (!id || !editingUserNoteId || savingEditedNote || !canSaveEditedUserNote) return
+
+    setSavingEditedNote(true)
+    setEditUserNoteFeedback(null)
+    setUserNoteActionFeedback(null)
+    try {
+      const savedNote = await saveUserNote(
+        `/notes/${id}/user-notes/${editingUserNoteId}`,
+        'PATCH',
+        {
+          content: editNote.trim(),
+          keepImages: editExistingImages,
+          images: editNewImages,
+        },
+      )
+
+      if (savedNote) {
+        setUserNotes((prev) => prev.map((item) => (
+          item.id === savedNote.id ? savedNote : item
+        )))
+        cancelEditingUserNote()
+      }
+    } catch {
+      setEditUserNoteFeedback('保存备注修改失败，请重试。')
+    }
+    setSavingEditedNote(false)
   }
 
   const handleStartEdit = () => {
@@ -658,22 +935,139 @@ export default function KnowledgeDetail() {
             {/* 我的备注 — below AI extensions */}
             <div className="bg-surface-card border border-border rounded-xl p-4">
               <div className="text-sm font-semibold text-text-secondary mb-3">我的备注</div>
-              {userNotes.map((n) => (
+              {userNoteActionFeedback && (
                 <div
-                  key={n.id}
-                  className="flex items-start gap-2 mb-2 pl-3 border-l-2 border-primary/40 group"
+                  role="alert"
+                  className="mb-3 rounded-md border border-[#7f1d1d] bg-[#450a0a] px-3 py-2 text-sm text-[#fecdd3]"
                 >
-                  <p className="text-[13px] text-text-muted flex-1 leading-relaxed">{n.content}</p>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteUserNote(n.id)}
-                    className="opacity-0 group-hover:opacity-100 shrink-0 text-text-subtle hover:text-[#fb7185] transition-all"
-                    title="删除备注"
-                  >
-                    <X size={13} />
-                  </button>
+                  {userNoteActionFeedback}
                 </div>
-              ))}
+              )}
+              <div className="flex flex-col gap-3">
+                {userNotes.map((userNote) => (
+                  editingUserNoteId === userNote.id ? (
+                    <div key={userNote.id} className="rounded-lg border border-border bg-[#141420] p-3">
+                      <textarea
+                        value={editNote}
+                        onChange={(event) => {
+                          setEditNote(event.target.value)
+                          if (editUserNoteFeedback) setEditUserNoteFeedback(null)
+                        }}
+                        onPaste={(event) => onPasteImages(
+                          event,
+                          editNewImages,
+                          editExistingImages.length + editNewImages.length,
+                          setEditNewImages,
+                          setEditUserNoteFeedback,
+                        )}
+                        aria-label="编辑备注内容"
+                        rows={3}
+                        className="w-full resize-none rounded-md border border-[#3a3a4a] bg-[#0f0f18] px-3 py-2 text-sm text-text-primary outline-none transition-colors focus:border-primary/60"
+                      />
+                      {editUserNoteFeedback && (
+                        <div
+                          role="alert"
+                          className="mt-3 rounded-md border border-[#7f1d1d] bg-[#450a0a] px-3 py-2 text-sm text-[#fecdd3]"
+                        >
+                          {editUserNoteFeedback}
+                        </div>
+                      )}
+                      {(editExistingImages.length > 0 || editNewImages.length > 0) && (
+                        <div className="mt-3 flex flex-col gap-3">
+                          <UserNoteCard
+                            note={{
+                              id: `${userNote.id}-editing-preview`,
+                              content: '',
+                              images: [
+                                ...editExistingImages,
+                                ...editNewImages.map((image) => image.previewUrl),
+                              ],
+                            }}
+                            thumbnailClassName="h-24 w-24 overflow-hidden rounded-md border border-border"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            {editExistingImages.map((image, index) => (
+                              <button
+                                key={`${image}-${index}`}
+                                type="button"
+                                aria-label={`移除已保存图片 ${imageFileName(image)}`}
+                                className="rounded-md border border-border px-2 py-1 text-xs text-text-dim transition hover:text-text-primary"
+                                onClick={() => {
+                                  setEditExistingImages((prev) => prev.filter((_, prevIndex) => prevIndex !== index))
+                                }}
+                              >
+                                移除 {imageFileName(image)}
+                              </button>
+                            ))}
+                            {editNewImages.map((image) => (
+                              <button
+                                key={image.id}
+                                type="button"
+                                aria-label={`移除新图片 ${image.file.name}`}
+                                className="rounded-md border border-border px-2 py-1 text-xs text-text-dim transition hover:text-text-primary"
+                                onClick={() => {
+                                  replaceDraftImages(
+                                    setEditNewImages,
+                                    editNewImages.filter((item) => item.id !== image.id),
+                                  )
+                                }}
+                              >
+                                移除新图 {image.file.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="mt-3 flex gap-2">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={() => void handleSaveEditedUserNote()}
+                          disabled={savingEditedNote || !canSaveEditedUserNote}
+                        >
+                          {savingEditedNote ? '保存中...' : '保存备注修改'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={cancelEditingUserNote}
+                        >
+                          取消
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <UserNoteCard
+                      key={userNote.id}
+                      note={userNote}
+                      thumbnailClassName="h-24 w-24 overflow-hidden rounded-md border border-border"
+                      actions={(
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            aria-label={`编辑备注 ${userNote.id}`}
+                            className="rounded-md p-1 text-text-subtle transition hover:text-text-primary"
+                            onClick={() => startEditUserNote(userNote)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`删除备注 ${userNote.id}`}
+                            className="rounded-md p-1 text-text-subtle transition hover:text-[#fb7185]"
+                            disabled={deletingUserNoteId === userNote.id}
+                            onClick={() => void handleDeleteUserNote(userNote.id)}
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      )}
+                    />
+                  )
+                ))}
+              </div>
               <AnimatePresence>
                 {addingNote && (
                   <motion.div
@@ -682,23 +1076,71 @@ export default function KnowledgeDetail() {
                     exit={{ height: 0, opacity: 0 }}
                     className="overflow-hidden"
                   >
+                    {draftImages.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-3">
+                        <UserNoteCard
+                          note={{
+                            id: 'draft-user-note-preview',
+                            content: '',
+                            images: draftImages.map((image) => image.previewUrl),
+                          }}
+                          thumbnailClassName="h-24 w-24 overflow-hidden rounded-md border border-border"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {draftImages.map((image) => (
+                            <button
+                              key={image.id}
+                              type="button"
+                              aria-label={`移除新图片 ${image.file.name}`}
+                              className="rounded-md border border-border px-2 py-1 text-xs text-text-dim transition hover:text-text-primary"
+                              onClick={() => {
+                                replaceDraftImages(
+                                  setDraftImages,
+                                  draftImages.filter((item) => item.id !== image.id),
+                                )
+                              }}
+                            >
+                              移除新图 {image.file.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {addNoteFeedback && (
+                      <div
+                        role="alert"
+                        className="mb-2 mt-2 rounded-md border border-[#7f1d1d] bg-[#450a0a] px-3 py-2 text-sm text-[#fecdd3]"
+                      >
+                        {addNoteFeedback}
+                      </div>
+                    )}
                     <textarea
                       autoFocus
                       value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
+                      onChange={(e) => {
+                        setNewNote(e.target.value)
+                        if (addNoteFeedback) setAddNoteFeedback(null)
+                      }}
+                      onPaste={(event) => onPasteImages(
+                        event,
+                        draftImages,
+                        draftImages.length,
+                        setDraftImages,
+                        setAddNoteFeedback,
+                      )}
                       placeholder="添加备注..."
                       rows={2}
                       className="w-full bg-[#141420] border border-[#3a3a4a] rounded-md px-3 py-2 text-sm text-text-primary placeholder-text-subtle outline-none resize-none mb-2 mt-2"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleSaveNote() }
-                        if (e.key === 'Escape') setAddingNote(false)
+                        if (e.key === 'Escape') cancelAddingNote()
                       }}
                     />
                     <div className="flex gap-2">
-                      <Button type="button" variant="primary" size="sm" onClick={() => void handleSaveNote()} disabled={savingNote}>
+                      <Button type="button" variant="primary" size="sm" onClick={() => void handleSaveNote()} disabled={savingNote || !canSaveNewNote}>
                         {savingNote ? '保存中...' : '保存'}
                       </Button>
-                      <Button type="button" variant="outline" size="sm" onClick={() => setAddingNote(false)}>
+                      <Button type="button" variant="outline" size="sm" onClick={cancelAddingNote}>
                         取消
                       </Button>
                     </div>

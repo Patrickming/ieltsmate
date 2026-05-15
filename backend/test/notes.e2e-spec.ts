@@ -1,16 +1,37 @@
 import 'reflect-metadata'
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { INestApplication, ValidationPipe } from '@nestjs/common'
-import { Test } from '@nestjs/testing'
+import { Test, TestingModule } from '@nestjs/testing'
 import request from 'supertest'
-import { AppModule } from '../src/app.module'
 import { HttpExceptionFilter } from '../src/common/http-exception.filter'
 import { ResponseInterceptor } from '../src/common/response.interceptor'
+import { PrismaService } from '../src/prisma/prisma.service'
 
 describe('Notes API', () => {
   let app: INestApplication
+  let prisma: PrismaService
+  let uploadRoot: string
+  const { AbstractLoader } = require('@nestjs/serve-static/dist/loaders/abstract.loader')
+  const { ExpressLoader } = require('@nestjs/serve-static/dist/loaders/express.loader')
+  const ONE_BY_ONE_PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnRk8wAAAAASUVORK5CYII=',
+    'base64',
+  )
+
+  const countStoredImages = () =>
+    readdirSync(uploadRoot, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).length
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
+    uploadRoot = mkdtempSync(join(tmpdir(), 'ieltsmate-user-note-images-'))
+    process.env.NOTE_USER_IMAGE_ROOT = uploadRoot
+    const { AppModule } = await import('../src/app.module')
+    const moduleRef: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(AbstractLoader)
+      .useValue(new ExpressLoader())
+      .compile()
+    prisma = moduleRef.get(PrismaService)
     app = moduleRef.createNestApplication()
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }))
     app.useGlobalInterceptors(new ResponseInterceptor())
@@ -20,6 +41,8 @@ describe('Notes API', () => {
 
   afterAll(async () => {
     await app.close()
+    rmSync(uploadRoot, { recursive: true, force: true })
+    delete process.env.NOTE_USER_IMAGE_ROOT
   })
 
   it('POST /notes then GET /notes supports search and category', async () => {
@@ -208,50 +231,216 @@ describe('Notes API', () => {
       .expect(400)
   })
 
-  it('user-notes: POST list DELETE flow; list excludes soft-deleted; note deleted => 404', async () => {
+  it('user-notes accepts multipart images, updates keepImages, and returns image urls', async () => {
     const created = await request(app.getHttpServer())
       .post('/notes')
       .send({
-        content: 'remark parent',
-        translation: '父笔记',
+        content: 'hostel',
+        translation: '旅舍',
         category: '单词',
       })
       .expect(201)
     const noteId = created.body.data.id as string
 
-    const empty = await request(app.getHttpServer()).get(`/notes/${noteId}/user-notes`).expect(200)
-    expect(empty.body.data.items).toEqual([])
-
-    const a = await request(app.getHttpServer())
+    const multipartCreated = await request(app.getHttpServer())
       .post(`/notes/${noteId}/user-notes`)
-      .send({ content: 'first remark' })
+      .field('content', '第一条备注')
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'a.png', contentType: 'image/png' })
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'b.png', contentType: 'image/png' })
       .expect(201)
-    const userNoteId = a.body.data.id as string
-    expect(a.body.data.content).toBe('first remark')
-    expect(a.body.data.deletedAt).toBeNull()
 
-    await request(app.getHttpServer()).post(`/notes/${noteId}/user-notes`).send({ content: '' }).expect(400)
+    expect(multipartCreated.body.data.content).toBe('第一条备注')
+    expect(multipartCreated.body.data.images).toHaveLength(2)
+    expect(multipartCreated.body.data.images[0]).toMatch(/^\/note-user-images\//)
+    expect(
+      existsSync(join(uploadRoot, multipartCreated.body.data.images[0].replace('/note-user-images/', ''))),
+    ).toBe(true)
+    await request(app.getHttpServer())
+      .get(multipartCreated.body.data.images[0] as string)
+      .expect('Content-Type', /image\/png/)
+      .expect(200)
+
+    const userNoteId = multipartCreated.body.data.id as string
+    const keptImage = multipartCreated.body.data.images[0] as string
+    const removedImage = multipartCreated.body.data.images[1] as string
+
+    const patched = await request(app.getHttpServer())
+      .patch(`/notes/${noteId}/user-notes/${userNoteId}`)
+      .field('content', '')
+      .field('keepImages', JSON.stringify([keptImage]))
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'c.png', contentType: 'image/png' })
+      .expect(200)
+
+    expect(patched.body.data.content).toBe('')
+    expect(patched.body.data.images).toEqual(expect.arrayContaining([keptImage]))
+    expect(patched.body.data.images).toHaveLength(2)
+    expect(
+      existsSync(join(uploadRoot, removedImage.replace('/note-user-images/', ''))),
+    ).toBe(false)
 
     const listed = await request(app.getHttpServer()).get(`/notes/${noteId}/user-notes`).expect(200)
-    expect(listed.body.data.items).toHaveLength(1)
-    expect(listed.body.data.items[0].id).toBe(userNoteId)
-
-    const noteList = await request(app.getHttpServer()).get('/notes').expect(200)
-    const listedParent = noteList.body.data.items.find((item: { id: string }) => item.id === noteId)
-    expect(listedParent.userNotes).toEqual([{ content: 'first remark' }])
+    expect(listed.body.data.items[0].images).toHaveLength(2)
 
     await request(app.getHttpServer())
       .delete(`/notes/${noteId}/user-notes/${userNoteId}`)
       .expect(200)
 
-    const afterDel = await request(app.getHttpServer()).get(`/notes/${noteId}/user-notes`).expect(200)
-    expect(afterDel.body.data.items).toEqual([])
+    const afterDelete = await request(app.getHttpServer()).get(`/notes/${noteId}/user-notes`).expect(200)
+    expect(afterDelete.body.data.items).toEqual([])
+    expect(existsSync(join(uploadRoot, keptImage.replace('/note-user-images/', '')))).toBe(false)
+    expect(
+      existsSync(join(uploadRoot, patched.body.data.images[1].replace('/note-user-images/', ''))),
+    ).toBe(false)
+  })
+
+  it('user-notes rejects empty content + empty images', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'empty guard',
+        translation: '测试',
+        category: '单词',
+      })
+      .expect(201)
 
     await request(app.getHttpServer())
-      .delete(`/notes/${noteId}/user-notes/${userNoteId}`)
-      .expect(404)
+      .post(`/notes/${created.body.data.id}/user-notes`)
+      .field('content', '   ')
+      .expect(400)
+  })
+
+  it('user-notes accepts image-only multipart create and persists normalized empty content', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'image only guard',
+        translation: '测试',
+        category: '单词',
+      })
+      .expect(201)
+
+    const imageOnly = await request(app.getHttpServer())
+      .post(`/notes/${created.body.data.id}/user-notes`)
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'only-image.png', contentType: 'image/png' })
+      .expect(201)
+
+    expect(imageOnly.body.data.content).toBe('')
+    expect(imageOnly.body.data.images).toHaveLength(1)
+    expect(imageOnly.body.data.images[0]).toMatch(/^\/note-user-images\//)
+
+    const listed = await request(app.getHttpServer())
+      .get(`/notes/${created.body.data.id}/user-notes`)
+      .expect(200)
+
+    expect(listed.body.data.items).toHaveLength(1)
+    expect(listed.body.data.items[0].content).toBe('')
+    expect(listed.body.data.items[0].images).toHaveLength(1)
+    expect(listed.body.data.items[0].id).toBe(imageOnly.body.data.id)
+  })
+
+  it('user-notes PATCH rejects empty final content with no kept or new images', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'patch empty guard',
+        translation: '测试',
+        category: '单词',
+      })
+      .expect(201)
+
+    const createdUserNote = await request(app.getHttpServer())
+      .post(`/notes/${created.body.data.id}/user-notes`)
+      .field('content', '原备注')
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'guard.png', contentType: 'image/png' })
+      .expect(201)
+
+    await request(app.getHttpServer())
+      .patch(`/notes/${created.body.data.id}/user-notes/${createdUserNote.body.data.id}`)
+      .field('content', '   ')
+      .field('keepImages', JSON.stringify([]))
+      .expect(400)
+  })
+
+  it('user-notes PATCH rejects final image count above 10 and cleans newly uploaded files', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'patch image overflow',
+        translation: '测试',
+        category: '单词',
+      })
+      .expect(201)
+
+    const createReq = request(app.getHttpServer())
+      .post(`/notes/${created.body.data.id}/user-notes`)
+      .field('content', '原备注')
+    for (let index = 0; index < 9; index += 1) {
+      createReq.attach('images', ONE_BY_ONE_PNG, {
+        filename: `seed-${index}.png`,
+        contentType: 'image/png',
+      })
+    }
+    const createdUserNote = await createReq.expect(201)
+
+    const existingImages = createdUserNote.body.data.images as string[]
+    expect(existingImages).toHaveLength(9)
+    const fileCountBeforePatch = countStoredImages()
+
+    const patchReq = request(app.getHttpServer())
+      .patch(`/notes/${created.body.data.id}/user-notes/${createdUserNote.body.data.id}`)
+      .field('content', '原备注')
+      .field('keepImages', JSON.stringify(existingImages))
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'overflow-a.png', contentType: 'image/png' })
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'overflow-b.png', contentType: 'image/png' })
+
+    await patchReq.expect(400)
+    expect(countStoredImages()).toBe(fileCountBeforePatch)
+
+    const listed = await request(app.getHttpServer())
+      .get(`/notes/${created.body.data.id}/user-notes`)
+      .expect(200)
+
+    expect(listed.body.data.items).toHaveLength(1)
+    expect(listed.body.data.items[0].images).toHaveLength(9)
+    expect(listed.body.data.items[0].images).toEqual(existingImages)
+  })
+
+  it('DELETE /notes/:id also cleans up child user-note images on disk', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/notes')
+      .send({
+        content: 'delete parent cleanup',
+        translation: '测试',
+        category: '单词',
+      })
+      .expect(201)
+
+    const noteId = created.body.data.id as string
+    const createdUserNote = await request(app.getHttpServer())
+      .post(`/notes/${noteId}/user-notes`)
+      .field('content', '带图备注')
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'parent-a.png', contentType: 'image/png' })
+      .attach('images', ONE_BY_ONE_PNG, { filename: 'parent-b.png', contentType: 'image/png' })
+      .expect(201)
+
+    const imagePaths = createdUserNote.body.data.images as string[]
+    expect(imagePaths).toHaveLength(2)
+    for (const imagePath of imagePaths) {
+      expect(existsSync(join(uploadRoot, imagePath.replace('/note-user-images/', '')))).toBe(true)
+    }
 
     await request(app.getHttpServer()).delete(`/notes/${noteId}`).expect(200)
-    await request(app.getHttpServer()).get(`/notes/${noteId}/user-notes`).expect(404)
+
+    await request(app.getHttpServer()).get(`/notes/${noteId}`).expect(404)
+    for (const imagePath of imagePaths) {
+      expect(existsSync(join(uploadRoot, imagePath.replace('/note-user-images/', '')))).toBe(false)
+    }
+
+    const deletedUserNotes = await prisma.noteUserNote.findMany({
+      where: { noteId },
+      select: { deletedAt: true },
+    })
+    expect(deletedUserNotes).toHaveLength(1)
+    expect(deletedUserNotes[0]?.deletedAt).not.toBeNull()
   })
 })

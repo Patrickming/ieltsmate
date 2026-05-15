@@ -66,7 +66,7 @@ describe('ReviewCards user notes on card back', () => {
   it('显示当前卡片的备注', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       createFetchResponse({
-        data: { items: [{ id: 'u-1', content: '易混词：hotel' }] },
+        data: { items: [{ id: 'u-1', content: '易混词：hotel', images: [] }] },
       }),
     )
 
@@ -78,6 +78,84 @@ describe('ReviewCards user notes on card back', () => {
 
     expect(await screen.findByText('我的备注')).toBeInTheDocument()
     expect(screen.getByText('易混词：hotel')).toBeInTheDocument()
+  })
+
+  it('显示备注缩略图并可打开大图预览', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createFetchResponse({
+        data: {
+          items: [
+            {
+              id: 'u-1',
+              content: '易混词：hotel',
+              images: [
+                '/note-user-images/2026/05/a.png',
+                '/note-user-images/2026/05/b.png',
+              ],
+            },
+          ],
+        },
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByRole('heading', { name: 'hostel' }))
+
+    expect(await screen.findByText('我的备注')).toBeInTheDocument()
+    expect(screen.getByText('易混词：hotel')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /查看备注图片/ })).toHaveLength(2)
+
+    await user.click(screen.getAllByRole('button', { name: /查看备注图片/ })[0])
+    expect(screen.getByRole('dialog', { name: '备注图片预览' })).toBeInTheDocument()
+  })
+
+  it('备注图片的键盘交互不会把卡片翻回正面', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      createFetchResponse({
+        data: {
+          items: [
+            {
+              id: 'u-1',
+              content: '易混词：hotel',
+              images: [
+                '/note-user-images/2026/05/a.png',
+                '/note-user-images/2026/05/b.png',
+              ],
+            },
+          ],
+        },
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderWithRouter(<ReviewCards />)
+
+    await user.click(screen.getByRole('heading', { name: 'hostel' }))
+
+    const flipShell = document.querySelector('.preserve-3d')
+    expect(await screen.findByText('我的备注')).toBeInTheDocument()
+    expect(flipShell).toBeTruthy()
+    await waitFor(() => {
+      expect((flipShell as HTMLElement).style.transform).toContain('180deg')
+    })
+
+    const thumbnail = screen.getAllByRole('button', { name: /查看备注图片/ })[0]
+    thumbnail.focus()
+    await user.keyboard('[Space]')
+
+    expect(screen.getByRole('dialog', { name: '备注图片预览' })).toBeInTheDocument()
+    expect((flipShell as HTMLElement).style.transform).toContain('180deg')
+
+    const closeButton = screen.getByRole('button', { name: '关闭备注图片预览' })
+    closeButton.focus()
+    await user.keyboard('[Space]')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '备注图片预览' })).not.toBeInTheDocument()
+    })
+    expect((flipShell as HTMLElement).style.transform).toContain('180deg')
   })
 
   it('无备注时不显示备注区块', async () => {

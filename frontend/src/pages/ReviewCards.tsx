@@ -17,6 +17,7 @@ import { ReviewAIWarmupBar } from "../components/review/ReviewAIWarmupBar";
 import { Badge } from "../components/ui/Badge";
 import { ModalShell } from "../components/ui/ModalShell";
 import { StrokeButton } from "../components/ui/StrokeButton";
+import { UserNoteCard } from "../components/ui/UserNoteCard";
 import {
   associationDisplaySaved,
   findConflictingAssociationEntries,
@@ -45,6 +46,7 @@ import type {
   ConfusableGroup,
   PartOfSpeechItem,
 } from "../types/noteExtensions";
+import type { UserNote } from "../types/userNote";
 import type { Pos4, WordFamily, WordFamilyItem } from "../types/wordFamily";
 
 type SaveNoticeTone = "success" | "warning" | "error";
@@ -369,15 +371,34 @@ type CardAIContent =
   | SpellingAI
   | FallbackAI;
 
-interface UserNoteItem {
-  id: string;
-  content: string;
-}
-
-interface UserNoteListResponse {
+type UserNotesResponse = {
   data?: {
-    items?: UserNoteItem[];
+    items?: UserNote[];
   };
+};
+
+const SPACE_FLIP_INTERACTIVE_SELECTOR = [
+  "button",
+  "a[href]",
+  "input",
+  "textarea",
+  "select",
+  "summary",
+  "[role='button']",
+  "[role='link']",
+  "[role='dialog']",
+  "[contenteditable]:not([contenteditable='false'])",
+  "[data-review-card-interactive='true']",
+].join(", ");
+
+function shouldIgnoreSpaceFlip(event: KeyboardEvent) {
+  if (event.defaultPrevented) return true;
+
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+
+  return target.closest(SPACE_FLIP_INTERACTIVE_SELECTOR) !== null;
 }
 
 type UserNotesFetchStatus = "idle" | "loading" | "success" | "error";
@@ -1070,25 +1091,26 @@ function UserNotesSection({
   userNotes,
   withTopDivider = false,
 }: {
-  userNotes: string[];
+  userNotes: UserNote[];
   withTopDivider?: boolean;
 }) {
   if (userNotes.length === 0) return null;
 
   return (
-    <div>
+    <div
+      data-review-card-interactive="true"
+      onClick={(event) => event.stopPropagation()}
+    >
       {withTopDivider && <div className="h-px bg-border mb-4" />}
       <div className="text-sm font-semibold text-text-muted mb-2">我的备注</div>
       <div className="flex flex-col gap-2">
-        {userNotes.map((content, idx) => (
-          <div
-            key={`${content}-${idx}`}
-            className="pl-3 border-l-2 border-primary/35"
-          >
-            <p className="text-[13px] text-text-muted leading-relaxed">
-              {content}
-            </p>
-          </div>
+        {userNotes.map((note) => (
+          <UserNoteCard
+            key={note.id}
+            note={note}
+            thumbnailClassName="w-10 h-10 rounded-md overflow-hidden border border-border"
+            maxVisibleImages={4}
+          />
         ))}
       </div>
     </div>
@@ -1127,7 +1149,7 @@ function CardBackWordPhrase({
   savedAnt: string[];
   onSaveSyn: (p: AssociationPair) => void;
   onSaveAnt: (p: AssociationPair) => void;
-  userNotes: string[];
+  userNotes: UserNote[];
   showPosConfusableTabs?: boolean;
   showWordFamilyTab?: boolean;
   backFaceTab?: BackFaceTab;
@@ -1335,7 +1357,7 @@ function CardBackSynonym({
   savedAnt: string[];
   onSaveSyn: (p: AssociationPair) => void;
   onSaveAnt: (p: AssociationPair) => void;
-  userNotes: string[];
+  userNotes: UserNote[];
   onRetry?: () => void;
   isRetrying?: boolean;
 }) {
@@ -1469,7 +1491,7 @@ function CardBackSentence({
 }: {
   note: Note;
   ai: SentenceAI;
-  userNotes: string[];
+  userNotes: UserNote[];
   onRetry?: () => void;
   isRetrying?: boolean;
 }) {
@@ -1563,7 +1585,7 @@ function CardBackSpelling({
   onSaveSyn: (p: AssociationPair) => void;
   onSaveAnt: (p: AssociationPair) => void;
   spellingAnswer?: string;
-  userNotes: string[];
+  userNotes: UserNote[];
   showPosConfusableTabs?: boolean;
   showWordFamilyTab?: boolean;
   backFaceTab?: BackFaceTab;
@@ -1799,7 +1821,7 @@ function CardBackFallback({
   spellingAnswer?: string;
   onRetry?: () => void;
   isRetrying?: boolean;
-  userNotes: string[];
+  userNotes: UserNote[];
   backFaceTab?: BackFaceTab;
   showWordFamilyTab?: boolean;
   onBackFaceTabChange?: (t: BackFaceTab) => void;
@@ -2043,7 +2065,7 @@ function CardBackFastReview({
   note: Note;
   cardType: ReturnType<typeof getCardType>;
   storedNote: Note;
-  userNotes: string[];
+  userNotes: UserNote[];
   spellingAnswer?: string;
 }) {
   const barColor = CATEGORY_BAR[note.category] ?? "#818cf8";
@@ -2292,7 +2314,7 @@ function CardBack({
   spellingAnswer?: string;
   onRetry?: () => void;
   isRetrying?: boolean;
-  userNotes: string[];
+  userNotes: UserNote[];
   storedNote: Note;
   backFaceTab: BackFaceTab;
   onBackFaceTabChange: (t: BackFaceTab) => void;
@@ -2549,7 +2571,7 @@ export default function ReviewCards() {
   const [spellingAnswer, setSpellingAnswer] = useState("");
   const [slashState, setSlashState] = useState<"idle" | "slashing">("idle");
   const [userNotesByCard, setUserNotesByCard] = useState<
-    Record<string, string[]>
+    Record<string, UserNote[]>
   >({});
   const [userNotesStatusByCard, setUserNotesStatusByCard] = useState<
     Record<string, UserNotesFetchStatus>
@@ -2612,20 +2634,36 @@ export default function ReviewCards() {
     void fetch(apiUrl(`/notes/${encodeURIComponent(noteId)}/user-notes`))
       .then((res) => {
         if (!res.ok) return null;
-        return res.json() as Promise<UserNoteListResponse>;
+        return res.json() as Promise<UserNotesResponse>;
       })
       .then((json) => {
         if (cancelled) return;
         const items = json?.data?.items;
-        const contents = Array.isArray(items)
+        const normalizedItems = Array.isArray(items)
           ? items
-              .map((item) =>
-                typeof item.content === "string" ? item.content.trim() : "",
+              .map((item, index) => ({
+                id:
+                  typeof item.id === "string" && item.id.trim().length > 0
+                    ? item.id
+                    : `${noteId}-${index}`,
+                content:
+                  typeof item.content === "string" ? item.content.trim() : "",
+                images: Array.isArray(item.images)
+                  ? item.images.filter(
+                      (image): image is string =>
+                        typeof image === "string" && image.trim().length > 0,
+                    )
+                  : [],
+                createdAt: item.createdAt,
+                updatedAt: item.updatedAt,
+              }))
+              .filter(
+                (item) =>
+                  item.content.trim().length > 0 || item.images.length > 0,
               )
-              .filter(Boolean)
           : [];
 
-        setUserNotesByCard((prev) => ({ ...prev, [noteId]: contents }));
+        setUserNotesByCard((prev) => ({ ...prev, [noteId]: normalizedItems }));
         setUserNotesStatusByCard((prev) => ({ ...prev, [noteId]: "success" }));
       })
       .catch(() => {
@@ -2655,14 +2693,11 @@ export default function ReviewCards() {
   // Spacebar flip
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (
-        e.code === "Space" &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement)
-      ) {
-        e.preventDefault();
-        setFlipped((f) => !f);
-      }
+      if (e.code !== "Space") return;
+      if (shouldIgnoreSpaceFlip(e)) return;
+
+      e.preventDefault();
+      setFlipped((f) => !f);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
