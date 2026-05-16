@@ -2,7 +2,25 @@ import { describe, expect, it } from 'vitest'
 import {
   applyBatchCategoryToRows,
   deriveImportCategoryOptions,
+  normalizePasteForImport,
 } from '../ImportModal'
+
+describe('normalizePasteForImport', () => {
+  it('wraps lemma - gloss lines as markdown bold entries', () => {
+    const raw = 'confuse - v. 使困惑\npuzzle - v. 使迷惑'
+    expect(normalizePasteForImport(raw)).toBe(
+      '- **confuse** - v. 使困惑\n- **puzzle** - v. 使迷惑',
+    )
+  })
+
+  it('preserves markdown headings', () => {
+    expect(normalizePasteForImport('## 单词\nfoo - v. 条')).toBe('## 单词\n- **foo** - v. 条')
+  })
+
+  it('preserves lines that already use bold lemma', () => {
+    expect(normalizePasteForImport('- **x** - v. y')).toBe('- **x** - v. y')
+  })
+})
 
 describe('ImportModal category helpers', () => {
   it('keeps built-in categories and merges parsed custom categories', () => {

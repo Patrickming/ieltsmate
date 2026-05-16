@@ -272,7 +272,7 @@ ieltsmate/
 | `/activity` | 学习活动热力图数据 |
 | `/writing-notes` | 写作 Markdown 笔记列表和详情 |
 | `/writing-assets` | 写作笔记静态资源访问 |
-| `/import` | Markdown 笔记导入预览和保存 |
+| `/import` | Markdown 导入：`POST notes/preview`（multipart 上传 `.md`）、`POST notes/preview-text`（JSON `{ markdown }` 粘贴预览）；`POST notes/save` 保存 |
 | `/export` | 笔记 JSON / CSV 导出 |
 | `/health` | 服务健康检查 |
 

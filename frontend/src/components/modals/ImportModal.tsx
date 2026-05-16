@@ -2,6 +2,7 @@ import { useMemo, useState, useRef, useCallback } from 'react'
 import {
   X, Upload, FileText, Sparkles, CheckCircle2, AlertTriangle,
   ChevronDown, RotateCcw, Loader2, TableProperties, Trash2, Pencil,
+  ClipboardPaste,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
@@ -69,6 +70,34 @@ export function applyBatchCategoryToRows(
   if (!category.trim()) return rows
   const target = new Set(targetIndexes)
   return rows.map((row, idx) => (target.has(idx) ? { ...row, category } : row))
+}
+
+const PREVIEW_MAX_BYTES = 5 * 1024 * 1024
+
+/**
+ * 将「lemma - gloss」纯文本行转为解析器友好的 `- **lemma** - gloss`，便于保留词性与括号注释。
+ */
+export function normalizePasteForImport(raw: string): string {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => {
+      const t = line.trim()
+      if (!t) return ''
+      if (/^#{1,6}\s/.test(t)) return t
+      const prefixedBullet = /^[-*+]\s+/.test(t)
+      const body = prefixedBullet ? t.replace(/^[-*+]\s+/, '').trim() : t
+      if (/^\*\*.+\*\*/.test(body)) {
+        return prefixedBullet ? t : `- ${body}`
+      }
+      const m = body.match(/^(.+?)\s+-\s+(.+)$/)
+      if (m) {
+        const lemma = m[1].trim()
+        const gloss = m[2].trim()
+        return `- **${lemma}** - ${gloss}`
+      }
+      return prefixedBullet ? t : `- ${body}`
+    })
+    .join('\n')
 }
 
 // ── Notes Table Modal ─────────────────────────────────────────────────────────
@@ -315,6 +344,8 @@ export function ImportModal() {
   const { showImport, closeImport, providers, loadNotes } = useAppStore()
 
   const [step, setStep] = useState<Step>('select')
+  const [sourceTab, setSourceTab] = useState<'paste' | 'file'>('paste')
+  const [pastedMarkdown, setPastedMarkdown] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [selectedModel, setSelectedModel] = useState('')
@@ -340,6 +371,8 @@ export function ImportModal() {
 
   const resetAndClose = useCallback(() => {
     setStep('select')
+    setSourceTab('paste')
+    setPastedMarkdown('')
     setFile(null)
     setSelectedModel('')
     setLoading(false)
@@ -381,16 +414,56 @@ export function ImportModal() {
   // ── Step 1 → Step 2: Preview ───────────────────────────────────────────────
 
   const handlePreview = async () => {
-    if (!file) return
-    if (!file.name.endsWith('.md')) {
-      setError('仅支持 .md 文件')
-      return
-    }
     setLoading(true)
     setError(null)
     try {
+      if (sourceTab === 'paste') {
+        const normalized = normalizePasteForImport(pastedMarkdown).trim()
+        if (!normalized) {
+          setLoading(false)
+          return
+        }
+        const bytes = new TextEncoder().encode(normalized).length
+        if (bytes > PREVIEW_MAX_BYTES) {
+          setError(`内容过大，最大 ${PREVIEW_MAX_BYTES / (1024 * 1024)} MB`)
+          setLoading(false)
+          return
+        }
+        const params = new URLSearchParams()
+        if (selectedModel) params.set('modelId', selectedModel)
+        if (forceAiFill) params.set('forceAi', '1')
+        const qs = params.toString()
+        const url = qs ? apiUrl(`/import/notes/preview-text?${qs}`) : apiUrl('/import/notes/preview-text')
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markdown: normalized }),
+        })
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { message?: string }
+          throw new Error(body.message ?? `服务器错误 ${res.status}`)
+        }
+        const json = (await res.json()) as { data?: PreviewResult }
+        const data = json.data ?? (json as unknown as PreviewResult)
+        setPreview(data)
+        setNotes([...data.notes])
+        setDismissedFlags(new Set())
+        setStep('review')
+        return
+      }
+
       const form = new FormData()
+      if (!file) {
+        setLoading(false)
+        return
+      }
+      if (!file.name.endsWith('.md')) {
+        setError('仅支持 .md 文件')
+        setLoading(false)
+        return
+      }
       form.append('file', file)
+
       const params = new URLSearchParams()
       if (selectedModel) params.set('modelId', selectedModel)
       if (forceAiFill) params.set('forceAi', '1')
@@ -489,7 +562,7 @@ export function ImportModal() {
             exit={{ scale: 0.95, opacity: 0, y: 8 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             style={{ position: 'fixed', left: '50%', top: '50%', translateX: '-50%', translateY: '-50%', zIndex: 50 }}
-            className="w-[min(520px,95vw)] bg-[#111113] border border-[#2a2a35] rounded-2xl shadow-modal flex flex-col overflow-hidden"
+            className="w-[min(560px,96vw)] max-h-[min(92vh,780px)] bg-[#111113] border border-[#2a2a35] rounded-2xl shadow-modal flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="h-14 border-b border-[#27272a] flex items-center gap-3 px-5 shrink-0">
@@ -499,7 +572,11 @@ export function ImportModal() {
               <div className="flex-1">
                 <div className="text-[15px] font-semibold text-text-primary">导入笔记</div>
                 <div className="text-[11px] text-text-dim">
-                  {step === 'select' ? 'Step 1 · 选择文件' : step === 'review' ? 'Step 2 · 预览审核' : 'Step 3 · 完成'}
+                  {step === 'select'
+                    ? 'Step 1 · 粘贴或上传'
+                    : step === 'review'
+                      ? 'Step 2 · 预览审核'
+                      : 'Step 3 · 完成'}
                 </div>
               </div>
               <StepDots step={step} />
@@ -520,49 +597,99 @@ export function ImportModal() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -16 }}
                   transition={{ duration: 0.2 }}
-                  className="p-5 flex flex-col gap-4"
+                  className="p-5 flex flex-col gap-4 min-h-0 overflow-y-auto"
                 >
-                  {/* File picker */}
-                  <div className="flex flex-col gap-2">
-                    <span className="text-xs font-semibold text-text-dim">选择 Markdown 文件</span>
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept=".md"
-                      className="hidden"
-                      onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
-                    />
-                    <div
-                      onClick={() => fileRef.current?.click()}
-                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-                      onDragLeave={() => setIsDragging(false)}
-                      onDrop={handleDrop}
-                      className={`relative flex flex-col items-center justify-center gap-2.5 h-28 border-2 border-dashed rounded-xl cursor-pointer transition-all select-none ${
-                        isDragging
-                          ? 'border-primary bg-primary/5'
-                          : file
-                          ? 'border-primary/50 bg-[#1e1b4b]/30'
-                          : 'border-[#3a3a46] hover:border-[#52525b] bg-[#18181b]'
-                      }`}
-                    >
-                      {file ? (
-                        <>
-                          <FileText size={22} className="text-primary" />
-                          <div className="text-center">
-                            <div className="text-sm font-medium text-text-primary leading-tight">{file.name}</div>
-                            <div className="text-xs text-text-dim mt-0.5">{(file.size / 1024).toFixed(1)} KB</div>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={22} className="text-text-dim" />
-                          <div className="text-center">
-                            <div className="text-sm text-text-muted">拖拽文件或点击选择</div>
-                            <div className="text-xs text-text-subtle mt-0.5">仅支持 .md 文件，最大 5 MB</div>
-                          </div>
-                        </>
-                      )}
+                  {/* 粘贴文本 / 上传文件 */}
+                  <div className="flex flex-col gap-2 min-h-0">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <span className="text-xs font-semibold text-text-dim shrink-0">
+                        {sourceTab === 'paste' ? '粘贴笔记内容' : 'Markdown 文件'}
+                      </span>
+                      <div className="flex rounded-lg border border-[#27272a] bg-[#16161a] p-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => { setSourceTab('paste'); setError(null) }}
+                          className={`flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium transition-colors ${
+                            sourceTab === 'paste'
+                              ? 'bg-[#27272a] text-text-primary shadow-sm'
+                              : 'text-text-dim hover:text-text-muted'
+                          }`}
+                        >
+                          <ClipboardPaste size={13} />
+                          粘贴文本
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setSourceTab('file'); setError(null) }}
+                          className={`flex items-center gap-1.5 h-8 px-3 rounded-md text-[11px] font-medium transition-colors ${
+                            sourceTab === 'file'
+                              ? 'bg-[#27272a] text-text-primary shadow-sm'
+                              : 'text-text-dim hover:text-text-muted'
+                          }`}
+                        >
+                          <Upload size={13} />
+                          上传 .md
+                        </button>
+                      </div>
                     </div>
+
+                    {sourceTab === 'paste' ? (
+                      <textarea
+                        value={pastedMarkdown}
+                        onChange={(e) => { setPastedMarkdown(e.target.value); setError(null) }}
+                        spellCheck={false}
+                        placeholder={
+                          '每行一条，示例：\n'
+                          + 'confuse - v. 使困惑\n'
+                          + 'puzzle - v. 使困惑，使迷惑\n'
+                          + 'odd - adj. 古怪的，异常的\n'
+                          + '\n'
+                          + '也支持完整 Markdown（列表、## 分类、**词条** 等）。最大 5 MB。'
+                        }
+                        className="w-full min-h-[168px] max-h-[min(280px,38vh)] resize-y rounded-xl border-2 border-[#3a3a46] bg-[#18181b] px-3 py-2.5 text-[13px] text-text-primary placeholder:text-text-subtle leading-relaxed focus:outline-none focus:border-primary/45 font-mono"
+                      />
+                    ) : (
+                      <>
+                        <input
+                          ref={fileRef}
+                          type="file"
+                          accept=".md"
+                          className="hidden"
+                          onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)}
+                        />
+                        <div
+                          onClick={() => fileRef.current?.click()}
+                          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                          onDragLeave={() => setIsDragging(false)}
+                          onDrop={handleDrop}
+                          className={`relative flex w-full min-h-[168px] max-h-[min(280px,38vh)] flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed px-3 py-2.5 cursor-pointer transition-all select-none ${
+                            isDragging
+                              ? 'border-primary bg-primary/5'
+                              : file
+                                ? 'border-primary/50 bg-[#1e1b4b]/30'
+                                : 'border-[#3a3a46] hover:border-[#52525b] bg-[#18181b]'
+                          }`}
+                        >
+                          {file ? (
+                            <>
+                              <FileText size={22} className="text-primary" />
+                              <div className="text-center px-2">
+                                <div className="text-sm font-medium text-text-primary leading-tight truncate max-w-[420px]">{file.name}</div>
+                                <div className="text-xs text-text-dim mt-0.5">{(file.size / 1024).toFixed(1)} KB</div>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <Upload size={22} className="text-text-dim" />
+                              <div className="text-center">
+                                <div className="text-sm text-text-muted">拖拽文件或点击选择</div>
+                                <div className="text-xs text-text-subtle mt-0.5">仅支持 .md 文件，最大 5 MB</div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Model selector */}
@@ -652,7 +779,12 @@ export function ImportModal() {
                     <motion.button
                       whileTap={{ scale: 0.97 }}
                       onClick={() => { void handlePreview() }}
-                      disabled={!file || loading}
+                      disabled={
+                        loading ||
+                        (sourceTab === 'paste'
+                          ? !normalizePasteForImport(pastedMarkdown).trim()
+                          : !file)
+                      }
                       className="h-9 px-5 rounded-md text-[13px] font-medium bg-primary-btn hover:bg-[#4338ca] text-white disabled:opacity-40 transition-all flex items-center gap-2"
                     >
                       {loading ? <><Spinner />AI 解析中…</> : '开始解析'}
@@ -833,7 +965,7 @@ export function ImportModal() {
                   <motion.button
                     whileTap={{ scale: 0.97 }}
                     onClick={resetAndClose}
-                    className="h-9 px-8 rounded-md text-[13px] font-medium bg-[#064e3b] border border-[#34d399]/30 text-[#34d399] hover:bg-[#065f46] transition-colors"
+                    className="h-9 px-8 rounded-md text-[13px] font-medium border border-[#27272a] text-text-dim hover:bg-[#27272a] hover:text-text-muted transition-colors"
                   >
                     关闭
                   </motion.button>
