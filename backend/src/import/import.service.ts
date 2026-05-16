@@ -27,9 +27,22 @@ export interface PreviewResult {
     total: number
     rulesParsed: number
     aiAssisted: number
+    /** 仍为「未分类」时由 AI 推断并成功写入的分类条数 */
+    categoriesInferred: number
     flaggedCount: number
   }
 }
+
+/** 与前端导入、知识库一致；AI 仅能选用下列之一（禁止自造类目名） */
+const IMPORT_AI_CATEGORY_WHITELIST = [
+  '口语',
+  '短语',
+  '句子',
+  '同义替换',
+  '拼写',
+  '单词',
+  '写作',
+] as const
 
 @Injectable()
 export class ImportService {
@@ -65,6 +78,97 @@ export class ImportService {
       }
     }
     return null
+  }
+
+  private isUncategorized(category: string | undefined): boolean {
+    const t = category?.trim()
+    return !t || t === '未分类'
+  }
+
+  private normalizeImportAiCategory(raw: string | undefined): string | null {
+    const t = raw?.trim()
+    if (!t) return null
+    return IMPORT_AI_CATEGORY_WHITELIST.includes(t as (typeof IMPORT_AI_CATEGORY_WHITELIST)[number])
+      ? t
+      : null
+  }
+
+  /**
+   * 对仍为「未分类」的条目批量推断分类（与阶段 2 是否运行无关）。
+   */
+  private async inferCategoriesForNotes(notes: ParsedNote[], modelId?: string): Promise<number> {
+    const indices = notes
+      .map((n, i) => (this.isUncategorized(n.category) ? i : -1))
+      .filter((i) => i >= 0)
+    if (indices.length === 0) return 0
+
+    const assigned = new Set<number>()
+    const chunks: number[][] = []
+    for (let i = 0; i < indices.length; i += ImportService.AI_BATCH_SIZE) {
+      chunks.push(indices.slice(i, i + ImportService.AI_BATCH_SIZE))
+    }
+
+    const allowed = IMPORT_AI_CATEGORY_WHITELIST.join('、')
+
+    for (const indexChunk of chunks) {
+      try {
+        const items = indexChunk.map((i) => ({
+          globalIndex: i,
+          content: notes[i].content,
+          translation: notes[i].translation,
+          synonyms: notes[i].synonyms?.length ? notes[i].synonyms : undefined,
+        }))
+
+        const prompt = `你是雅思学习笔记分类助手。根据每条笔记的英文 content 与中文 translation（及同义词 synonyms 若有），为其选择**唯一**分类。
+
+**可选分类**（必须逐字选用下列之一，禁止自造或改写名称）：
+${allowed}
+
+**判断要点**（择最贴切的一项）：
+- **单词**：单个词、派生词、功能词/连接词（如 since、hence、thus、given 作介词时仍常作单词卡）
+- **短语**：固定搭配、多词短语（如 in that、get out of）
+- **句子**：完整英文句子或从句级例句型笔记
+- **同义替换**：典型同义改写链、A=B 类（若 content 即体现替换关系）
+- **拼写**：以易混拼写为主、无中文释义的拼写表
+- **口语**：明显为口语套话、习语表达
+- **写作**：明显针对写作任务的高分表达/模板句
+
+若极难判断，优先选 **单词** 或 **短语**（按词数：单核词偏单词，多词固定搭配偏短语）。
+
+返回严格的 JSON 数组，每项仅含: { "globalIndex": 数字, "category": "..." }，不要解释。
+
+待分类列表:
+${JSON.stringify(items, null, 2)}`
+
+        const raw = await this.aiService.complete({
+          messages: [{ role: 'user', content: prompt }],
+          model: modelId,
+          slot: 'classify',
+          timeoutMs: 90_000,
+        })
+
+        const parsed = this.parseJsonArray(raw)
+        if (!parsed) continue
+
+        const filled = parsed as Array<{ globalIndex?: number; category?: string }>
+        for (const item of filled) {
+          if (typeof item.globalIndex !== 'number' || item.globalIndex < 0 || item.globalIndex >= notes.length) {
+            continue
+          }
+          const cat = this.normalizeImportAiCategory(item.category)
+          if (cat) {
+            notes[item.globalIndex].category = cat
+            assigned.add(item.globalIndex)
+          }
+        }
+      } catch (err) {
+        this.logger.warn(
+          `AI 分类推断失败（chunk=${indexChunk.length}）: ${err instanceof Error ? err.message : String(err)}`,
+        )
+      }
+    }
+
+    return assigned.size
   }
 
   async preview(fileBuffer: Buffer, modelId?: string, forceAi = false): Promise<PreviewResult> {
@@ -213,6 +317,9 @@ ${JSON.stringify(items, null, 2)}`
       }
     }
 
+    // ── Stage 2b: 对「未分类」条目推断分类（规则解析成功时也会执行） ───────────
+    const categoriesInferred = await this.inferCategoriesForNotes(notes, modelId)
+
     // ── Stage 3: AI Review ────────────────────────────────────────────────
     const flagged: FlaggedItem[] = []
     if (notes.length <= 60) {
@@ -257,6 +364,7 @@ ${JSON.stringify(notes.map((n, i) => ({ index: i, ...n })), null, 2)}`
         total: notes.length,
         rulesParsed,
         aiAssisted: aiAssistedIndices.size,
+        categoriesInferred,
         flaggedCount: flagged.length,
       },
     }

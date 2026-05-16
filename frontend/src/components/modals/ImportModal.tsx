@@ -34,6 +34,7 @@ interface PreviewResult {
     total: number
     rulesParsed: number
     aiAssisted: number
+    categoriesInferred?: number
     flaggedCount: number
   }
 }
@@ -678,6 +679,11 @@ export function ImportModal() {
                     <div className="flex items-center gap-3 flex-wrap">
                       <StatChip label="规则解析" value={preview.stats.rulesParsed} color="#34d399" />
                       <StatChip label="AI 补全" value={preview.stats.aiAssisted} color="#818cf8" />
+                      <StatChip
+                        label="AI 分类"
+                        value={preview.stats.categoriesInferred ?? 0}
+                        color="#a78bfa"
+                      />
                       <StatChip label="待审核" value={preview.stats.flaggedCount} color="#fbbf24" />
                     </div>
                   </div>
