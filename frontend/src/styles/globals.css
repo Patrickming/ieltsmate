@@ -50,6 +50,8 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* SPA 外壳：避免出现「整页 + 内部 main」双滚动与拉过底的橡皮筋残留 */
+  overflow: hidden;
 }
 
 body {
