@@ -30,14 +30,29 @@ function isSpellingListLine(line: string): boolean {
 }
 
 /**
+ * 多义项释义里常见串联：「v. …；n. …」「prep. …；adj. …」；
+ * `prep`、`adj` 等若参与英文切段检测，会把**单条释义**误判成行间多词条。
+ */
+function stripPosAbbreviationsForGrouping(text: string): string {
+  // 仅在词边界类位置（行首 / 空白 / 中英文标点）后出现的「词性.」视作略语剥离
+  return text.replace(
+    /(?<=^|[\s;；，,])(?:v|n|vt|vi|adj|adv|prep|conj|pron|det|art|num|int|aux|modal|abbr|phr)\s*\.\s*/gi,
+    ' ',
+  )
+}
+
+/**
  * 检测文本中是否有被英文词（≥2字母）分隔的多个中文词组
  * 例："显示表明 cooperation laundry洗衣店 nightmare噩梦" → true
  *     "与…… 有关"                                    → false（单个词组）
  *     "壮观的/令人惊叹的 = dramatic"                  → false（一个词条+英文同义词）
  */
 function hasMultipleChineseGroups(text: string): boolean {
+  // 括号常为补充辨析、词源、英文括号说明；参与拆分会误判为多词条混排。
+  const withoutParens = text.replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').replace(/【[^】]*】/g, '')
+  const withoutPosTicks = stripPosAbbreviationsForGrouping(withoutParens)
   // 按 2+ 连续英文字母拆分，统计含中文的段数
-  const parts = text.split(/[a-zA-Z]{2,}/)
+  const parts = withoutPosTicks.split(/[a-zA-Z]{2,}/)
   const chineseParts = parts.filter((p) => /[\u4e00-\u9fa5]/.test(p))
   return chineseParts.length >= 2
 }
@@ -70,10 +85,11 @@ function parseBoldEntry(line: string, category: string): RawEntry | null {
     return { content, translation: parenMatch[1].trim(), category, synonyms: [], needsAI: false }
   }
 
-  // 从第一个中文字符开始取释义
-  const chineseIdx = rest.search(/[\u4e00-\u9fa5]/)
-  if (chineseIdx >= 0) {
-    return { content, translation: rest.slice(chineseIdx).trim(), category, synonyms: [], needsAI: false }
+  // 「释义」区保留全貌：词性（v./n./adj. 等）、破折号前英文、括号里英文注解等，
+  // 仅去掉开头的列表分隔符 "-" / "–"。勿从首个汉字截断（否则会丢掉「v. 」）。
+  const gloss = rest.replace(/^\s*[-–—]\s*/, '').trim()
+  if (/[\u4e00-\u9fa5]/.test(gloss)) {
+    return { content, translation: gloss, category, synonyms: [], needsAI: false }
   }
 
   // 无中文的加粗（如 **词条** = other，可能是同义替换或需AI）

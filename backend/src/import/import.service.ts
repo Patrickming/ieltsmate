@@ -98,20 +98,35 @@ export class ImportService {
 
       for (const indexChunk of chunks) {
         try {
-          const items = indexChunk.map((i) => ({
-            globalIndex: i,
-            content: notes[i].content,
-            category: notes[i].category,
-            existingSynonyms: notes[i].synonyms,
-          }))
+          const items = indexChunk.map((i) => {
+            const row: {
+              globalIndex: number
+              content: string
+              category: string
+              existingSynonyms?: string[]
+              existingTranslation?: string
+            } = {
+              globalIndex: i,
+              content: notes[i].content,
+              category: notes[i].category,
+            }
+            if (notes[i].synonyms?.length) row.existingSynonyms = notes[i].synonyms
+            const trimmedTrans = notes[i].translation?.trim()
+            if (trimmedTrans) row.existingTranslation = trimmedTrans
+            return row
+          })
 
           const prompt = `你是一个英语学习笔记整理助手。处理下面每个词条，规则如下：
 
-**规则1 - 单词或短语**（content 是单个英文词/短语，无中文）：
-  提供中文释义。返回: { globalIndex, content(保持原样), translation(中文释义), category }
+**总则**：不得擅自删改用户已给出的释义用词。释义里常带有词性标签（如 v./n./adj./adv.）、破折号、括号内英文（如 alternative adj.）等，这些都属于释义正文的一部分，必须与输入一致完整地保留。
+若某条带有 existingTranslation 字段（非空），则返回的 translation 必须与其逐字等价，或仅在明显缺译时在其基础上增补，严禁去掉词性标注、括号内英文或任何非中文片段。
+
+**规则1 - 单词或短语**（content 是单个英文词/短语）：
+  若无 existingTranslation：提供中文释义（可含词性、括号中英混写等与用户习惯的格式）。
+  返回: { globalIndex, content(与输入完全一致), translation, category }
 
 **规则2 - 同义替换**（content 是英文短语，existingSynonyms 有值）：
-  直接给 content 补充中文释义即可。返回: { globalIndex, content(保持原样), translation(中文释义), category }
+  补充中文释义。返回: { globalIndex, content(与输入完全一致), translation, category }
 
 **规则3 - 多词条混排行**（content 里有多个英文词条穿插中文注释，如 "meditation冥想沉思 dispense分发分配 indispensable不可或缺的"）：
   将这一行拆分成多个独立词条。返回: { globalIndex, split: true, entries: [{content, translation, synonyms?}] }
