@@ -47,7 +47,13 @@ export function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const reduceMotion = useReducedMotion()
-  const { expandedGroups, toggleGroup, openImport, openQuickNote, writingTocOpen, writingTocItems, toggleWritingToc } = useAppStore()
+  const expandedGroups = useAppStore((s) => s.expandedGroups)
+  const toggleGroup = useAppStore((s) => s.toggleGroup)
+  const openImport = useAppStore((s) => s.openImport)
+  const openQuickNote = useAppStore((s) => s.openQuickNote)
+  const writingTocOpen = useAppStore((s) => s.writingTocOpen)
+  const writingTocItems = useAppStore((s) => s.writingTocItems)
+  const toggleWritingToc = useAppStore((s) => s.toggleWritingToc)
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/'

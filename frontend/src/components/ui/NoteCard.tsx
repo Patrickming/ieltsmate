@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { CATEGORY_BAR } from '../../data/mockData'
 import type { Note } from '../../data/mockData'
 import { Badge } from './Badge'
@@ -9,7 +10,7 @@ interface NoteCardProps {
   note: Note
 }
 
-export function NoteCard({ note }: NoteCardProps) {
+export const NoteCard = memo(function NoteCard({ note }: NoteCardProps) {
   const navigate = useNavigate()
   const setSelectedNote = useAppStore((s) => s.setSelectedNote)
   const barColor = CATEGORY_BAR[note.category] ?? '#71717a'
@@ -220,4 +221,4 @@ export function NoteCard({ note }: NoteCardProps) {
       </div>
     </div>
   )
-}
+})

@@ -31,7 +31,14 @@ const ImportModal = lazy(() =>
 
 function GlobalShortcuts() {
   const location = useLocation()
-  const { openSearch, openAIPanel, closeAll, showSearch, showAIPanel, showQuickNote, showAIConfig, showImport } = useAppStore()
+  const openSearch = useAppStore((s) => s.openSearch)
+  const openAIPanel = useAppStore((s) => s.openAIPanel)
+  const closeAll = useAppStore((s) => s.closeAll)
+  const showSearch = useAppStore((s) => s.showSearch)
+  const showAIPanel = useAppStore((s) => s.showAIPanel)
+  const showQuickNote = useAppStore((s) => s.showQuickNote)
+  const showAIConfig = useAppStore((s) => s.showAIConfig)
+  const showImport = useAppStore((s) => s.showImport)
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -82,11 +89,15 @@ function AnimatedRoutes() {
 }
 
 function AppInner() {
-  const store = useAppStore()
-  const { showSearch, showQuickNote, showAIPanel, showAIConfig, showImport } = store
-  const { syncFavorites, loadNotes, loadWritingNotes } = store
-  const loadProviders = (store as any).loadProviders as (() => Promise<void>) | undefined
-  const loadSettings = (store as any).loadSettings as (() => Promise<void>) | undefined
+  const showSearch = useAppStore((s) => s.showSearch)
+  const showQuickNote = useAppStore((s) => s.showQuickNote)
+  const showAIConfig = useAppStore((s) => s.showAIConfig)
+  const showImport = useAppStore((s) => s.showImport)
+  const syncFavorites = useAppStore((s) => s.syncFavorites)
+  const loadNotes = useAppStore((s) => s.loadNotes)
+  const loadWritingNotes = useAppStore((s) => s.loadWritingNotes)
+  const loadProviders = useAppStore((s) => s.loadProviders)
+  const loadSettings = useAppStore((s) => s.loadSettings)
 
   useEffect(() => {
     void loadSettings?.()

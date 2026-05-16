@@ -10,8 +10,8 @@ interface FavoriteButtonProps {
 export function FavoriteButton({ noteId, variant = 'full' }: FavoriteButtonProps) {
   const uid = useId()
   const inputId = `fav-${uid}`
-  const { favorites, toggleFavorite } = useAppStore()
-  const isFav = favorites.includes(noteId)
+  const isFav = useAppStore((s) => s.favorites.includes(noteId))
+  const toggleFavorite = useAppStore((s) => s.toggleFavorite)
 
   const heart = (
     <svg

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback } from 'react'
+import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import {
   X, Upload, FileText, Sparkles, CheckCircle2, AlertTriangle,
   ChevronDown, RotateCcw, Loader2, TableProperties, Trash2, Pencil,
@@ -7,7 +7,12 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
 import { apiUrl } from '../../lib/apiBase'
-import type { Category } from '../../data/mockData'
+import {
+  applyBatchCategoryToRows,
+  deriveImportCategoryOptions,
+  normalizePasteForImport,
+} from '../../lib/importHelpers'
+import { getVirtualRange } from '../../lib/virtualization'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,62 +48,9 @@ interface PreviewResult {
 type Step = 'select' | 'review' | 'done'
 type EditableColumn = 'content' | 'translation' | 'category'
 
-const IMPORT_BUILTIN_CATEGORIES: Array<Category | '未分类'> = [
-  '未分类',
-  '口语',
-  '短语',
-  '句子',
-  '同义替换',
-  '拼写',
-  '单词',
-  '写作',
-]
-
-export function deriveImportCategoryOptions(rows: Array<Pick<ParsedNote, 'category'>>): string[] {
-  const customCategories = rows
-    .map((r) => r.category?.trim())
-    .filter((cat): cat is string => Boolean(cat))
-
-  return Array.from(new Set([...IMPORT_BUILTIN_CATEGORIES, ...customCategories]))
-}
-
-export function applyBatchCategoryToRows(
-  rows: ParsedNote[],
-  targetIndexes: number[],
-  category: string,
-): ParsedNote[] {
-  if (!category.trim()) return rows
-  const target = new Set(targetIndexes)
-  return rows.map((row, idx) => (target.has(idx) ? { ...row, category } : row))
-}
-
 const PREVIEW_MAX_BYTES = 5 * 1024 * 1024
-
-/**
- * 将「lemma - gloss」纯文本行转为解析器友好的 `- **lemma** - gloss`，便于保留词性与括号注释。
- */
-export function normalizePasteForImport(raw: string): string {
-  return raw
-    .split(/\r?\n/)
-    .map((line) => {
-      const t = line.trim()
-      if (!t) return ''
-      if (/^#{1,6}\s/.test(t)) return t
-      const prefixedBullet = /^[-*+]\s+/.test(t)
-      const body = prefixedBullet ? t.replace(/^[-*+]\s+/, '').trim() : t
-      if (/^\*\*.+\*\*/.test(body)) {
-        return prefixedBullet ? t : `- ${body}`
-      }
-      const m = body.match(/^(.+?)\s+-\s+(.+)$/)
-      if (m) {
-        const lemma = m[1].trim()
-        const gloss = m[2].trim()
-        return `- **${lemma}** - ${gloss}`
-      }
-      return prefixedBullet ? t : `- ${body}`
-    })
-    .join('\n')
-}
+const IMPORT_TABLE_ROW_HEIGHT = 44
+const IMPORT_TABLE_OVERSCAN = 6
 
 // ── Notes Table Modal ─────────────────────────────────────────────────────────
 
@@ -113,6 +65,9 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
   const [editingCell, setEditingCell] = useState<{ row: number; col: EditableColumn } | null>(null)
   const [editValue, setEditValue] = useState('')
   const [search, setSearch] = useState('')
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(0)
   const categoryOptions = useMemo(() => deriveImportCategoryOptions(rows), [rows])
   const [batchCategory, setBatchCategory] = useState<string>('未分类')
 
@@ -123,6 +78,36 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
         r.category.toLowerCase().includes(search.toLowerCase()),
       )
     : rows.map((r, i) => ({ r, i }))
+
+  useEffect(() => {
+    const updateViewport = () => {
+      const el = bodyRef.current
+      if (!el) return
+      setViewportHeight(el.clientHeight)
+      setScrollTop(el.scrollTop)
+    }
+
+    updateViewport()
+    window.addEventListener('resize', updateViewport)
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => updateViewport())
+      : null
+    if (bodyRef.current) observer?.observe(bodyRef.current)
+
+    return () => {
+      window.removeEventListener('resize', updateViewport)
+      observer?.disconnect()
+    }
+  }, [filtered.length])
+
+  const virtualRange = useMemo(() => getVirtualRange({
+    itemCount: filtered.length,
+    itemSize: IMPORT_TABLE_ROW_HEIGHT,
+    viewportSize: viewportHeight || IMPORT_TABLE_ROW_HEIGHT * Math.min(filtered.length, 12),
+    scrollOffset: scrollTop,
+    overscan: IMPORT_TABLE_OVERSCAN,
+  }), [filtered.length, scrollTop, viewportHeight])
+  const visibleRows = filtered.slice(virtualRange.startIndex, virtualRange.endIndex)
 
   const startEdit = (rowIdx: number, col: EditableColumn) => {
     setEditingCell({ row: rowIdx, col })
@@ -204,7 +189,11 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
       </div>
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
+      <div
+        ref={bodyRef}
+        className="flex-1 overflow-auto"
+        onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
+      >
         <table className="w-full text-sm border-collapse">
           <thead className="sticky top-0 bg-[#111113] z-10">
             <tr className="border-b border-[#27272a]">
@@ -216,10 +205,15 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
             </tr>
           </thead>
           <tbody>
-            {filtered.map(({ r, i }) => (
+            {virtualRange.offsetTop > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={5} className="p-0 border-0" style={{ height: virtualRange.offsetTop }} />
+              </tr>
+            )}
+            {visibleRows.map(({ r, i }) => (
               <tr
                 key={i}
-                className="border-b border-[#1c1c20] hover:bg-[#18181b] group"
+                className="h-11 border-b border-[#1c1c20] hover:bg-[#18181b] group"
               >
                 <td className="py-2 px-3 text-right text-[11px] text-text-subtle select-none">{i + 1}</td>
 
@@ -265,7 +259,7 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
                           col === 'translation' ? 'text-text-dim' : 'text-text-subtle text-xs'
                         }`}
                       >
-                        <span className="flex-1 break-all">{r[col] || <span className="text-text-subtle italic">空</span>}</span>
+                        <span className="flex-1 min-w-0 truncate">{r[col] || <span className="text-text-subtle italic">空</span>}</span>
                         <Pencil size={10} className="shrink-0 opacity-0 group-hover/cell:opacity-50 text-text-subtle transition-opacity" />
                       </div>
                     )}
@@ -282,6 +276,11 @@ function NotesTableModal({ notes: initialNotes, onClose, onSave }: NotesTablePro
                 </td>
               </tr>
             ))}
+            {virtualRange.offsetBottom > 0 && (
+              <tr aria-hidden="true">
+                <td colSpan={5} className="p-0 border-0" style={{ height: virtualRange.offsetBottom }} />
+              </tr>
+            )}
           </tbody>
         </table>
         {filtered.length === 0 && (
@@ -341,7 +340,10 @@ function StepDots({ step }: { step: Step }) {
 // ── Main modal ────────────────────────────────────────────────────────────────
 
 export function ImportModal() {
-  const { showImport, closeImport, providers, loadNotes } = useAppStore()
+  const showImport = useAppStore((s) => s.showImport)
+  const closeImport = useAppStore((s) => s.closeImport)
+  const providers = useAppStore((s) => s.providers)
+  const loadNotes = useAppStore((s) => s.loadNotes)
 
   const [step, setStep] = useState<Step>('select')
   const [sourceTab, setSourceTab] = useState<'paste' | 'file'>('paste')

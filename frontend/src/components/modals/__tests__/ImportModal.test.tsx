@@ -3,7 +3,7 @@ import {
   applyBatchCategoryToRows,
   deriveImportCategoryOptions,
   normalizePasteForImport,
-} from '../ImportModal'
+} from '@/lib/importHelpers'
 
 describe('normalizePasteForImport', () => {
   it('wraps lemma - gloss lines as markdown bold entries', () => {
