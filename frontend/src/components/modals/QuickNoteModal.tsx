@@ -155,7 +155,7 @@ function QuickNoteModalSurface({ onClose }: { onClose: () => void }) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-        onClick={onClose}
+        aria-hidden="true"
       />
       {/* Modal */}
       <motion.div
