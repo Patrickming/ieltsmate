@@ -9,7 +9,7 @@ import {
   type ReactNode,
   type SetStateAction,
 } from 'react'
-import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen, Heart, Trash2, Check } from 'lucide-react'
+import { Search, FileText, CirclePlus, Plus, LayoutGrid, NotebookPen, Heart, Trash2, Check, Copy } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/layout/Layout'
@@ -22,6 +22,12 @@ import { CATEGORY_BAR, CATEGORY_COLORS, type Category, type Note } from '../data
 import { useAppStore } from '../store/useAppStore'
 import { noteMatchesPrimarySearch, normalizeSearchQuery } from '../lib/searchModalResults'
 import { getVirtualGridRange } from '../lib/virtualization'
+import {
+  countDuplicateParticipantNotes,
+  englishContentCounts,
+  isNoteEnglishDuplicate,
+  sortDuplicateNotesByEnglishCluster,
+} from '../lib/noteEnglishDedup'
 
 const SUB_CATS: (Category | '全部')[] = ['全部', '口语', '短语', '句子', '同义替换', '拼写', '单词']
 const NOTE_GRID_COLUMNS = 3
@@ -39,7 +45,7 @@ const WRITING_TYPE_COLORS: Record<WritingType, { color: string; bg: string; bord
 }
 
 function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
-  groupFilter: '全部' | '杂笔记' | '写作' | '收藏夹' | '已掌握'
+  groupFilter: '全部' | '杂笔记' | '写作' | '收藏夹' | '已掌握' | '重复笔记'
   subFilter: Category | '全部'
   statusFilter: '全部' | 'mastered' | 'unmastered'
 } {
@@ -50,6 +56,7 @@ function kbFiltersFromSearchParams(searchParams: URLSearchParams): {
     status === 'mastered' || status === 'unmastered' ? status : '全部'
   if (group === '写作') return { groupFilter: '写作', subFilter: '全部', statusFilter: '全部' }
   if (group === '收藏夹') return { groupFilter: '收藏夹', subFilter: '全部', statusFilter: '全部' }
+  if (group === '重复笔记') return { groupFilter: '重复笔记', subFilter: '全部', statusFilter: '全部' }
   if (group === '已掌握') return { groupFilter: '已掌握', subFilter: '全部', statusFilter: 'mastered' }
   if (group === '杂笔记') {
     const sub: Category | '全部' = cat ? (cat as Category) : '全部'
@@ -316,6 +323,8 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
     () => notes.reduce((count, note) => count + (note.reviewStatus === 'mastered' ? 1 : 0), 0),
     [notes],
   )
+  const englishDupCounts = useMemo(() => englishContentCounts(notes), [notes])
+  const duplicateNotesTabCount = useMemo(() => countDuplicateParticipantNotes(notes), [notes])
   const noteCategoryCounts = useMemo(() => {
     const counts = new Map<Category, number>()
     for (const note of notes) {
@@ -345,6 +354,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
 
   const filteredNotes = useMemo(() => notes.filter((n) => {
     if (groupFilter === '写作' || groupFilter === '收藏夹') return false
+    if (groupFilter === '重复笔记' && !isNoteEnglishDuplicate(n, englishDupCounts)) return false
     if (groupFilter === '已掌握' && n.reviewStatus !== 'mastered') return false
     if (groupFilter === '杂笔记') {
       if (subFilter !== '全部' && n.category !== subFilter) return false
@@ -352,7 +362,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
       if (statusFilter === 'unmastered' && n.reviewStatus === 'mastered') return false
     }
     return noteMatchesPrimarySearch(n, deferredSearch)
-  }), [deferredSearch, groupFilter, notes, statusFilter, subFilter])
+  }), [deferredSearch, englishDupCounts, groupFilter, notes, statusFilter, subFilter])
 
   const favNotes = useMemo(() => notes.filter((n) => {
     if (!favoriteIds.has(n.id)) return false
@@ -365,10 +375,14 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
   }), [normalizedWritingSearch, writingNotes, writingSubFilter])
 
   const showWriting = groupFilter === '全部' || groupFilter === '写作'
-  const showNotes = groupFilter === '全部' || groupFilter === '杂笔记' || groupFilter === '已掌握'
+  const showNotes = groupFilter === '全部' || groupFilter === '杂笔记' || groupFilter === '已掌握' || groupFilter === '重复笔记'
   const showFavorites = groupFilter === '收藏夹'
 
-  const allItems = useMemo(() => (showNotes ? filteredNotes : []), [filteredNotes, showNotes])
+  const allItems = useMemo(() => {
+    if (!showNotes) return []
+    if (groupFilter === '重复笔记') return sortDuplicateNotesByEnglishCluster(filteredNotes)
+    return filteredNotes
+  }, [filteredNotes, groupFilter, showNotes])
   const canBatchDelete = showNotes || showFavorites
   const visibleDeletableIds = useMemo(() => new Set<string>([
     ...allItems.map((note) => note.id),
@@ -469,6 +483,7 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
             { g: '写作' as const, icon: FileText, count: writingNotes.length, activeClass: 'bg-[#1e1b4b] border-[#4338ca] text-[#c7d2fe]', activeIcon: 'text-primary', activeBadge: 'bg-primary/20 text-primary' },
             { g: '收藏夹' as const, icon: Heart, count: favorites.length, activeClass: 'bg-[#2e1a1a] border-[#ef4444] text-[#fca5a5]', activeIcon: 'text-[#ef4444]', activeBadge: 'bg-[#ef4444]/20 text-[#ef4444]' },
             { g: '已掌握' as const, icon: LayoutGrid, count: masteredNotesCount, activeClass: 'bg-[#0e2a1f] border-[#34d399] text-[#86efac]', activeIcon: 'text-[#34d399]', activeBadge: 'bg-[#34d399]/20 text-[#34d399]' },
+            { g: '重复笔记' as const, icon: Copy, count: duplicateNotesTabCount, activeClass: 'bg-[#2a220e] border-[#f59e0b] text-[#fcd34d]', activeIcon: 'text-[#f59e0b]', activeBadge: 'bg-[#f59e0b]/20 text-[#f59e0b]' },
           ]).map(({ g, icon: Icon, count, activeClass, activeIcon, activeBadge }) => (
             <motion.button
               key={g}
@@ -710,7 +725,13 @@ function KnowledgeBaseMain({ search, setSearch, searchParams, setSearchParams }:
                 animate={{ opacity: 1, y: 0 }}
               >
                 <EmptyState
-                  title={search ? '未找到相关笔记' : `暂无${subFilter !== '全部' ? subFilter : ''}笔记`}
+                  title={
+                    search
+                      ? '未找到相关笔记'
+                      : groupFilter === '重复笔记'
+                        ? '暂无英文重复的笔记'
+                        : `暂无${subFilter !== '全部' ? subFilter : ''}笔记`
+                  }
                   description="点击下方按钮快速记录新笔记"
                   action={
                     <>

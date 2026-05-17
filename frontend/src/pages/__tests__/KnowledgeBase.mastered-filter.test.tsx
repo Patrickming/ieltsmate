@@ -33,11 +33,30 @@ describe('KnowledgeBase mastered filters', () => {
           correctCount: 1,
           wrongCount: 1,
         },
+        {
+          id: 'n-dup-a',
+          content: 'girl',
+          translation: '女孩',
+          category: '单词',
+          subcategory: '杂笔记',
+          createdAt: '今天',
+          reviewStatus: 'new',
+        },
+        {
+          id: 'n-dup-b',
+          content: 'girl',
+          translation: '女孩儿',
+          category: '短语',
+          subcategory: '杂笔记',
+          createdAt: '今天',
+          reviewStatus: 'learning',
+        },
       ],
       writingNotes: [],
       writingNotesLoading: false,
       favorites: [],
       openQuickNote: () => {},
+      deleteNote: async () => true,
       clearLastAddedNoteId: () => {},
       lastAddedNoteId: null,
     })
@@ -66,6 +85,20 @@ describe('KnowledgeBase mastered filters', () => {
     )
 
     expect(screen.getByText('sugar')).toBeInTheDocument()
+    expect(screen.queryByText('abandon')).not.toBeInTheDocument()
+  })
+
+  it('重复笔记 lists every note whose english matches another note', () => {
+    render(
+      <MemoryRouter initialEntries={['/kb?group=重复笔记']}>
+        <Routes>
+          <Route path="/kb" element={<KnowledgeBase />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getAllByText('girl')).toHaveLength(2)
+    expect(screen.queryByText('sugar')).not.toBeInTheDocument()
     expect(screen.queryByText('abandon')).not.toBeInTheDocument()
   })
 })
