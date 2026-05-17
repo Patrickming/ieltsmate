@@ -378,13 +378,11 @@ type UserNotesResponse = {
 };
 
 const SPACE_FLIP_INTERACTIVE_SELECTOR = [
-  "button",
   "a[href]",
   "input",
   "textarea",
   "select",
   "summary",
-  "[role='button']",
   "[role='link']",
   "[role='dialog']",
   "[contenteditable]:not([contenteditable='false'])",
@@ -397,6 +395,9 @@ function shouldIgnoreSpaceFlip(event: KeyboardEvent) {
   const target = event.target;
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
+
+  // 侧栏/顶栏：保留原生键盘行为（空格激活链接或按钮）。
+  if (target.closest("aside") || target.closest("header")) return true;
 
   return target.closest(SPACE_FLIP_INTERACTIVE_SELECTOR) !== null;
 }
@@ -1117,6 +1118,34 @@ function UserNotesSection({
   );
 }
 
+/** 卡片背面「中文意思」上方的英文原词（或句子） */
+function BackContentAboveTranslation({
+  note,
+  variant = "word",
+}: {
+  note: Note;
+  variant?: "word" | "sentence";
+}) {
+  if (variant === "sentence") {
+    return (
+      <p
+        className="text-[15px] text-text-secondary italic leading-relaxed mb-1"
+        lang="en"
+      >
+        &quot;{note.content}&quot;
+      </p>
+    );
+  }
+  return (
+    <p
+      className="text-[17px] font-semibold text-text-primary leading-snug mb-1"
+      lang="en"
+    >
+      {note.content}
+    </p>
+  );
+}
+
 // ── CardBack sub-components ───────────────────────────────────────────────────
 function CardBackWordPhrase({
   note,
@@ -1232,6 +1261,7 @@ function CardBackWordPhrase({
             </div>
           )}
           <div>
+            <BackContentAboveTranslation note={note} />
             <div className="text-sm font-semibold text-text-dim mb-1.5">
               中文意思
             </div>
@@ -1509,6 +1539,7 @@ function CardBackSentence({
       </div>
       <UserNotesSection userNotes={userNotes} />
       <div>
+        <BackContentAboveTranslation note={note} variant="sentence" />
         <div className="text-sm font-semibold text-text-dim mb-1.5">
           中文意思
         </div>
@@ -1699,6 +1730,7 @@ function CardBackSpelling({
             </div>
           )}
           <div>
+            <BackContentAboveTranslation note={note} />
             <div className="text-sm font-semibold text-text-dim mb-1.5">
               中文意思
             </div>
@@ -1957,6 +1989,7 @@ function CardBackFallback({
             </div>
           )}
           <div>
+            <BackContentAboveTranslation note={note} />
             <div className="text-sm font-semibold text-text-dim mb-1.5">
               中文意思
             </div>
@@ -2152,6 +2185,10 @@ function CardBackFastReview({
           <span className="text-[16px] text-[#a5b4fc]">{n.phonetic}</span>
         </div>
       )}
+
+      {(cardType === "word-speech" ||
+        cardType === "phrase" ||
+        cardType === "spelling") && <BackContentAboveTranslation note={note} />}
 
       <div>
         <div className="text-sm font-semibold text-text-dim mb-1.5">
@@ -2699,8 +2736,8 @@ export default function ReviewCards() {
       e.preventDefault();
       setFlipped((f) => !f);
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, { capture: true });
+    return () => window.removeEventListener("keydown", handler, { capture: true });
   }, []);
 
   if (!session || !card) return null;
