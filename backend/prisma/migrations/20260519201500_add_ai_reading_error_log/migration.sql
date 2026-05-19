@@ -1,0 +1,2 @@
+ALTER TABLE "AiReadingReviewBatch"
+  ADD COLUMN "errorLog" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

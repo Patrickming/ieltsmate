@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   NotebookPen, Heart, Play, Shuffle, RotateCcw,
   AlertCircle, CheckCheck, XCircle, ChevronRight, GraduationCap, ArrowDownUp, Sparkles,
+  BookOpen,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Variants } from 'framer-motion'
@@ -16,6 +17,7 @@ const SUB_CATS: Category[] = ['口语', '短语', '同义替换', '拼写', '单
 type Range = 'all' | 'wrong' | 'exclude_mastered' | 'new_only'
 type Order = 'random' | 'sequential'
 type Mode = 'random' | 'continue'
+type ReviewKind = 'cards' | 'reading'
 
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 16 },
@@ -54,6 +56,7 @@ export default function ReviewSelection() {
   const [subCats, setSubCats] = useState<Set<Category | '全部'>>(new Set(['全部']))
   const [range, setRange] = useState<Range>('all')
   const [order, setOrder] = useState<Order>('random')
+  const [reviewKind, setReviewKind] = useState<ReviewKind>('cards')
   const [mode, setMode] = useState<Mode>(() => {
     const p = loadContinueProgress()
     if (!p) return 'random'
@@ -97,7 +100,15 @@ export default function ReviewSelection() {
 
   const reviewCards = getFilteredNotes()
 
+  const openReadingReview = () => {
+    navigate('/review/reading')
+  }
+
   const handleStart = async () => {
+    if (reviewKind === 'reading') {
+      openReadingReview()
+      return
+    }
     const isContinue = mode === 'continue'
     const canStart = isContinue ? continueRemaining > 0 : reviewCards.length > 0
     if (!canStart || starting || reviewPreparing) return
@@ -163,9 +174,48 @@ export default function ReviewSelection() {
 
           <motion.div variants={stagger} initial="hidden" animate="show" className="flex flex-col gap-8">
 
-            {/* ── Step 1: 大分类 ─────────────────── */}
+            {/* ── Step 1: 复习类型 ─────────────── */}
             <motion.div variants={fadeUp} className="flex flex-col gap-3">
-              <SectionLabel step={1} label="选择来源" />
+              <SectionLabel step={1} label="复习类型" />
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { key: 'cards' as const, icon: Play, label: '卡片复习', desc: '一条条复习笔记' },
+                  { key: 'reading' as const, icon: BookOpen, label: 'AI 阅读复习', desc: '生成雅思阅读文章' },
+                ]).map(({ key, icon: Icon, label, desc }) => {
+                  const active = reviewKind === key
+                  return (
+                    <motion.button
+                      key={key}
+                      whileHover={{ y: -1 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setReviewKind(key)}
+                      className="relative flex items-start gap-4 p-5 rounded-2xl border text-left transition-colors duration-200 overflow-hidden"
+                      style={{
+                        background: active ? 'linear-gradient(135deg, #1a1a3e, #1e1b4b)' : '#1c1c20',
+                        borderColor: active ? '#4f46e5' : '#27272a',
+                        boxShadow: active ? '0 0 16px rgba(79,70,229,0.2)' : 'none',
+                      }}
+                    >
+                      <div className="w-10 h-10 rounded-xl shrink-0 flex items-center justify-center mt-0.5"
+                        style={{ background: active ? '#4f46e522' : '#27272a', border: `1px solid ${active ? '#818cf866' : '#3f3f46'}` }}>
+                        <Icon size={17} className={active ? 'text-primary' : 'text-text-subtle'} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-semibold" style={{ color: active ? '#e0e7ff' : '#71717a' }}>{label}</div>
+                        <div className="text-[12px] mt-1" style={{ color: active ? '#818cf877' : '#3f3f46' }}>{desc}</div>
+                      </div>
+                      {active && <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-primary" />}
+                    </motion.button>
+                  )
+                })}
+              </div>
+            </motion.div>
+
+            {reviewKind === 'cards' && (
+              <>
+            {/* ── Step 2: 大分类 ─────────────────── */}
+            <motion.div variants={fadeUp} className="flex flex-col gap-3">
+              <SectionLabel step={2} label="选择来源" />
               <div className="grid grid-cols-2 gap-3">
                 {([
                   {
@@ -196,7 +246,7 @@ export default function ReviewSelection() {
                       whileHover={{ y: -2 }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setBigCat(key)}
-                      className="relative flex flex-col p-5 rounded-2xl border text-left overflow-hidden transition-colors duration-300"
+                      className="relative flex flex-col p-4 rounded-xl border text-left overflow-hidden transition-colors duration-300"
                       style={{
                         background: active ? activeBg : '#1c1c20',
                         borderColor: active ? activeBorder : '#27272a',
@@ -211,9 +261,9 @@ export default function ReviewSelection() {
 
                       {/* Icon row */}
                       <div className="flex items-center justify-between mb-4 relative z-10">
-                        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center"
                           style={{ background: active ? `${accent}22` : '#27272a', border: `1px solid ${active ? accent + '44' : '#3f3f46'}` }}>
-                          <Icon size={17} style={{ color: active ? accent : '#71717a' }} fill={key === '收藏夹' && active ? accent : 'none'} />
+                          <Icon size={15} style={{ color: active ? accent : '#71717a' }} fill={key === '收藏夹' && active ? accent : 'none'} />
                         </div>
                         {active && (
                           <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="w-5 h-5 rounded-full flex items-center justify-center"
@@ -225,7 +275,7 @@ export default function ReviewSelection() {
 
                       {/* Count */}
                       <div className="relative z-10 mb-1">
-                        <span className="text-3xl font-bold" style={{ color: active ? accent : '#52525b' }}>{count}</span>
+                        <span className="text-2xl font-bold" style={{ color: active ? accent : '#52525b' }}>{count}</span>
                         <span className="text-sm ml-1.5" style={{ color: active ? accent + 'aa' : '#3f3f46' }}>张</span>
                       </div>
 
@@ -252,7 +302,7 @@ export default function ReviewSelection() {
                   className="overflow-hidden"
                 >
                   <div className="flex flex-col gap-3">
-                    <SectionLabel step={2} label="筛选子分类" />
+                    <SectionLabel step={3} label="筛选子分类" />
                     <div className="flex flex-wrap gap-2">
                       {(['全部', ...SUB_CATS] as (Category | '全部')[]).map((cat) => {
                         const isAll = cat === '全部'
@@ -289,10 +339,11 @@ export default function ReviewSelection() {
               )}
             </AnimatePresence>
 
-            {/* ── Step 3: 复习设置 ─────────────── */}
+            {/* ── Step 4: 复习设置 ─────────────── */}
             <motion.div variants={fadeUp} className="flex flex-col gap-4">
-              <SectionLabel step={bigCat === '杂笔记' ? 3 : 2} label="复习设置" />
+              <SectionLabel step={bigCat === '杂笔记' ? 4 : 3} label="复习设置" />
 
+              <>
               {/* 主选择：重新开始 / 继续上次 */}
               <div className="grid grid-cols-2 gap-3">
                 {/* 重新开始 */}
@@ -496,7 +547,28 @@ export default function ReviewSelection() {
                   </motion.div>
                 )}
               </AnimatePresence>
+              </>
             </motion.div>
+              </>
+            )}
+
+            {reviewKind === 'reading' && (
+              <motion.div variants={fadeUp} className="flex flex-col gap-4">
+                <div className="rounded-2xl border border-primary/35 bg-[#1c1c20] p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/15 border border-primary/30">
+                      <BookOpen size={17} className="text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-semibold text-text-primary">进入 AI 阅读生成页</div>
+                      <p className="mt-1 text-[12px] leading-relaxed text-text-dim">
+                        来源、笔记范围、生成篇数、超时时间、继续上次生成和历史文章都在专属页面里设置。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
 
           </motion.div>
         </div>
@@ -518,6 +590,34 @@ export default function ReviewSelection() {
             >
               {/* Count display */}
               {(() => {
+                if (reviewKind === 'reading') {
+                  return (
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                        style={{ background: '#4f46e5' }}>
+                        <BookOpen size={15} className="text-white" />
+                      </div>
+                      <div>
+                        <div className="flex items-baseline gap-1.5">
+                          <motion.span
+                            key="reading"
+                            initial={{ scale: 1.3, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={{ duration: 0.25 }}
+                            className="text-2xl font-bold"
+                            style={{ color: '#818cf8' }}
+                          >
+                            AI
+                          </motion.span>
+                          <span className="text-sm text-text-dim">阅读复习生成页</span>
+                        </div>
+                        <p className="text-[11px] text-text-subtle">
+                          生成选项、继续上次和历史文章都在专属页面中
+                        </p>
+                      </div>
+                    </div>
+                  )
+                }
                 const isContinue = mode === 'continue'
                 const count = isContinue ? continueRemaining : reviewCards.length
                 const hasContent = count > 0
@@ -569,13 +669,17 @@ export default function ReviewSelection() {
 
               {/* Start button */}
               <motion.button
-                whileHover={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting && !reviewPreparing ? { scale: 1.02 } : {}}
-                whileTap={(mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting && !reviewPreparing ? { scale: 0.97 } : {}}
+                whileHover={(reviewKind === 'reading' ? true : (mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting && !reviewPreparing) ? { scale: 1.02 } : {}}
+                whileTap={(reviewKind === 'reading' ? true : (mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0) && !starting && !reviewPreparing) ? { scale: 0.97 } : {}}
                 onClick={() => { void handleStart() }}
-                disabled={(mode === 'continue' ? continueRemaining === 0 : reviewCards.length === 0) || starting || reviewPreparing}
+                disabled={reviewKind === 'reading'
+                  ? false
+                  : (mode === 'continue' ? continueRemaining === 0 : reviewCards.length === 0) || starting || reviewPreparing}
                 className="flex items-center gap-2.5 h-11 px-7 rounded-xl font-semibold text-[15px] transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={(() => {
-                  const hasContent = mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0
+                  const hasContent = reviewKind === 'reading'
+                    ? true
+                    : mode === 'continue' ? continueRemaining > 0 : reviewCards.length > 0
                   return {
                     background: hasContent ? 'linear-gradient(135deg, #4f46e5, #6d28d9)' : '#27272a',
                     color: hasContent ? '#fff' : '#52525b',
@@ -584,7 +688,9 @@ export default function ReviewSelection() {
                 })()}
               >
                 <Play size={15} fill="currentColor" />
-                {reviewPreparing
+                {reviewKind === 'reading'
+                  ? '进入生成'
+                  : reviewPreparing
                   ? 'AI 生成中...'
                   : starting
                     ? '正在进入...'

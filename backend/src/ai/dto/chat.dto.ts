@@ -23,8 +23,8 @@ export class ChatDto {
   model?: string
 
   @IsOptional()
-  @IsIn(['classify', 'review', 'chat'])
-  slot?: 'classify' | 'review' | 'chat'
+  @IsIn(['classify', 'review', 'chat', 'readingReview'])
+  slot?: 'classify' | 'review' | 'chat' | 'readingReview'
 
   @IsOptional()
   @IsString()

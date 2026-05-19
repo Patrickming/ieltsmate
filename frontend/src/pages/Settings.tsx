@@ -29,6 +29,7 @@ function canonicalModelIdFromStored(stored: string, providers: ProviderConfig[])
 function resolveSlotDraft(
   classifyModel: string,
   reviewModel: string,
+  readingReviewModel: string,
   chatModel: string,
   providers: ProviderConfig[],
 ) {
@@ -37,6 +38,7 @@ function resolveSlotDraft(
   return {
     classify: canonicalModelIdFromStored(classifyModel || firstSel, providers),
     review: canonicalModelIdFromStored(reviewModel || secondSel || firstSel, providers),
+    readingReview: canonicalModelIdFromStored(readingReviewModel || reviewModel || secondSel || firstSel, providers),
     chat: canonicalModelIdFromStored(chatModel || firstSel, providers),
   }
 }
@@ -48,6 +50,7 @@ function SectionTitle({ children }: { children: string }) {
 const MODEL_SLOTS = [
   { id: 'classify', label: '分类识别', tip: '用于自动识别笔记分类' },
   { id: 'review', label: '复习联想', tip: '用于复习时生成延伸内容' },
+  { id: 'readingReview', label: 'AI 复习阅读', tip: '用于生成雅思阅读文章、题目与中文解析' },
   { id: 'chat', label: 'AI 助手', tip: '用于 AI 对话助手' },
 ]
 
@@ -60,6 +63,7 @@ export default function Settings() {
     providers,
     classifyModel,
     reviewModel,
+    readingReviewModel,
     chatModel,
     settingsLoaded,
     commitModelSlots,
@@ -71,7 +75,7 @@ export default function Settings() {
     useAppStore()
 
   const [slotDraft, setSlotDraft] = useState(() =>
-    resolveSlotDraft(classifyModel, reviewModel, chatModel, providers),
+    resolveSlotDraft(classifyModel, reviewModel, readingReviewModel, chatModel, providers),
   )
   const [slotsDirty, setSlotsDirty] = useState(false)
   const [slotsSaving, setSlotsSaving] = useState(false)
@@ -79,8 +83,8 @@ export default function Settings() {
   useEffect(() => {
     if (!settingsLoaded) return
     if (slotsDirty) return
-    setSlotDraft(resolveSlotDraft(classifyModel, reviewModel, chatModel, providers))
-  }, [settingsLoaded, classifyModel, reviewModel, chatModel, providers, slotsDirty])
+    setSlotDraft(resolveSlotDraft(classifyModel, reviewModel, readingReviewModel, chatModel, providers))
+  }, [settingsLoaded, classifyModel, reviewModel, readingReviewModel, chatModel, providers, slotsDirty])
 
   const handleExport = async (format: 'json' | 'csv') => {
     const res = await fetch(`/export/notes?format=${format}`)
@@ -186,7 +190,7 @@ export default function Settings() {
                 </span>
               )}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {MODEL_SLOTS.map((slot) => {
                 const currentVal = slotDraft[slot.id as keyof typeof slotDraft]
                 return (
@@ -236,7 +240,7 @@ export default function Settings() {
                 type="button"
                 disabled={!slotsDirty || slotsSaving}
                 onClick={() => {
-                  setSlotDraft(resolveSlotDraft(classifyModel, reviewModel, chatModel, providers))
+                  setSlotDraft(resolveSlotDraft(classifyModel, reviewModel, readingReviewModel, chatModel, providers))
                   setSlotsDirty(false)
                 }}
                 className="h-8 px-3 text-xs border border-border rounded-sm text-text-muted hover:bg-[#27272a] transition-colors disabled:opacity-40 disabled:pointer-events-none"

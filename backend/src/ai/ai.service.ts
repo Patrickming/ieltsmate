@@ -367,11 +367,25 @@ export class AiService {
 
   // ── Simple completion (no function calling) ──────────────────────────────
 
+  async resolveCompletionTarget(slot?: ChatDto['slot'], model?: string) {
+    const { provider, model: modelId } = await this.resolveProviderAndModel({
+      messages: [],
+      ...(model ? { model } : {}),
+      ...(slot ? { slot } : {}),
+    } as ChatDto)
+    return {
+      providerName: provider.displayName || provider.name,
+      modelId,
+    }
+  }
+
   async complete(dto: {
     messages: Array<{ role: string; content: string }>
     model?: string
     slot?: string
     timeoutMs?: number
+    signal?: AbortSignal
+    stream?: boolean
   }): Promise<string> {
     const { provider, model } = await this.resolveProviderAndModel({
       messages: dto.messages,
@@ -387,7 +401,12 @@ export class AiService {
 
     const baseUrl = provider.baseUrl.replace(/\/$/, '')
     const url = `${baseUrl}/chat/completions`
-    const timeoutMs = Math.max(5_000, Math.min(dto.timeoutMs ?? 30_000, 180_000))
+    const timeoutMs = dto.timeoutMs === 0
+      ? 0
+      : Math.max(5_000, Math.min(dto.timeoutMs ?? 30_000, 599_940_000))
+    const timeoutSignal = timeoutMs > 0 ? AbortSignal.timeout(timeoutMs) : undefined
+    const signals = [dto.signal, timeoutSignal].filter((signal): signal is AbortSignal => Boolean(signal))
+    const signal = signals.length === 0 ? undefined : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
 
     let res: Response
     try {
@@ -400,12 +419,12 @@ export class AiService {
         body: JSON.stringify({
           model,
           messages: dto.messages,
-          stream: false,
+          stream: dto.stream === true,
         }),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal,
       })
     } catch (err) {
-      throw new BadRequestException(`Network error: ${String(err)}`)
+      throw new BadRequestException(this.formatNetworkError('Network error', err))
     }
 
     if (!res.ok) {
@@ -413,10 +432,84 @@ export class AiService {
       throw new BadRequestException(`Provider returned ${res.status}: ${text}`)
     }
 
+    if (dto.stream === true) {
+      try {
+        return await this.readStreamingCompletion(res, dto.slot === 'readingReview' ? 120_000 : 90_000)
+      } catch (err) {
+        throw new BadRequestException(this.formatNetworkError('Stream error', err))
+      }
+    }
+
     const json = (await res.json()) as {
       choices?: Array<{ message?: { content?: string } }>
     }
     return json.choices?.[0]?.message?.content ?? ''
+  }
+
+  private async readStreamingCompletion(res: Response, idleTimeoutMs = 90_000) {
+    if (!res.body) return ''
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let content = ''
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+
+    const clearIdleTimer = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer)
+        idleTimer = undefined
+      }
+    }
+
+    const armIdleTimer = () => {
+      clearIdleTimer()
+      idleTimer = setTimeout(() => {
+        void reader.cancel(new DOMException('Stream idle timeout', 'TimeoutError'))
+      }, idleTimeoutMs)
+    }
+
+    const processLine = (line: string) => {
+      const trimmed = line.trim()
+      if (!trimmed.startsWith('data:')) return false
+      const data = trimmed.slice(5).trim()
+      if (!data || data === '[DONE]') return data === '[DONE]'
+      try {
+        const json = JSON.parse(data) as {
+          choices?: Array<{
+            delta?: { content?: string }
+            message?: { content?: string }
+            text?: string
+          }>
+        }
+        const choice = json.choices?.[0]
+        content += choice?.delta?.content ?? choice?.message?.content ?? choice?.text ?? ''
+      } catch {
+        // Ignore malformed keep-alive or provider-specific stream frames.
+      }
+      return false
+    }
+
+    try {
+      armIdleTimer()
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        armIdleTimer()
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split(/\r?\n/)
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (processLine(line)) return content
+        }
+      }
+      buffer += decoder.decode()
+      for (const line of buffer.split(/\r?\n/)) {
+        if (processLine(line)) break
+      }
+      return content
+    } finally {
+      clearIdleTimer()
+    }
   }
 
   // ── Test single model ────────────────────────────────────────────────────
@@ -473,6 +566,13 @@ export class AiService {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
+
+  private formatNetworkError(prefix: string, err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    const causeValue = err instanceof Error ? (err as Error & { cause?: unknown }).cause : undefined
+    const cause = causeValue !== undefined ? ` | cause: ${String(causeValue)}` : ''
+    return `${prefix}: ${err instanceof Error ? err.constructor.name : 'Error'}: ${message}${cause}`
+  }
 
   private async ensureProvider(id: string) {
     const p = await this.prisma.aiProvider.findUnique({

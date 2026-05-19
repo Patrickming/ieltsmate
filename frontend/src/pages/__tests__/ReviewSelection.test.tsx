@@ -38,6 +38,13 @@ describe('ReviewSelection', () => {
       favorites: [],
       reviewPreparing: false,
       reviewPreparingProgress: { done: 0, total: 0 },
+      currentReadingReviewBatch: null,
+      readingReviewBatches: [],
+      readingReviewLoading: false,
+      loadReadingReviewBatches: vi.fn().mockResolvedValue(undefined),
+      loadReadingReviewBatch: vi.fn().mockResolvedValue(null),
+      createReadingReviewBatch: vi.fn().mockResolvedValue(null),
+      cancelReadingReviewBatch: vi.fn().mockResolvedValue(null),
     })
     localStorage.removeItem('ielts_review_progress')
   })
@@ -104,5 +111,27 @@ describe('ReviewSelection', () => {
     })
 
     expect(screen.getByText('AI 生成较慢，已进入复习页，联想内容会在卡片内继续补全')).toBeInTheDocument()
+  })
+
+  it('AI 阅读复习会进入专属生成页', async () => {
+    const user = userEvent.setup()
+
+    renderWithRouter(<ReviewSelection />)
+
+    await user.click(screen.getByRole('button', { name: /AI 阅读复习/ }))
+    await user.click(screen.getByRole('button', { name: '进入生成' }))
+
+    expect(routerMocks.navigate).toHaveBeenCalledWith('/review/reading')
+  })
+
+  it('AI 阅读复习页不再展示生成选项，只提供专属页入口', async () => {
+    const user = userEvent.setup()
+
+    renderWithRouter(<ReviewSelection />)
+
+    await user.click(screen.getByRole('button', { name: /AI 阅读复习/ }))
+
+    expect(screen.getByText('进入 AI 阅读生成页')).toBeInTheDocument()
+    expect(screen.queryByLabelText('生成文章数量')).not.toBeInTheDocument()
   })
 })

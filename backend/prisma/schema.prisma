@@ -39,6 +39,7 @@ model Note {
   userNotes   NoteUserNote[]
   reviewCards ReviewSessionCard[]
   reviewLogs  ReviewLog[]
+  aiReadingArticleNotes AiReadingArticleNote[]
 
   @@index([category, createdAt(sort: Desc)])
   @@index([reviewStatus])
@@ -104,6 +105,73 @@ model ReviewLog {
 
   @@index([noteId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+}
+
+model AiReadingReviewBatch {
+  id                String             @id @default(uuid())
+  sourceType        String
+  rangeType         String
+  categoryFilter    String[]           @default([])
+  targetArticles    Int?
+  generateAll       Boolean            @default(false)
+  timeoutSeconds    Int                @default(1800)
+  status            String             @default("pending")
+  totalNotes        Int                @default(0)
+  usedNotes         Int                @default(0)
+  generatedArticles Int                @default(0)
+  failedArticles    Int                @default(0)
+  errorMessage      String?
+  errorLog          String[]           @default([])
+  modelProvider     String?
+  modelId           String?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  cancelledAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  articles          AiReadingArticle[]
+
+  @@index([createdAt(sort: Desc)])
+  @@index([status])
+}
+
+model AiReadingArticle {
+  id              String                 @id @default(uuid())
+  batchId         String
+  title           String
+  article         String
+  paragraphTranslations Json?
+  wordCount       Int
+  questions       Json
+  answers         Json
+  explanations    Json
+  status          String                 @default("completed")
+  generationMs    Int                    @default(0)
+  qualityWarnings String[]               @default([])
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  batch           AiReadingReviewBatch   @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  notes           AiReadingArticleNote[]
+
+  @@index([batchId, createdAt])
+}
+
+model AiReadingArticleNote {
+  id              String           @id @default(uuid())
+  articleId       String
+  noteId          String?
+  noteContent     String
+  noteTranslation String
+  noteCategory    String
+  expression      String
+  isVariant       Boolean          @default(false)
+  explanation     String?
+  createdAt       DateTime         @default(now())
+  article         AiReadingArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  note            Note?            @relation(fields: [noteId], references: [id], onDelete: SetNull)
+
+  @@index([articleId])
+  @@index([noteId])
 }
 
 model Todo {

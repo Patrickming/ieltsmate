@@ -199,6 +199,76 @@ interface ReviewPreparingProgress {
   total: number
 }
 
+export interface CreateReadingReviewBatchParams {
+  source: 'notes' | 'favorites'
+  categories?: string[]
+  range: 'all' | 'wrong' | 'exclude_mastered' | 'new_only'
+  articleTarget?: number
+  generateAll?: boolean
+  timeoutSeconds?: number
+}
+
+export interface ContinueReadingReviewBatchParams {
+  articleTarget?: number
+  generateAll?: boolean
+  timeoutSeconds?: number
+}
+
+export interface AiReadingArticleSummary {
+  id: string
+  title: string
+  wordCount: number
+  status: string
+  generationMs: number
+  qualityWarnings: string[]
+  createdAt: string
+  _count?: { notes: number }
+}
+
+export interface AiReadingReviewBatch {
+  id: string
+  sourceType: string
+  rangeType: string
+  categoryFilter: string[]
+  targetArticles: number | null
+  generateAll: boolean
+  timeoutSeconds: number
+  status: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed' | string
+  totalNotes: number
+  usedNotes: number
+  generatedArticles: number
+  failedArticles: number
+  errorMessage?: string | null
+  errorLog?: string[]
+  modelProvider?: string | null
+  modelId?: string | null
+  startedAt?: string | null
+  endedAt?: string | null
+  cancelledAt?: string | null
+  createdAt: string
+  updatedAt: string
+  articles: AiReadingArticleSummary[]
+}
+
+export interface AiReadingArticleDetail extends AiReadingArticleSummary {
+  batchId: string
+  article: string
+  paragraphTranslations?: string[]
+  questions: Array<{ id: string; type: string; prompt: string; options?: string[] }>
+  answers: Array<{ id: string; answer: string }>
+  explanations: Array<{ id: string; explanation: string }>
+  notes: Array<{
+    id: string
+    noteId: string | null
+    noteContent: string
+    noteTranslation: string
+    noteCategory: string
+    expression: string
+    isVariant: boolean
+    explanation?: string | null
+  }>
+}
+
 type AddNoteInput = {
   content: string
   translation: string
@@ -327,12 +397,13 @@ interface AppState {
   saveSettings: (patch: Record<string, string>) => Promise<void>
   classifyModel: string
   reviewModel: string
+  readingReviewModel: string
   chatModel: string
   reviewPrepareBatchSize: number
   reviewPrepareTimeoutMs: number
-  setModelSlot: (slot: 'classify' | 'review' | 'chat', model: string) => Promise<void>
-  /** 一次性写入三个默认模型槽位（设置页「确认保存」） */
-  commitModelSlots: (slots: { classify: string; review: string; chat: string }) => Promise<void>
+  setModelSlot: (slot: 'classify' | 'review' | 'readingReview' | 'chat', model: string) => Promise<void>
+  /** 一次性写入默认模型槽位（设置页「确认保存」） */
+  commitModelSlots: (slots: { classify: string; review: string; readingReview: string; chat: string }) => Promise<void>
   setReviewPrepareBatchSize: (batchSize: number) => Promise<void>
   setReviewPrepareTimeoutMs: (timeoutMs: number) => Promise<void>
 
@@ -414,6 +485,20 @@ interface AppState {
   retryAIContent: (noteId: string, cardType: string) => void
   ensureAIWindow: (currentIdx: number) => void
   incrementSavedExtensions: () => void
+
+  // AI reading review
+  readingReviewBatches: AiReadingReviewBatch[]
+  currentReadingReviewBatch: AiReadingReviewBatch | null
+  selectedReadingArticle: AiReadingArticleDetail | null
+  readingReviewLoading: boolean
+  createReadingReviewBatch: (params: CreateReadingReviewBatchParams) => Promise<AiReadingReviewBatch | null>
+  continueReadingReviewBatch: (id: string, params: ContinueReadingReviewBatchParams) => Promise<AiReadingReviewBatch | null>
+  loadReadingReviewBatches: () => Promise<void>
+  loadReadingReviewBatch: (id: string) => Promise<AiReadingReviewBatch | null>
+  cancelReadingReviewBatch: (id: string) => Promise<AiReadingReviewBatch | null>
+  deleteReadingReviewBatch: (id: string) => Promise<boolean>
+  loadReadingArticle: (id: string) => Promise<AiReadingArticleDetail | null>
+  deleteReadingArticle: (id: string) => Promise<boolean>
 
   // Todos
   todos: TodoItem[]
@@ -653,6 +738,7 @@ export const useAppStore = create<AppState>((set, get) => {
   settingsLoaded: false,
   classifyModel: '',
   reviewModel: '',
+  readingReviewModel: '',
   chatModel: '',
   reviewPrepareBatchSize: REVIEW_PREPARE_DEFAULT_BATCH_SIZE,
   reviewPrepareTimeoutMs: REVIEW_PREPARE_DEFAULT_TIMEOUT_MS,
@@ -668,6 +754,7 @@ export const useAppStore = create<AppState>((set, get) => {
         ...(s['theme'] ? { theme: s['theme'] as 'dark' | 'light' } : {}),
         classifyModel: s['classifyModel'] ?? '',
         reviewModel: s['reviewModel'] ?? '',
+        readingReviewModel: s['readingReviewModel'] ?? '',
         chatModel: s['chatModel'] ?? '',
         reviewPrepareBatchSize: Number(s['reviewPrepareBatchSize']) > 0
           ? Number(s['reviewPrepareBatchSize'])
@@ -691,7 +778,7 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   setModelSlot: async (slot, model) => {
-    const key = `${slot}Model` as 'classifyModel' | 'reviewModel' | 'chatModel'
+    const key = `${slot}Model` as 'classifyModel' | 'reviewModel' | 'readingReviewModel' | 'chatModel'
     set({ [key]: model })
     try {
       await fetch(apiUrl('/settings'), {
@@ -706,6 +793,7 @@ export const useAppStore = create<AppState>((set, get) => {
     set({
       classifyModel: slots.classify,
       reviewModel: slots.review,
+      readingReviewModel: slots.readingReview,
       chatModel: slots.chat,
     })
     try {
@@ -716,6 +804,7 @@ export const useAppStore = create<AppState>((set, get) => {
           settings: {
             classifyModel: slots.classify,
             reviewModel: slots.review,
+            readingReviewModel: slots.readingReview,
             chatModel: slots.chat,
           },
         }),
@@ -1367,6 +1456,143 @@ export const useAppStore = create<AppState>((set, get) => {
     reviewPreparing: false,
     reviewPreparingProgress: { done: 0, total: 0 },
   }),
+
+  // ── AI reading review ─────────────────────────────────────────────
+  readingReviewBatches: [],
+  currentReadingReviewBatch: null,
+  selectedReadingArticle: null,
+  readingReviewLoading: false,
+
+  createReadingReviewBatch: async (params) => {
+    set({ readingReviewLoading: true })
+    try {
+      const res = await fetch(apiUrl('/review/reading/batches'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: AiReadingReviewBatch }
+      if (!json.data) return null
+      set({ currentReadingReviewBatch: json.data })
+      return json.data
+    } catch {
+      return null
+    } finally {
+      set({ readingReviewLoading: false })
+    }
+  },
+
+  continueReadingReviewBatch: async (id, params) => {
+    set({ readingReviewLoading: true })
+    try {
+      const res = await fetch(apiUrl(`/review/reading/batches/${id}/continue`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: AiReadingReviewBatch }
+      if (!json.data) return null
+      set({ currentReadingReviewBatch: json.data })
+      return json.data
+    } catch {
+      return null
+    } finally {
+      set({ readingReviewLoading: false })
+    }
+  },
+
+  loadReadingReviewBatches: async () => {
+    set({ readingReviewLoading: true })
+    try {
+      const res = await fetch(apiUrl('/review/reading/batches'))
+      if (!res.ok) return
+      const json = (await res.json()) as { data?: { items?: AiReadingReviewBatch[] } }
+      set({ readingReviewBatches: json.data?.items ?? [] })
+    } catch { /* 静默 */ } finally {
+      set({ readingReviewLoading: false })
+    }
+  },
+
+  loadReadingReviewBatch: async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/review/reading/batches/${id}`))
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: AiReadingReviewBatch }
+      if (!json.data) return null
+      set((s) => ({
+        currentReadingReviewBatch: json.data!,
+        readingReviewBatches: s.readingReviewBatches.map((item) =>
+          item.id === json.data!.id ? json.data! : item,
+        ),
+      }))
+      return json.data
+    } catch {
+      return null
+    }
+  },
+
+  cancelReadingReviewBatch: async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/review/reading/batches/${id}/cancel`), { method: 'POST' })
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: AiReadingReviewBatch }
+      if (json.data) set({ currentReadingReviewBatch: json.data })
+      return json.data ?? null
+    } catch {
+      return null
+    }
+  },
+
+  deleteReadingReviewBatch: async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/review/reading/batches/${id}`), { method: 'DELETE' })
+      if (!res.ok) return false
+      set((s) => ({
+        readingReviewBatches: s.readingReviewBatches.filter((item) => item.id !== id),
+        currentReadingReviewBatch: s.currentReadingReviewBatch?.id === id ? null : s.currentReadingReviewBatch,
+      }))
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  loadReadingArticle: async (id) => {
+    set({ readingReviewLoading: true })
+    try {
+      const res = await fetch(apiUrl(`/review/reading/articles/${id}`))
+      if (!res.ok) return null
+      const json = (await res.json()) as { data?: AiReadingArticleDetail }
+      set({ selectedReadingArticle: json.data ?? null })
+      return json.data ?? null
+    } catch {
+      return null
+    } finally {
+      set({ readingReviewLoading: false })
+    }
+  },
+
+  deleteReadingArticle: async (id) => {
+    try {
+      const res = await fetch(apiUrl(`/review/reading/articles/${id}`), { method: 'DELETE' })
+      if (!res.ok) return false
+      set((s) => {
+        const removeFromBatch = (batch: AiReadingReviewBatch | null) => batch
+          ? { ...batch, articles: batch.articles.filter((article) => article.id !== id) }
+          : null
+        return {
+          currentReadingReviewBatch: removeFromBatch(s.currentReadingReviewBatch),
+          selectedReadingArticle: s.selectedReadingArticle?.id === id ? null : s.selectedReadingArticle,
+          readingReviewBatches: s.readingReviewBatches.map((batch) => removeFromBatch(batch)!),
+        }
+      })
+      return true
+    } catch {
+      return false
+    }
+  },
 
   // ── Todos ─────────────────────────────────────────────────────────
   todos: [],

@@ -10,6 +10,8 @@ const KnowledgeDetail = lazy(() => import('./pages/KnowledgeDetail'))
 const WritingNoteDetail = lazy(() => import('./pages/WritingNoteDetail'))
 const ReviewSelection = lazy(() => import('./pages/ReviewSelection'))
 const ReviewCards = lazy(() => import('./pages/ReviewCards'))
+const ReviewReading = lazy(() => import('./pages/ReviewReading'))
+const ReviewReadingArticle = lazy(() => import('./pages/ReviewReadingArticle'))
 const ReviewSummary = lazy(() => import('./pages/ReviewSummary'))
 const Settings = lazy(() => import('./pages/Settings'))
 
@@ -81,6 +83,8 @@ function AnimatedRoutes() {
         <Route path="/kb/:id" element={<KnowledgeDetail />} />
         <Route path="/review" element={<ReviewSelection />} />
         <Route path="/review/cards" element={<ReviewCards />} />
+        <Route path="/review/reading" element={<ReviewReading />} />
+        <Route path="/review/reading/articles/:id" element={<ReviewReadingArticle />} />
         <Route path="/review/summary" element={<ReviewSummary />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
