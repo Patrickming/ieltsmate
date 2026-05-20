@@ -35,6 +35,11 @@ export class CreateNoteDto {
   phonetic?: string
 
   @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  pronunciationAudioUrl?: string
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   synonyms?: string[]

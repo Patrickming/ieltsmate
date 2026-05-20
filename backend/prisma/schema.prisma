@@ -18,8 +18,9 @@ model Note {
   content        String
   translation    String
   category       String
-  phonetic       String?
-  synonyms       String[]     @default([])
+  phonetic               String?
+  pronunciationAudioUrl  String?
+  synonyms               String[]     @default([])
   antonyms       String[]     @default([])
   example        String?
   memoryTip      String?

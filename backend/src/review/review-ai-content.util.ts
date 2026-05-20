@@ -52,9 +52,6 @@ function cleanOptionalString(x: unknown): string | undefined {
 }
 
 function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null {
-  if (typeof p.phonetic !== 'string') {
-    return null
-  }
   const synonyms = parseAssociationItems(p.synonyms)
   const antonyms = parseAssociationItems(p.antonyms)
   if (synonyms === null || antonyms === null) {
@@ -69,7 +66,7 @@ function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null
   const exampleTranslation = cleanOptionalString(p.exampleTranslation)
   return {
     fallback: false,
-    phonetic: p.phonetic,
+    phonetic: typeof p.phonetic === 'string' ? p.phonetic.trim() : '',
     synonyms,
     antonyms,
     example: p.example,
@@ -82,9 +79,6 @@ function parseWordSpeechPayload(p: Record<string, unknown>): WordSpeechAI | null
 }
 
 function parsePhrasePayload(p: Record<string, unknown>): PhraseAI | null {
-  if (typeof p.phonetic !== 'string') {
-    return null
-  }
   const synonyms = parseAssociationItems(p.synonyms)
   const antonyms = parseAssociationItems(p.antonyms)
   if (synonyms === null || antonyms === null) {
@@ -96,7 +90,7 @@ function parsePhrasePayload(p: Record<string, unknown>): PhraseAI | null {
   const exampleTranslation = cleanOptionalString(p.exampleTranslation)
   return {
     fallback: false,
-    phonetic: p.phonetic,
+    phonetic: typeof p.phonetic === 'string' ? p.phonetic.trim() : '',
     synonyms,
     antonyms,
     example: p.example,
@@ -116,16 +110,12 @@ function parseSynonymPayload(p: Record<string, unknown>): SynonymAI | null {
       return null
     }
     const o = row as Record<string, unknown>
-    if (
-      typeof o.word !== 'string' ||
-      typeof o.phonetic !== 'string' ||
-      typeof o.meaning !== 'string'
-    ) {
+    if (typeof o.word !== 'string' || typeof o.meaning !== 'string') {
       return null
     }
     wordMeanings.push({
       word: o.word,
-      phonetic: o.phonetic,
+      phonetic: typeof o.phonetic === 'string' ? o.phonetic.trim() : '',
       meaning: o.meaning,
     })
   }
@@ -169,9 +159,6 @@ function parseSentencePayload(p: Record<string, unknown>): SentenceAI | null {
 }
 
 function parseSpellingPayload(p: Record<string, unknown>): SpellingAI | null {
-  if (typeof p.phonetic !== 'string') {
-    return null
-  }
   const synonyms = parseAssociationItems(p.synonyms)
   const antonyms = parseAssociationItems(p.antonyms)
   if (synonyms === null || antonyms === null) {
@@ -194,7 +181,7 @@ function parseSpellingPayload(p: Record<string, unknown>): SpellingAI | null {
   const wf = normalizeWordFamily(p.wordFamily)
   return {
     fallback: false,
-    phonetic: p.phonetic,
+    phonetic: typeof p.phonetic === 'string' ? p.phonetic.trim() : '',
     synonyms,
     antonyms,
     memoryTip: p.memoryTip,

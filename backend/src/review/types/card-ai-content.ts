@@ -24,6 +24,9 @@ export interface AssociationItem {
 export interface WordSpeechAI {
   fallback: false
   phonetic: string
+  /** 英式发音 MP3（Free Dictionary API） */
+  pronunciationAudioUrl?: string | null
+  pronunciationAccent?: 'uk' | null
   synonyms: AssociationItem[]
   antonyms: AssociationItem[]
   example: string
@@ -37,6 +40,8 @@ export interface WordSpeechAI {
 export interface PhraseAI {
   fallback: false
   phonetic: string
+  pronunciationAudioUrl?: string | null
+  pronunciationAccent?: 'uk' | null
   synonyms: AssociationItem[]
   antonyms: AssociationItem[]
   example: string
@@ -60,6 +65,8 @@ export interface SentenceAI {
 export interface SpellingAI {
   fallback: false
   phonetic: string
+  pronunciationAudioUrl?: string | null
+  pronunciationAccent?: 'uk' | null
   synonyms: AssociationItem[]
   antonyms: AssociationItem[]
   memoryTip: string
@@ -74,6 +81,8 @@ export interface FallbackResponse {
   /** User-facing explanation for why the model output was degraded (Chinese or short English) */
   reason?: string
   phonetic: string | null
+  pronunciationAudioUrl?: string | null
+  pronunciationAccent?: 'uk' | null
   translation: string
   synonyms: string[]
   antonyms: string[]

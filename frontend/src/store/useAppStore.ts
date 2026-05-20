@@ -53,6 +53,7 @@ interface BackendNote {
   translation: string
   category: string
   phonetic: string | null
+  pronunciationAudioUrl: string | null
   synonyms: string[]
   antonyms: string[]
   partsOfSpeech?: unknown
@@ -96,6 +97,7 @@ function mapBackendNote(n: BackendNote): Note {
     category: n.category as Category,
     subcategory: '杂笔记',
     phonetic: n.phonetic ?? undefined,
+    ...(n.pronunciationAudioUrl ? { pronunciationAudioUrl: n.pronunciationAudioUrl } : {}),
     synonyms: n.synonyms ?? [],
     antonyms: n.antonyms ?? [],
     ...(normalizedPartsOfSpeech.length > 0 ? { partsOfSpeech: normalizedPartsOfSpeech } : {}),
@@ -968,6 +970,7 @@ export const useAppStore = create<AppState>((set, get) => {
         category: (n.category as Category) ?? input.category,
         subcategory: '杂笔记',
         phonetic: n.phonetic ?? undefined,
+        ...(n.pronunciationAudioUrl ? { pronunciationAudioUrl: n.pronunciationAudioUrl } : {}),
         synonyms: n.synonyms ?? [],
         antonyms: n.antonyms ?? [],
         example: n.example ?? undefined,

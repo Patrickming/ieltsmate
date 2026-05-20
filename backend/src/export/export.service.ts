@@ -15,6 +15,7 @@ export class ExportService {
         translation: true,
         category: true,
         phonetic: true,
+        pronunciationAudioUrl: true,
         synonyms: true,
         antonyms: true,
         example: true,
@@ -41,6 +42,7 @@ export class ExportService {
         translation: true,
         category: true,
         phonetic: true,
+        pronunciationAudioUrl: true,
         synonyms: true,
         antonyms: true,
         example: true,
@@ -56,7 +58,7 @@ export class ExportService {
     })
 
     const headers = [
-      'id', 'content', 'translation', 'category', 'phonetic',
+      'id', 'content', 'translation', 'category', 'phonetic', 'pronunciationAudioUrl',
       'synonyms', 'antonyms', 'example', 'memoryTip',
       'reviewStatus', 'reviewCount', 'correctCount', 'wrongCount',
       'lastReviewedAt', 'createdAt', 'updatedAt',
@@ -76,6 +78,7 @@ export class ExportService {
       n.translation,
       n.category,
       n.phonetic ?? '',
+      n.pronunciationAudioUrl ?? '',
       n.synonyms.join('|'),
       n.antonyms.join('|'),
       n.example ?? '',

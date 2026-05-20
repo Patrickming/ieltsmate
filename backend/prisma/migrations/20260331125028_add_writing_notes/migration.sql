@@ -1,0 +1,2 @@
+-- Writing notes are loaded from the filesystem (writing-notes); no DB tables required.
+-- Placeholder to match an already-applied migration record.

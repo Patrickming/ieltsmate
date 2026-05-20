@@ -1,13 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Volume2,
   Plus,
   Check,
   Sparkles,
   HelpCircle,
   LogOut,
-  BookOpen,
   Keyboard,
   RotateCcw,
 } from "lucide-react";
@@ -16,6 +14,11 @@ import { Layout } from "../components/layout/Layout";
 import { ReviewAIWarmupBar } from "../components/review/ReviewAIWarmupBar";
 import { Badge } from "../components/ui/Badge";
 import { ModalShell } from "../components/ui/ModalShell";
+import {
+  BritishPhoneticBlock,
+  pronunciationAudioFromAi,
+} from "../components/ui/BritishPhoneticBlock";
+import { showsReviewDictionaryPronunciation } from "../lib/reviewPronunciation";
 import { StrokeButton } from "../components/ui/StrokeButton";
 import { UserNoteCard } from "../components/ui/UserNoteCard";
 import {
@@ -135,15 +138,14 @@ function CardFront({
   const inputRef = useRef<HTMLInputElement>(null);
   const barColor = CATEGORY_BAR[note.category] ?? "#818cf8";
 
+  const wordLen = note.content.length;
+  const firstLetter = note.content[0] ?? "";
   const translationLines = note.translation
     ? note.translation
         .split(/[；;]/)
         .map((s) => s.trim())
         .filter(Boolean)
     : [];
-
-  const wordLen = note.content.length;
-  const firstLetter = note.content[0] ?? "";
 
   // Auto-focus input when spelling card mounts
   useEffect(() => {
@@ -174,51 +176,44 @@ function CardFront({
 
         {/* ── Body ── */}
         <div className="flex-1 flex flex-col justify-center items-center gap-5 px-8 pb-5 min-h-0">
-          {/* Definition card */}
-          <div
-            className="w-full max-w-[560px] rounded-2xl overflow-hidden border"
-            style={{ background: "#0d0d12", borderColor: "#1f1f2e" }}
-          >
+          <BritishPhoneticBlock
+            word={note.content}
+            noteId={note.id}
+            phonetic={note.phonetic}
+            audioUrl={note.pronunciationAudioUrl}
+            className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3 w-fit cursor-pointer hover:border-primary/40 transition-colors"
+            iconSize={16}
+            textClassName="text-[16px] text-[#a5b4fc] font-mono"
+          />
+
+          {translationLines.length > 0 && (
             <div
-              className="flex items-center gap-2 px-4 py-2.5 border-b"
-              style={{ borderColor: "#1a1a26", background: "#111118" }}
+              className="w-full max-w-[560px] rounded-2xl border px-5 py-4"
+              style={{ background: "#0d0d12", borderColor: "#1f1f2e" }}
             >
-              <BookOpen size={12} style={{ color: barColor }} />
-              <span
-                className="text-[10px] font-bold uppercase tracking-[1.5px]"
+              <div
+                className="text-[10px] font-bold uppercase tracking-[1.5px] mb-3"
                 style={{ color: barColor }}
               >
-                词义参考
-              </span>
-              {note.phonetic && (
-                <>
-                  <div className="w-px h-3 bg-[#27272a] mx-1" />
-                  <Volume2 size={11} className="text-text-subtle" />
-                  <span
-                    className="text-[12px] font-mono"
-                    style={{ color: barColor + "99" }}
-                  >
-                    {note.phonetic}
-                  </span>
-                </>
-              )}
+                中文意思
+              </div>
+              <div className="flex flex-col gap-2">
+                {translationLines.map((line, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span
+                      className="text-[11px] font-bold shrink-0 mt-1 tabular-nums"
+                      style={{ color: barColor + "bb" }}
+                    >
+                      {String(i + 1).padStart(2, "0")}.
+                    </span>
+                    <p className="text-[16px] text-text-secondary leading-relaxed">
+                      {line}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="px-5 py-4 flex flex-col gap-2">
-              {translationLines.map((line, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span
-                    className="text-[11px] font-bold shrink-0 mt-1 tabular-nums"
-                    style={{ color: barColor + "bb" }}
-                  >
-                    {String(i + 1).padStart(2, "0")}.
-                  </span>
-                  <p className="text-[16px] text-text-secondary leading-relaxed">
-                    {line}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Letter count row */}
           <div className="flex flex-col items-center gap-2 w-full max-w-[560px]">
@@ -300,6 +295,14 @@ function CardFront({
       <h2 className="text-[2.8rem] font-bold text-text-primary text-center leading-tight">
         {note.content}
       </h2>
+      {showsReviewDictionaryPronunciation(note.category, cardType) && (
+        <BritishPhoneticBlock
+          word={note.content}
+          noteId={note.id}
+          phonetic={note.phonetic}
+          audioUrl={note.pronunciationAudioUrl}
+        />
+      )}
       <p className="text-base text-text-dim">点击卡片或按空格键翻转</p>
     </div>
   );
@@ -313,6 +316,8 @@ interface AIContentBase {
 interface WordSpeechAI extends AIContentBase {
   fallback: false;
   phonetic: string;
+  pronunciationAudioUrl?: string | null;
+  pronunciationAccent?: "uk" | null;
   synonyms: AssociationPair[];
   antonyms: AssociationPair[];
   example: string;
@@ -325,6 +330,8 @@ interface WordSpeechAI extends AIContentBase {
 interface PhraseAI extends AIContentBase {
   fallback: false;
   phonetic: string;
+  pronunciationAudioUrl?: string | null;
+  pronunciationAccent?: "uk" | null;
   synonyms: AssociationPair[];
   antonyms: AssociationPair[];
   example: string;
@@ -345,6 +352,8 @@ interface SentenceAI extends AIContentBase {
 interface SpellingAI extends AIContentBase {
   fallback: false;
   phonetic: string;
+  pronunciationAudioUrl?: string | null;
+  pronunciationAccent?: "uk" | null;
   synonyms: AssociationPair[];
   antonyms: AssociationPair[];
   memoryTip: string;
@@ -357,6 +366,8 @@ interface FallbackAI extends AIContentBase {
   fallback: true;
   reason?: string;
   phonetic: string | null;
+  pronunciationAudioUrl?: string | null;
+  pronunciationAccent?: "uk" | null;
   translation: string;
   synonyms: string[];
   antonyms: string[];
@@ -378,6 +389,7 @@ type UserNotesResponse = {
 };
 
 const SPACE_FLIP_INTERACTIVE_SELECTOR = [
+  "button",
   "a[href]",
   "input",
   "textarea",
@@ -702,11 +714,15 @@ function PartOfSpeechMeaningBlock({
               <p className="text-[15px] text-text-primary leading-relaxed">
                 {item.meaning}
               </p>
-              {item.phonetic && (
-                <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">
-                  {item.phonetic}
-                </p>
-              )}
+              {showsReviewDictionaryPronunciation(
+                note.category,
+                getCardType(note.category),
+              ) &&
+                item.phonetic && (
+                  <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">
+                    {item.phonetic}
+                  </p>
+                )}
               {item.example && (
                 <p className="text-[13px] text-text-secondary italic mt-2 leading-relaxed">
                   "{item.example}"
@@ -736,12 +752,14 @@ function isConfusableSaved(
 }
 
 function PosConfusablePanel({
+  note,
   aiConf,
   storedNote,
   savedConfKeys,
   onSaveConf,
   readOnly = false,
 }: {
+  note: Note;
   aiConf?: ConfusableGroup[];
   storedNote: Note;
   savedConfKeys: string[];
@@ -749,6 +767,10 @@ function PosConfusablePanel({
   /** 快速复习：仅展示，不显示存入按钮 */
   readOnly?: boolean;
 }) {
+  const showPhonetics = showsReviewDictionaryPronunciation(
+    note.category,
+    getCardType(note.category),
+  );
   const mergedConf = mergeUniqueConfusables(
     storedNote.confusables ?? [],
     aiConf ?? [],
@@ -821,7 +843,7 @@ function PosConfusablePanel({
                           <span className="text-[16px] font-semibold text-text-primary">
                             {w.word}
                           </span>
-                          {w.phonetic && (
+                          {showPhonetics && w.phonetic && (
                             <span className="text-[13px] text-[#a5b4fc] font-mono">
                               {w.phonetic}
                             </span>
@@ -913,6 +935,10 @@ function WordFamilyPanel({
   })();
   const posKeys: Pos4[] = ["noun", "verb", "adjective", "adverb"];
   const currentWordSurface = note.content.trim().toLowerCase();
+  const showPhonetics = showsReviewDictionaryPronunciation(
+    note.category,
+    getCardType(note.category),
+  );
 
   return (
     <div className="flex flex-col gap-5" onClick={(e) => e.stopPropagation()}>
@@ -980,7 +1006,7 @@ function WordFamilyPanel({
                       <p className="text-[14px] text-text-secondary leading-relaxed">
                         {item.meaning}
                       </p>
-                      {ph ? (
+                      {showPhonetics && ph ? (
                         <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">
                           {ph}
                         </p>
@@ -1061,7 +1087,7 @@ function WordFamilyPanel({
                   <p className="text-[14px] text-text-secondary leading-relaxed">
                     {item.meaning}
                   </p>
-                  {ph ? (
+                  {showPhonetics && ph ? (
                     <p className="text-[13px] text-[#a5b4fc] mt-2 font-mono">
                       {ph}
                     </p>
@@ -1149,6 +1175,7 @@ function BackContentAboveTranslation({
 // ── CardBack sub-components ───────────────────────────────────────────────────
 function CardBackWordPhrase({
   note,
+  cardType,
   ai,
   savedSyn,
   savedAnt,
@@ -1173,6 +1200,7 @@ function CardBackWordPhrase({
   savedWordFamilyKeys = [],
 }: {
   note: Note;
+  cardType: ReturnType<typeof getCardType>;
   ai: WordSpeechAI | PhraseAI;
   savedSyn: string[];
   savedAnt: string[];
@@ -1203,6 +1231,10 @@ function CardBackWordPhrase({
   const showReviewTabs = Boolean(showPosConfusableTabs && onBackFaceTabChange);
   const existingSynList = storedNote?.synonyms ?? note.synonyms ?? [];
   const existingAntList = storedNote?.antonyms ?? note.antonyms ?? [];
+  const showPronunciation = showsReviewDictionaryPronunciation(
+    note.category,
+    cardType,
+  );
 
   return (
     <div
@@ -1246,6 +1278,7 @@ function CardBackWordPhrase({
         onSavePos &&
         onSaveConf ? (
         <PosConfusablePanel
+          note={note}
           aiConf={extConf}
           storedNote={storedNote}
           savedConfKeys={savedConfKeys}
@@ -1254,11 +1287,15 @@ function CardBackWordPhrase({
       ) : (
         <>
           <UserNotesSection userNotes={userNotes} />
-          {ai.phonetic && (
-            <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-              <Volume2 size={16} className="text-primary" />
-              <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
-            </div>
+          {showPronunciation && (
+            <BritishPhoneticBlock
+              word={note.content}
+              noteId={note.id}
+              phonetic={ai.phonetic?.trim() || note.phonetic}
+              audioUrl={
+                pronunciationAudioFromAi(ai) ?? note.pronunciationAudioUrl
+              }
+            />
           )}
           <div>
             <BackContentAboveTranslation note={note} />
@@ -1429,11 +1466,6 @@ function CardBackSynonym({
                     <span className="text-[17px] font-bold text-text-primary">
                       {wm.word}
                     </span>
-                    {wm.phonetic && (
-                      <span className="text-[13px] text-[#a5b4fc]">
-                        {wm.phonetic}
-                      </span>
-                    )}
                   </div>
                   <button
                     type="button"
@@ -1684,6 +1716,7 @@ function CardBackSpelling({
         onSavePos &&
         onSaveConf ? (
         <PosConfusablePanel
+          note={note}
           aiConf={ai.confusables}
           storedNote={storedNote}
           savedConfKeys={savedConfKeys}
@@ -1723,12 +1756,12 @@ function CardBackSpelling({
             </div>
           )}
           <UserNotesSection userNotes={userNotes} />
-          {ai.phonetic && (
-            <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-              <Volume2 size={16} className="text-primary" />
-              <span className="text-[16px] text-[#a5b4fc]">{ai.phonetic}</span>
-            </div>
-          )}
+          <BritishPhoneticBlock
+            word={note.content}
+            noteId={note.id}
+            phonetic={ai.phonetic?.trim() || note.phonetic}
+            audioUrl={pronunciationAudioFromAi(ai) ?? note.pronunciationAudioUrl}
+          />
           <div>
             <BackContentAboveTranslation note={note} />
             <div className="text-sm font-semibold text-text-dim mb-1.5">
@@ -1809,7 +1842,7 @@ function CardBackSpelling({
             <AITip label="💬 例句与分析" tip="AI 生成的语境例句及用法解析" />
             <div className="bg-[#141420] border border-[#27272a] rounded-xl px-4 py-3.5 mt-2.5 flex flex-col gap-2">
               <p className="text-[14px] text-text-secondary italic leading-relaxed">
-                "{ai.contextExample.sentence}"
+                &quot;{ai.contextExample.sentence}&quot;
               </p>
               {ai.contextExample.translation && (
                 <p className="text-[13px] text-text-dim leading-relaxed">
@@ -1885,9 +1918,15 @@ function CardBackFallback({
     >
       <div className="flex items-center justify-between">
         <Badge category={note.category} size="md" showEmoji />
-        <span className="text-sm text-text-dim">已翻转</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-text-dim">已翻转</span>
+          {cardType === "spelling" && onRetry && (
+            <RegenerateCardButton onRetry={onRetry} isRetrying={isRetrying} />
+          )}
+        </div>
       </div>
-      <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40">
+      {cardType !== "spelling" && (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-yellow-950/30 border border-yellow-800/40">
         <div className="flex items-center gap-2 text-[12px] text-yellow-400">
           <span>⚠</span>
           <span>
@@ -1910,7 +1949,8 @@ function CardBackFallback({
             {isRetrying ? "生成中..." : "重新生成"}
           </button>
         )}
-      </div>
+        </div>
+      )}
       {showExtTabs && (
         <ReviewBackTabBar
           active={backFaceTab}
@@ -1941,6 +1981,7 @@ function CardBackFallback({
         onSavePos &&
         onSaveConf ? (
         <PosConfusablePanel
+          note={note}
           aiConf={undefined}
           storedNote={storedNote}
           savedConfKeys={savedConfKeys}
@@ -1949,7 +1990,7 @@ function CardBackFallback({
       ) : (
         <>
           <UserNotesSection userNotes={userNotes} />
-          {spellingAnswer && (
+          {cardType === "spelling" && spellingAnswer && (
             <div
               className="flex items-center gap-3 px-4 py-3 rounded-xl border"
               style={{
@@ -1980,13 +2021,14 @@ function CardBackFallback({
               )}
             </div>
           )}
-          {note.phonetic && (
-            <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-              <Volume2 size={16} className="text-primary" />
-              <span className="text-[16px] text-[#a5b4fc]">
-                {note.phonetic}
-              </span>
-            </div>
+          {(cardType === "spelling" ||
+            showsReviewDictionaryPronunciation(note.category, cardType)) && (
+            <BritishPhoneticBlock
+              word={note.content}
+              noteId={note.id}
+              phonetic={note.phonetic}
+              audioUrl={note.pronunciationAudioUrl}
+            />
           )}
           <div>
             <BackContentAboveTranslation note={note} />
@@ -2125,6 +2167,8 @@ function CardBackFastReview({
         </div>
       </div>
 
+      <UserNotesSection userNotes={userNotes} />
+
       {cardType === "spelling" && spellingAnswer && (
         <div
           className="flex items-center gap-3 px-4 py-3 rounded-xl border"
@@ -2157,8 +2201,6 @@ function CardBackFastReview({
         </div>
       )}
 
-      <UserNotesSection userNotes={userNotes} />
-
       {cardType === "synonym" && (
         <div>
           <div className="text-sm font-semibold text-text-dim mb-1.5">
@@ -2179,11 +2221,14 @@ function CardBackFastReview({
         </div>
       )}
 
-      {n.phonetic && (
-        <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-          <Volume2 size={16} className="text-primary" />
-          <span className="text-[16px] text-[#a5b4fc]">{n.phonetic}</span>
-        </div>
+      {(cardType === "spelling" ||
+        showsReviewDictionaryPronunciation(note.category, cardType)) && (
+        <BritishPhoneticBlock
+          word={note.content}
+          noteId={note.id}
+          phonetic={n.phonetic}
+          audioUrl={n.pronunciationAudioUrl}
+        />
       )}
 
       {(cardType === "word-speech" ||
@@ -2302,6 +2347,7 @@ function CardBackFastReview({
             readOnly
           />
           <PosConfusablePanel
+            note={note}
             aiConf={undefined}
             storedNote={storedNote}
             savedConfKeys={[]}
@@ -2415,6 +2461,7 @@ function CardBack({
       return (
         <CardBackWordPhrase
           note={note}
+          cardType={cardType}
           ai={aiContent as WordSpeechAI}
           savedSyn={savedSyn}
           savedAnt={savedAnt}
@@ -2443,6 +2490,7 @@ function CardBack({
       return (
         <CardBackWordPhrase
           note={note}
+          cardType={cardType}
           ai={aiContent as PhraseAI}
           savedSyn={savedSyn}
           savedAnt={savedAnt}
@@ -2511,6 +2559,7 @@ function CardBack({
       return (
         <CardBackWordPhrase
           note={note}
+          cardType={cardType}
           ai={aiContent as WordSpeechAI}
           savedSyn={savedSyn}
           savedAnt={savedAnt}
@@ -3409,8 +3458,15 @@ export default function ReviewCards() {
                   {/* Flip container */}
                   <div
                     className={`perspective w-full h-full ${slashState === "slashing" ? "cursor-default" : "cursor-pointer"}`}
-                    onClick={() => {
+                    onClick={(e) => {
                       if (slashState === "slashing") return;
+                      const target = e.target;
+                      if (
+                        target instanceof HTMLElement &&
+                        target.closest(SPACE_FLIP_INTERACTIVE_SELECTOR)
+                      ) {
+                        return;
+                      }
                       setFlipped((f) => !f);
                     }}
                   >
@@ -3423,7 +3479,11 @@ export default function ReviewCards() {
                       {/* Front */}
                       <div
                         className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden"
-                        style={{ borderTopColor: barColor, borderTopWidth: 3 }}
+                        style={{
+                          borderTopColor: barColor,
+                          borderTopWidth: 3,
+                          pointerEvents: flipped ? "none" : "auto",
+                        }}
                       >
                         <CardFront
                           note={card}
@@ -3437,7 +3497,11 @@ export default function ReviewCards() {
                       {/* Back */}
                       <div
                         className="backface-hidden absolute inset-0 bg-surface-card border border-border rounded-2xl overflow-hidden rotate-y-180"
-                        style={{ borderTopColor: barColor, borderTopWidth: 3 }}
+                        style={{
+                          borderTopColor: barColor,
+                          borderTopWidth: 3,
+                          pointerEvents: flipped ? "auto" : "none",
+                        }}
                       >
                         <CardBack
                           note={card}

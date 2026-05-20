@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Volume2, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Check, X } from 'lucide-react'
+import { ArrowLeft, Sparkles, Plus, ChevronLeft, ChevronRight, Trash2, Pencil, Check, X } from 'lucide-react'
+import { BritishPhoneticBlock } from '../components/ui/BritishPhoneticBlock'
 import { FavoriteButton } from '../components/ui/FavoriteButton'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useState, useEffect, useRef, type ClipboardEvent, type Dispatch, type SetStateAction } from 'react'
@@ -802,14 +803,22 @@ export default function KnowledgeDetail() {
                   </div>
                 )}
 
-                {/* Phonetic */}
-                {note.phonetic && (
+                {/* Phonetic（英式，来自词典 API；复习后会写回笔记） */}
+                {note.category !== '句子' && note.category !== '写作' && (
                   <div>
-                    <div className="text-sm font-semibold text-text-muted mb-2.5">🔊 音标</div>
-                    <div className="flex items-center gap-2.5 bg-[#141420] border border-[#27272a] rounded-md px-3.5 py-3 w-fit">
-                      <Volume2 size={16} className="text-primary" />
-                      <span className="text-[15px] text-[#a5b4fc]">{note.phonetic}</span>
-                    </div>
+                    <div className="text-sm font-semibold text-text-muted mb-2.5">🔊 音标（英式）</div>
+                    <BritishPhoneticBlock
+                      word={note.content}
+                      noteId={note.id}
+                      phonetic={note.phonetic}
+                      audioUrl={note.pronunciationAudioUrl}
+                      textClassName="text-[15px] text-[#a5b4fc]"
+                    />
+                    {!note.phonetic && !note.pronunciationAudioUrl && (
+                      <p className="text-[12px] text-text-subtle mt-2">
+                        暂无音标；复习该词或打开卡片后会自动从词典同步并保存。
+                      </p>
+                    )}
                   </div>
                 )}
 

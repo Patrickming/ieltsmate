@@ -281,7 +281,7 @@ describe('review-ai-content util', () => {
   })
 
   it('parseAIResponse 能从混杂文本中提取首个平衡 JSON 对象', () => {
-    const service = new ReviewAiService({} as never, {} as never)
+    const service = new ReviewAiService({} as never, {} as never, {} as never, {} as never)
     const content = [
       '这里是前置说明，不是 JSON。',
       '以下是结果：',
@@ -308,7 +308,7 @@ describe('review-ai-content util', () => {
   })
 
   it('parseAIResponse 会过滤不围绕目标词且拼写不够接近的 confusables', () => {
-    const service = new ReviewAiService({} as never, {} as never)
+    const service = new ReviewAiService({} as never, {} as never, {} as never, {} as never)
     const content = JSON.stringify({
       fallback: false,
       phonetic: '/lɔːn/',
@@ -414,9 +414,11 @@ describe('review-ai-content util', () => {
   }
 
   it('buildPrompt word-speech 含关联词对象示例与 meaning 约束', () => {
-    const service = new ReviewAiService({} as never, {} as never)
+    const service = new ReviewAiService({} as never, {} as never, {} as never, {} as never)
     const buildPrompt = (service as unknown as { buildPrompt: (...args: unknown[]) => string }).buildPrompt.bind(service)
     const prompt = buildPrompt(stubNote, 'word-speech')
+    expect(prompt).toContain('不要返回 phonetic')
+    expect(prompt).not.toMatch(/"phonetic":\s*"音标/)
     expect(prompt).toContain('"synonyms":')
     expect(prompt).toMatch(/\{\s*"word"\s*:/)
     expect(prompt).toMatch(/\{\s*"word"\s*:.*"meaning"\s*:/s)
@@ -436,7 +438,7 @@ describe('review-ai-content util', () => {
   })
 
   it('buildPrompt synonym 含 antonymGroup/moreSynonyms 对象示例与 meaning 约束', () => {
-    const service = new ReviewAiService({} as never, {} as never)
+    const service = new ReviewAiService({} as never, {} as never, {} as never, {} as never)
     const buildPrompt = (service as unknown as { buildPrompt: (...args: unknown[]) => string }).buildPrompt.bind(service)
     const prompt = buildPrompt({ ...stubNote, content: 'a, b' }, 'synonym')
     expect(prompt).toContain('"antonymGroup":')
@@ -452,7 +454,7 @@ describe('review-ai-content util', () => {
   })
 
   it('buildPrompt phrase 含关联词对象示例与 meaning 约束', () => {
-    const service = new ReviewAiService({} as never, {} as never)
+    const service = new ReviewAiService({} as never, {} as never, {} as never, {} as never)
     const buildPrompt = (service as unknown as { buildPrompt: (...args: unknown[]) => string }).buildPrompt.bind(service)
     const prompt = buildPrompt(stubNote, 'phrase')
     expect(prompt).toContain('"synonyms":')
@@ -467,7 +469,7 @@ describe('review-ai-content util', () => {
   })
 
   it('buildPrompt spelling 含关联词对象示例与 meaning 约束', () => {
-    const service = new ReviewAiService({} as never, {} as never)
+    const service = new ReviewAiService({} as never, {} as never, {} as never, {} as never)
     const buildPrompt = (service as unknown as { buildPrompt: (...args: unknown[]) => string }).buildPrompt.bind(service)
     const prompt = buildPrompt(stubNote, 'spelling')
     expect(prompt).toContain('"synonyms":')

@@ -66,6 +66,17 @@ export class NotesController {
     return this.notesService.softDeleteUserNote(id, userNoteId)
   }
 
+  @Post(':id/pronunciation/sync')
+  syncBritishPronunciation(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.notesService.syncBritishPronunciation(id)
+  }
+
+  /** 词典优先；无音标时由 AI 生成并写回笔记 */
+  @Post(':id/phonetic/ensure')
+  ensurePhonetic(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.notesService.ensurePhoneticForNote(id)
+  }
+
   @Get(':id')
   detail(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.notesService.detail(id)

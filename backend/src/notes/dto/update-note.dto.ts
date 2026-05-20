@@ -38,6 +38,11 @@ export class UpdateNoteDto {
   phonetic?: string | null
 
   @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  pronunciationAudioUrl?: string | null
+
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
   synonyms?: string[]

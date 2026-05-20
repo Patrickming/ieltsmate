@@ -125,6 +125,11 @@ export default defineConfig({
         changeOrigin: true,
         bypass: devBackendProxyBypass,
       },
+      '/dictionary': {
+        target: devBackendProxyTarget,
+        changeOrigin: true,
+        bypass: devBackendProxyBypass,
+      },
     },
   },
   test: {

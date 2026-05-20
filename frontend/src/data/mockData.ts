@@ -11,6 +11,7 @@ export interface Note {
   category: Category
   subcategory: string
   phonetic?: string
+  pronunciationAudioUrl?: string
   synonyms?: string[]
   antonyms?: string[]
   partsOfSpeech?: PartOfSpeechItem[]

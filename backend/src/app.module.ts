@@ -2,6 +2,7 @@ import { Controller, Get, Module } from '@nestjs/common'
 import { ServeStaticModule } from '@nestjs/serve-static'
 import { join } from 'node:path'
 import { AiModule } from './ai/ai.module'
+import { DictionaryModule } from './dictionary/dictionary.module'
 import { DashboardModule } from './dashboard/dashboard.module'
 import { ExportModule } from './export/export.module'
 import { ImportModule } from './import/import.module'
@@ -44,6 +45,7 @@ class HealthController {
     AiModule,
     TodosModule,
     DashboardModule,
+    DictionaryModule,
     ExportModule,
     ImportModule,
     WritingModule,

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
+import { AiService } from '../ai/ai.service'
+import { FreeDictionaryApiService } from '../dictionary/free-dictionary-api.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateNoteDto } from './dto/create-note.dto'
 import { CreateUserNoteDto } from './dto/create-user-note.dto'
@@ -24,7 +26,135 @@ export class NotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly noteUserImageStorage: NoteUserImageStorage,
+    private readonly dictionary: FreeDictionaryApiService,
+    private readonly aiService: AiService,
   ) {}
+
+  /**
+   * 词典无音标时用 AI 生成英式 IPA，并写回笔记（不覆盖已有发音 URL）。
+   */
+  async ensurePhoneticForNote(noteId: string) {
+    const note = await this.detail(noteId)
+    const existingPhonetic = note.phonetic?.trim()
+    if (existingPhonetic) {
+      return {
+        phonetic: existingPhonetic,
+        audioUrl: note.pronunciationAudioUrl ?? null,
+        source: 'note' as const,
+      }
+    }
+
+    const uk = await this.dictionary.lookupBritishPronunciation(note.content)
+    if (uk?.phonetic) {
+      const updated = await this.persistBritishPronunciation(noteId, uk)
+      return {
+        phonetic: updated.phonetic,
+        audioUrl: updated.pronunciationAudioUrl ?? null,
+        source: 'dictionary' as const,
+      }
+    }
+
+    const aiPhonetic = await this.generatePhoneticWithAi(note.content)
+    if (!aiPhonetic) {
+      throw new NotFoundException('词典与 AI 均未生成可用音标')
+    }
+
+    const updated = await this.prisma.note.update({
+      where: { id: noteId },
+      data: {
+        phonetic: aiPhonetic,
+        ...(uk?.audioUrl ? { pronunciationAudioUrl: uk.audioUrl } : {}),
+      },
+      include: noteInclude,
+    })
+    return {
+      phonetic: updated.phonetic,
+      audioUrl: updated.pronunciationAudioUrl ?? null,
+      source: 'ai' as const,
+    }
+  }
+
+  private wrapIpaPhonetic(text: string): string {
+    const t = text.trim()
+    if (!t) return ''
+    if (t.startsWith('/') && t.endsWith('/')) return t
+    return `/${t.replace(/^\/+|\/+$/g, '')}/`
+  }
+
+  private extractJsonCandidate(content: string): string {
+    const start = content.indexOf('{')
+    const end = content.lastIndexOf('}')
+    if (start >= 0 && end > start) return content.slice(start, end + 1)
+    return content.trim()
+  }
+
+  private async generatePhoneticWithAi(word: string): Promise<string | null> {
+    const w = word.trim()
+    if (!w) return null
+    try {
+      const raw = await this.aiService.complete({
+        messages: [
+          {
+            role: 'user',
+            content:
+              `单词: "${w}"\n请仅返回该词的英式英语 IPA 音标。JSON 格式：{"phonetic":"/音标/"}。只要 JSON，不要释义或其它字段。`,
+          },
+        ],
+        slot: 'review',
+        timeoutMs: 25_000,
+      })
+      const parsed = JSON.parse(this.extractJsonCandidate(raw)) as { phonetic?: unknown }
+      const ph = typeof parsed.phonetic === 'string' ? parsed.phonetic.trim() : ''
+      return ph ? this.wrapIpaPhonetic(ph) : null
+    } catch (err) {
+      this.logger.warn(
+        `generatePhoneticWithAi failed word=${w}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+      return null
+    }
+  }
+
+  /**
+   * 从词典拉取英式音标与发音并写入笔记（复习或手动同步时调用）。
+   */
+  async syncBritishPronunciation(noteId: string) {
+    const note = await this.detail(noteId)
+    const uk = await this.dictionary.lookupBritishPronunciation(note.content)
+    if (!uk?.phonetic) {
+      throw new NotFoundException('未找到该词的英式音标')
+    }
+    return this.persistBritishPronunciation(noteId, uk)
+  }
+
+  /** 复习生成后静默写回笔记，失败不阻断复习流程 */
+  async saveBritishPronunciationToNote(noteId: string, lookupText: string): Promise<void> {
+    try {
+      const uk = await this.dictionary.lookupBritishPronunciation(lookupText)
+      if (!uk?.phonetic) return
+      await this.persistBritishPronunciation(noteId, uk)
+    } catch (err) {
+      this.logger.warn(
+        `saveBritishPronunciationToNote failed noteId=${noteId}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    }
+  }
+
+  private async persistBritishPronunciation(
+    noteId: string,
+    uk: { phonetic: string | null; audioUrl: string | null },
+  ) {
+    if (!uk.phonetic) {
+      throw new NotFoundException('未找到该词的英式音标')
+    }
+    return this.prisma.note.update({
+      where: { id: noteId },
+      data: {
+        phonetic: uk.phonetic,
+        pronunciationAudioUrl: uk.audioUrl ?? null,
+      },
+      include: noteInclude,
+    })
+  }
 
   async create(dto: CreateNoteDto) {
     const normalizedSynonyms =
@@ -38,6 +168,7 @@ export class NotesService {
         translation: dto.translation,
         category: dto.category,
         phonetic: dto.phonetic,
+        pronunciationAudioUrl: dto.pronunciationAudioUrl,
         synonyms: normalizedSynonyms,
         antonyms: normalizedAntonyms,
         example: dto.example,
@@ -106,6 +237,9 @@ export class NotesService {
     if (dto.translation !== undefined) data.translation = dto.translation
     if (dto.category !== undefined) data.category = dto.category
     if (dto.phonetic !== undefined) data.phonetic = dto.phonetic
+    if (dto.pronunciationAudioUrl !== undefined) {
+      data.pronunciationAudioUrl = dto.pronunciationAudioUrl
+    }
     if (dto.synonyms !== undefined) data.synonyms = [...new Set(dto.synonyms.map((s) => s.trim()).filter(Boolean))]
     if (dto.antonyms !== undefined) data.antonyms = [...new Set(dto.antonyms.map((s) => s.trim()).filter(Boolean))]
     if (dto.example !== undefined) data.example = dto.example

@@ -163,6 +163,18 @@ run_startup() {
     fi
   fi
 
+  # Step 1b: Prisma 迁移（自动检测并 apply）
+  if [ -x "${PROJECT_DIR}/db-migrate.sh" ]; then
+    info "检查并同步数据库迁移…"
+    if ! "${PROJECT_DIR}/db-migrate.sh" sync; then
+      err "数据库迁移未就绪，可单独执行: ./db-migrate.sh"
+      return 1
+    fi
+    ok "数据库迁移已是最新"
+  else
+    warn "未找到可执行的 db-migrate.sh，跳过自动迁移"
+  fi
+
   # Step 2: 后端
   echo ""
   echo -e "${Y}  [2/3]  后端 NestJS${NC}"
