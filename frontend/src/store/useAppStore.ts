@@ -8,6 +8,13 @@ import {
   showsReviewDictionaryPronunciation,
   type ReviewCardType,
 } from '../lib/reviewPronunciation'
+import {
+  clearReviewSessionSnapshot,
+  countWarmedInSnapshot,
+  loadReviewSessionSnapshot,
+  saveReviewSessionSnapshot,
+  type ReviewSessionSnapshot,
+} from '../lib/reviewSessionSnapshot'
 import { normalizeWordFamilyForUI } from '../lib/wordFamilyDedup'
 import { normalizeConfusablesForUI, normalizePartOfSpeechForUI } from '../lib/noteExtensionsDedup'
 
@@ -331,6 +338,33 @@ function reviewCardAiReady(v: CardAIContent | null | undefined): boolean {
   return typeof v === 'object' && 'fallback' in v
 }
 
+function buildReviewSessionSnapshot(session: ReviewSession): ReviewSessionSnapshot {
+  return {
+    sessionId: session.sessionId,
+    cardIds: session.cards.map((c) => c.id),
+    current: session.current,
+    results: session.results,
+    params: session.params,
+    skipAi: session.skipAi,
+    aiContent: session.aiContent,
+    aiLoading: session.aiLoading,
+    savedExtensionCount: session.savedExtensionCount,
+    completedOffset: session.completedOffset,
+    timestamp: Date.now(),
+  }
+}
+
+function filterAiContentForCardIds(
+  aiContent: ReviewSession['aiContent'],
+  cardIds: Set<string>,
+): ReviewSession['aiContent'] {
+  const next: ReviewSession['aiContent'] = {}
+  for (const id of cardIds) {
+    if (id in aiContent) next[id] = aiContent[id]
+  }
+  return next
+}
+
 function patchReviewSessionNotePronetic(
   noteId: string,
   phonetic: string | null | undefined,
@@ -559,6 +593,16 @@ interface AppState {
   retryAIContent: (noteId: string, cardType: string) => void
   ensureAIWindow: (currentIdx: number) => void
   incrementSavedExtensions: () => void
+  persistReviewSessionSnapshot: () => void
+  resumePausedReviewSession: () => boolean
+  getPausedReviewMeta: () => {
+    remaining: number
+    warmed: number
+    current: number
+    completedOffset: number
+    skipAi: boolean
+  } | null
+  hasPausedReviewSession: () => boolean
 
   // AI reading review
   readingReviewBatches: AiReadingReviewBatch[]
@@ -1242,10 +1286,91 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!skipAi) {
         setTimeout(() => get().ensureAIWindow(0), 0)
       }
+      get().persistReviewSessionSnapshot()
       return true
     } catch {
       return false
     }
+  },
+
+  persistReviewSessionSnapshot: () => {
+    const session = get().reviewSession
+    if (!session) return
+    saveReviewSessionSnapshot(buildReviewSessionSnapshot(session))
+  },
+
+  hasPausedReviewSession: () => {
+    if (get().reviewSession) return false
+    return loadReviewSessionSnapshot() !== null
+  },
+
+  getPausedReviewMeta: () => {
+    const active = get().reviewSession
+    if (active) {
+      return {
+        remaining: active.cards.length,
+        warmed: countWarmedInSnapshot(active.aiContent, active.cards.map((c) => c.id)),
+        current: active.current,
+        completedOffset: active.completedOffset,
+        skipAi: active.skipAi,
+      }
+    }
+    const snap = loadReviewSessionSnapshot()
+    if (!snap) return null
+    const notes = get().notes
+    const remaining = snap.cardIds.filter((id) => notes.some((n) => n.id === id)).length
+    if (remaining === 0) return null
+    return {
+      remaining,
+      warmed: countWarmedInSnapshot(snap.aiContent, snap.cardIds),
+      current: Math.min(snap.current, Math.max(0, remaining - 1)),
+      completedOffset: snap.completedOffset,
+      skipAi: snap.skipAi,
+    }
+  },
+
+  resumePausedReviewSession: () => {
+    if (get().reviewSession) return true
+    const snap = loadReviewSessionSnapshot()
+    if (!snap) return false
+
+    const notes = get().notes
+    const cardIdSet = new Set<string>()
+    const cards = snap.cardIds
+      .map((id) => {
+        const note = notes.find((n) => n.id === id)
+        if (note) cardIdSet.add(id)
+        return note
+      })
+      .filter((c): c is Note => !!c)
+
+    if (cards.length === 0) return false
+
+    const current = Math.min(Math.max(0, snap.current), cards.length - 1)
+    const validResultIds = new Set(cards.map((c) => c.id))
+
+    set({
+      reviewPreparing: false,
+      reviewPreparingProgress: { done: 0, total: 0 },
+      reviewSession: {
+        sessionId: snap.sessionId,
+        cards,
+        current,
+        results: snap.results.filter((r) => validResultIds.has(r.id)),
+        params: snap.params,
+        skipAi: snap.skipAi,
+        aiContent: filterAiContentForCardIds(snap.aiContent, cardIdSet),
+        aiLoading: {},
+        savedExtensionCount: snap.savedExtensionCount,
+        completedOffset: snap.completedOffset,
+      },
+    })
+
+    if (!snap.skipAi) {
+      setTimeout(() => get().ensureAIWindow(current), 0)
+    }
+    get().persistReviewSessionSnapshot()
+    return true
   },
 
   prepareInitialAIBatch: async (opts) => {
@@ -1306,6 +1431,7 @@ export const useAppStore = create<AppState>((set, get) => {
       set({ reviewPreparingProgress: { done, total } })
       if (done >= total) {
         set({ reviewPreparing: false, reviewPreparingProgress: { done, total } })
+        get().persistReviewSessionSnapshot()
         return { timedOut: false, done, total }
       }
       await waitMs(pollIntervalMs)
@@ -1316,6 +1442,7 @@ export const useAppStore = create<AppState>((set, get) => {
       done = targetCards.filter((card) => reviewCardAiReady(latest.aiContent[card.id])).length
     }
     set({ reviewPreparing: false, reviewPreparingProgress: { done, total } })
+    get().persistReviewSessionSnapshot()
     return { timedOut: done < total, done, total }
   },
 
@@ -1324,14 +1451,17 @@ export const useAppStore = create<AppState>((set, get) => {
     reviewPreparingProgress: { done: 0, total: 0 },
   }),
 
-  nextCard: () => set((s) => {
-    if (!s.reviewSession) return s
-    const newCurrent = s.reviewSession.current + 1
-    if (!s.reviewSession.skipAi) {
-      setTimeout(() => get().ensureAIWindow(newCurrent), 0)
-    }
-    return { reviewSession: { ...s.reviewSession, current: newCurrent } }
-  }),
+  nextCard: () => {
+    set((s) => {
+      if (!s.reviewSession) return s
+      const newCurrent = s.reviewSession.current + 1
+      if (!s.reviewSession.skipAi) {
+        setTimeout(() => get().ensureAIWindow(newCurrent), 0)
+      }
+      return { reviewSession: { ...s.reviewSession, current: newCurrent } }
+    })
+    get().persistReviewSessionSnapshot()
+  },
 
   rateCard: (noteId, rating, spellingAnswer) => {
     set((s) => {
@@ -1380,7 +1510,12 @@ export const useAppStore = create<AppState>((set, get) => {
     if (session) {
       // Clear progress when all cards in this session have been rated
       const allDone = session.results.length + 1 >= session.cards.length
-      if (allDone) clearContinueState()
+      if (allDone) {
+        clearContinueState()
+        clearReviewSessionSnapshot()
+      } else {
+        get().persistReviewSessionSnapshot()
+      }
 
       fetch(apiUrl(`/review/sessions/${session.sessionId}/rate`), {
         method: 'PATCH',
@@ -1429,6 +1564,7 @@ export const useAppStore = create<AppState>((set, get) => {
         method: 'POST',
       }).catch(() => {})
     }
+    clearReviewSessionSnapshot()
     set({
       reviewSession: null,
       reviewPreparing: false,
@@ -1477,6 +1613,7 @@ export const useAppStore = create<AppState>((set, get) => {
           } else {
             void loadNotesAfterAiPhonetic(noteId)
           }
+          get().persistReviewSessionSnapshot()
           return
         }
         const r = (content as CardAIContent).reason
@@ -1507,6 +1644,7 @@ export const useAppStore = create<AppState>((set, get) => {
         },
       }
     })
+    get().persistReviewSessionSnapshot()
   },
 
   retryAIContent: (noteId, cardType) => {
@@ -1567,11 +1705,14 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   }),
 
-  endReview: () => set({
-    reviewSession: null,
-    reviewPreparing: false,
-    reviewPreparingProgress: { done: 0, total: 0 },
-  }),
+  endReview: () => {
+    clearReviewSessionSnapshot()
+    set({
+      reviewSession: null,
+      reviewPreparing: false,
+      reviewPreparingProgress: { done: 0, total: 0 },
+    })
+  },
 
   // ── AI reading review ─────────────────────────────────────────────
   readingReviewBatches: [],

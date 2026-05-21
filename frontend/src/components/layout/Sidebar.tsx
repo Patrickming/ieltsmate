@@ -6,6 +6,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useAppStore } from '../../store/useAppStore'
 import { CATEGORIES } from '../../data/mockData'
+import { ReviewResumePrompt } from '../review/ReviewResumePrompt'
 
 const NAV_ITEMS = [
   { path: '/', icon: LayoutDashboard, label: '首页' },
@@ -74,7 +75,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-60 min-w-[240px] h-full bg-surface-sidebar flex flex-col">
+    <aside className="w-60 min-w-[240px] h-full overflow-x-hidden bg-surface-sidebar flex flex-col">
       {/* Logo */}
       <div className="px-5 pt-5 pb-3 flex items-start justify-between">
         <div>
@@ -110,10 +111,12 @@ export function Sidebar() {
       {/* Middle: normal nav + TOC overlay stacked in a flex-1 container */}
       <div className="flex-1 relative overflow-hidden">
         {/* Normal nav — structure identical to original, always in DOM */}
-        <nav className="absolute inset-0 overflow-y-auto py-1">
+        <nav className="absolute inset-0 overflow-x-hidden overflow-y-auto py-1">
           <div className="px-4 pt-2 pb-1">
             <span className="text-[9px] font-bold text-text-subtle tracking-[1.8px] uppercase">主要</span>
           </div>
+
+          <ReviewResumePrompt variant="compact" />
 
           {NAV_ITEMS.map(({ path, icon: Icon, label }) => {
             const active = isActive(path)

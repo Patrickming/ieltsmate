@@ -11,6 +11,7 @@ import { Layout } from '../components/layout/Layout'
 import { ReviewPreparingOverlay } from '../components/review/ReviewPreparingOverlay'
 import { CATEGORY_BAR, type Category } from '../data/mockData'
 import { useAppStore, type StartReviewParams } from '../store/useAppStore'
+import { ReviewResumePrompt } from '../components/review/ReviewResumePrompt'
 
 const SUB_CATS: Category[] = ['口语', '短语', '同义替换', '拼写', '单词']
 
@@ -173,6 +174,10 @@ export default function ReviewSelection() {
           </motion.div>
 
           <motion.div variants={stagger} initial="hidden" animate="show" className="flex flex-col gap-8">
+
+            <motion.div variants={fadeUp}>
+              <ReviewResumePrompt />
+            </motion.div>
 
             {/* ── Step 1: 复习类型 ─────────────── */}
             <motion.div variants={fadeUp} className="flex flex-col gap-3">

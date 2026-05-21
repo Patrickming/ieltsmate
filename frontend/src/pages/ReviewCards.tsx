@@ -2714,9 +2714,15 @@ export default function ReviewCards() {
   const displayCurrent = current + completedOffset;
   const progress = total > 0 ? ((displayCurrent + 1) / total) * 100 : 0;
 
+  const resumePausedReviewSession = useAppStore(
+    (s) => s.resumePausedReviewSession,
+  );
+
   useEffect(() => {
-    if (!session) navigate("/review");
-  }, [session, navigate]);
+    if (session) return;
+    if (resumePausedReviewSession()) return;
+    navigate("/review");
+  }, [session, navigate, resumePausedReviewSession]);
 
   // 进入复习页后兜底补一次滑动窗口（避免预热完成判定与展示条件不一致时首张背面仍缺 aiContent）
   useEffect(() => {

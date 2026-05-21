@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { AnimatePresence } from 'framer-motion'
 import { LoadingState } from './components/ui/LoadingState'
 import { useAppStore } from './store/useAppStore'
@@ -93,6 +94,7 @@ function AnimatedRoutes() {
 }
 
 function AppInner() {
+  const location = useLocation()
   const showSearch = useAppStore((s) => s.showSearch)
   const showQuickNote = useAppStore((s) => s.showQuickNote)
   const showAIConfig = useAppStore((s) => s.showAIConfig)
@@ -102,6 +104,13 @@ function AppInner() {
   const loadWritingNotes = useAppStore((s) => s.loadWritingNotes)
   const loadProviders = useAppStore((s) => s.loadProviders)
   const loadSettings = useAppStore((s) => s.loadSettings)
+  const { persistReviewSessionSnapshot, resumePausedReviewSession } = useAppStore(
+    useShallow((s) => ({
+      persistReviewSessionSnapshot: s.persistReviewSessionSnapshot,
+      resumePausedReviewSession: s.resumePausedReviewSession,
+    })),
+  )
+  const notesCount = useAppStore((s) => s.notes.length)
 
   useEffect(() => {
     void loadSettings?.()
@@ -110,6 +119,18 @@ function AppInner() {
     void syncFavorites()
     void loadWritingNotes()
   }, [loadSettings, loadProviders, loadNotes, syncFavorites, loadWritingNotes])
+
+  useEffect(() => {
+    const onBeforeUnload = () => persistReviewSessionSnapshot()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [persistReviewSessionSnapshot])
+
+  useEffect(() => {
+    if (location.pathname !== '/review/cards' || notesCount === 0) return
+    if (useAppStore.getState().reviewSession) return
+    resumePausedReviewSession()
+  }, [location.pathname, notesCount, resumePausedReviewSession])
 
   return (
     <>

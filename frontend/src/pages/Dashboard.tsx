@@ -10,6 +10,7 @@ import { DashboardInsight } from '../components/ui/DashboardInsight'
 import { TodoList } from '../components/ui/TodoList'
 import { Button } from '../components/ui/Button'
 import { useAppStore } from '../store/useAppStore'
+import { ReviewResumePrompt } from '../components/review/ReviewResumePrompt'
 
 function getCSTDateString(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -58,6 +59,7 @@ export default function Dashboard() {
   return (
     <Layout title="首页">
       <div className="p-8 flex flex-col gap-6">
+        <ReviewResumePrompt />
         <div className="flex items-start gap-4">
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-text-primary">仪表盘</h1>
