@@ -16,3 +16,11 @@ export function showsReviewDictionaryPronunciation(
   if (category === '单词') return true
   return false
 }
+
+/** 与 showsReviewDictionaryPronunciation 一致：进入卡片正面时自动播放发音 */
+export function shouldAutoplayReviewPronunciation(
+  category: Category,
+  cardType?: ReviewCardType,
+): boolean {
+  return showsReviewDictionaryPronunciation(category, cardType)
+}

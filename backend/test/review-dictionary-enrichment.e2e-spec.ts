@@ -1,6 +1,9 @@
 import 'reflect-metadata'
 import type { FreeDictionaryApiService } from '../src/dictionary/free-dictionary-api.service'
-import { enrichReviewCardWithDictionary } from '../src/review/review-dictionary-enrichment'
+import {
+  enrichReviewCardWithDictionary,
+  overlayNotePronunciationOnCard,
+} from '../src/review/review-dictionary-enrichment'
 import type { WordSpeechAI } from '../src/review/types/card-ai-content'
 
 describe('review-dictionary-enrichment', () => {
@@ -42,6 +45,35 @@ describe('review-dictionary-enrichment', () => {
       expect(out.phonetic).toBe('/həˈləʊ/')
       expect(out.pronunciationAudioUrl).toContain('hello-uk.mp3')
       expect(out.pronunciationAccent).toBe('uk')
+    }
+  })
+
+  it('词典无音标时用笔记预热结果补全复习卡', async () => {
+    ;(dictionary.lookupBritishPronunciation as jest.Mock).mockResolvedValue(null)
+
+    const ai: WordSpeechAI = {
+      fallback: false,
+      phonetic: '',
+      synonyms: [{ word: 'hi', meaning: '嗨' }],
+      antonyms: [{ word: 'bye', meaning: '再见' }],
+      example: 'Hello.',
+      memoryTip: 'tip',
+    }
+
+    const enriched = await enrichReviewCardWithDictionary(
+      dictionary,
+      ai,
+      'word-speech',
+      'xyzzy',
+    )
+    const out = overlayNotePronunciationOnCard(enriched, {
+      phonetic: '/ˈzɪɡi/',
+      pronunciationAudioUrl: null,
+    })
+
+    expect(out.fallback).toBe(false)
+    if (out && 'phonetic' in out && !out.fallback) {
+      expect(out.phonetic).toBe('/ˈzɪɡi/')
     }
   })
 })

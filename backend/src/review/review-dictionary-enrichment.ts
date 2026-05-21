@@ -133,3 +133,35 @@ export async function enrichReviewCardWithDictionary(
 
   return next
 }
+
+type CardWithPronunciation = CardAIContent & {
+  phonetic: string
+  pronunciationAudioUrl?: string | null
+  pronunciationAccent?: 'uk' | null
+}
+
+/** 词典 enrichment 后音标仍为空时，用笔记/AI 预热结果补全复习卡 */
+export function overlayNotePronunciationOnCard(
+  content: CardAIContent,
+  pron: {
+    phonetic: string
+    pronunciationAudioUrl?: string | null
+    pronunciationAccent?: 'uk' | null
+  } | null,
+): CardAIContent {
+  if (!pron?.phonetic?.trim() || content.fallback || !hasPhoneticField(content)) {
+    return content
+  }
+  const card = content as CardWithPronunciation
+  if (card.phonetic?.trim()) return content
+  return {
+    ...card,
+    phonetic: pron.phonetic.trim(),
+    pronunciationAudioUrl:
+      pron.pronunciationAudioUrl ?? card.pronunciationAudioUrl ?? null,
+    pronunciationAccent:
+      pron.pronunciationAudioUrl != null
+        ? 'uk'
+        : (card.pronunciationAccent ?? null),
+  }
+}

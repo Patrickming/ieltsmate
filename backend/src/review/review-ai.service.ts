@@ -2,7 +2,10 @@ import { Injectable, Logger } from '@nestjs/common'
 import { AiService } from '../ai/ai.service'
 import { FreeDictionaryApiService } from '../dictionary/free-dictionary-api.service'
 import { NotesService } from '../notes/notes.service'
-import { enrichReviewCardWithDictionary } from './review-dictionary-enrichment'
+import {
+  enrichReviewCardWithDictionary,
+  overlayNotePronunciationOnCard,
+} from './review-dictionary-enrichment'
 import type { ConfusableGroup } from '../notes/types/note-extensions'
 import { PrismaService } from '../prisma/prisma.service'
 import { parseReviewAiPayload } from './review-ai-content.util'
@@ -241,8 +244,11 @@ export class ReviewAiService {
         cardType,
         note.content,
       )
-      void this.notesService.saveBritishPronunciationToNote(noteId, note.content)
-      return enriched
+      const pron = await this.notesService.saveBritishPronunciationToNote(
+        noteId,
+        note.content,
+      )
+      return overlayNotePronunciationOnCard(enriched, pron)
     } catch (err) {
       this.logger.warn(`AI generation failed for note ${noteId}: ${String(err)}`)
       const fallback = this.buildFallback(note, 'AI 调用失败或超时')
@@ -252,8 +258,11 @@ export class ReviewAiService {
         cardType,
         note.content,
       )
-      void this.notesService.saveBritishPronunciationToNote(noteId, note.content)
-      return enriched
+      const pron = await this.notesService.saveBritishPronunciationToNote(
+        noteId,
+        note.content,
+      )
+      return overlayNotePronunciationOnCard(enriched, pron)
     }
   }
 

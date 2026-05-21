@@ -3,6 +3,11 @@ import type { Note, Category } from '../data/mockData'
 import type { ConfusableGroup, PartOfSpeechItem } from '../types/noteExtensions'
 import type { WordFamily } from '../types/wordFamily'
 import { apiUrl } from '../lib/apiBase'
+import { ensureNotePhonetic } from '../lib/dictionaryPronunciation'
+import {
+  showsReviewDictionaryPronunciation,
+  type ReviewCardType,
+} from '../lib/reviewPronunciation'
 import { normalizeWordFamilyForUI } from '../lib/wordFamilyDedup'
 import { normalizeConfusablesForUI, normalizePartOfSpeechForUI } from '../lib/noteExtensionsDedup'
 
@@ -324,6 +329,73 @@ function waitMs(ms: number): Promise<void> {
 function reviewCardAiReady(v: CardAIContent | null | undefined): boolean {
   if (v === null || v === undefined) return false
   return typeof v === 'object' && 'fallback' in v
+}
+
+function patchReviewSessionNotePronetic(
+  noteId: string,
+  phonetic: string | null | undefined,
+  pronunciationAudioUrl: string | null | undefined,
+): void {
+  useAppStore.setState((s) => {
+    if (!s.reviewSession) return s
+    const cards = s.reviewSession.cards.map((c) =>
+      c.id === noteId
+        ? {
+            ...c,
+            ...(phonetic?.trim() ? { phonetic: phonetic.trim() } : {}),
+            ...(pronunciationAudioUrl?.trim()
+              ? { pronunciationAudioUrl: pronunciationAudioUrl.trim() }
+              : {}),
+          }
+        : c,
+    )
+    const notes = s.notes.map((n) =>
+      n.id === noteId
+        ? {
+            ...n,
+            ...(phonetic?.trim() ? { phonetic: phonetic.trim() } : {}),
+            ...(pronunciationAudioUrl?.trim()
+              ? { pronunciationAudioUrl: pronunciationAudioUrl.trim() }
+              : {}),
+          }
+        : n,
+    )
+    return { reviewSession: { ...s.reviewSession, cards }, notes }
+  })
+}
+
+async function loadNotesAfterAiPhonetic(noteId: string): Promise<void> {
+  await useAppStore.getState().loadNotes()
+  const n = useAppStore.getState().notes.find((x) => x.id === noteId)
+  if (!n?.phonetic?.trim() && !n?.pronunciationAudioUrl?.trim()) return
+  patchReviewSessionNotePronetic(
+    noteId,
+    n.phonetic,
+    n.pronunciationAudioUrl,
+  )
+}
+
+function pronunciationFromAiContent(
+  content: CardAIContent,
+): { phonetic?: string; audioUrl?: string | null } {
+  if (!content || typeof content !== 'object' || content.fallback === true) {
+    return {}
+  }
+  const raw = content as {
+    phonetic?: unknown
+    pronunciationAudioUrl?: unknown
+  }
+  const phonetic = typeof raw.phonetic === 'string' ? raw.phonetic.trim() : ''
+  const audioUrl =
+    typeof raw.pronunciationAudioUrl === 'string'
+      ? raw.pronunciationAudioUrl.trim()
+      : raw.pronunciationAudioUrl === null
+        ? null
+        : undefined
+  return {
+    ...(phonetic ? { phonetic } : {}),
+    ...(audioUrl !== undefined ? { audioUrl } : {}),
+  }
 }
 
 export interface ProviderConfig {
@@ -1205,6 +1277,23 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!latest) break
       if (reviewCardAiReady(latest.aiContent[card.id]) || latest.aiLoading[card.id]) continue
       void get().fetchAIContent(card.id, mapReviewCardType(card.category))
+
+      const cardType = mapReviewCardType(card.category) as ReviewCardType
+      if (
+        showsReviewDictionaryPronunciation(
+          card.category as Category,
+          cardType,
+        )
+      ) {
+        void ensureNotePhonetic(card.id).then((ensured) => {
+          if (!ensured) return
+          patchReviewSessionNotePronetic(
+            card.id,
+            ensured.phonetic,
+            ensured.audioUrl,
+          )
+        })
+      }
     }
 
     const start = Date.now()
@@ -1372,6 +1461,7 @@ export const useAppStore = create<AppState>((set, get) => {
         const json = (await res.json()) as { data?: CardAIContent }
         const content = json.data ?? { fallback: true }
         if (content.fallback !== true) {
+          const pron = pronunciationFromAiContent(content as CardAIContent)
           set((s) => {
             if (!s.reviewSession) return s
             return {
@@ -1382,6 +1472,11 @@ export const useAppStore = create<AppState>((set, get) => {
               },
             }
           })
+          if (pron.phonetic || pron.audioUrl) {
+            patchReviewSessionNotePronetic(noteId, pron.phonetic, pron.audioUrl)
+          } else {
+            void loadNotesAfterAiPhonetic(noteId)
+          }
           return
         }
         const r = (content as CardAIContent).reason
@@ -1441,6 +1536,24 @@ export const useAppStore = create<AppState>((set, get) => {
       if (reviewCardAiReady(latest.aiContent[card.id])) continue
       if (latest.aiLoading[card.id]) continue
       void get().fetchAIContent(card.id, mapReviewCardType(card.category))
+
+      const cardType = mapReviewCardType(card.category) as ReviewCardType
+      if (
+        showsReviewDictionaryPronunciation(
+          card.category as Category,
+          cardType,
+        ) &&
+        !card.phonetic?.trim()
+      ) {
+        void ensureNotePhonetic(card.id).then((ensured) => {
+          if (!ensured) return
+          patchReviewSessionNotePronetic(
+            card.id,
+            ensured.phonetic,
+            ensured.audioUrl,
+          )
+        })
+      }
     }
   },
 

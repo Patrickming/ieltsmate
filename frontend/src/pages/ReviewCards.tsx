@@ -18,7 +18,11 @@ import {
   BritishPhoneticBlock,
   pronunciationAudioFromAi,
 } from "../components/ui/BritishPhoneticBlock";
-import { showsReviewDictionaryPronunciation } from "../lib/reviewPronunciation";
+import {
+  shouldAutoplayReviewPronunciation,
+  showsReviewDictionaryPronunciation,
+} from "../lib/reviewPronunciation";
+import { useReviewPronunciationAutoplay } from "../lib/reviewPronunciationAutoplay";
 import { StrokeButton } from "../components/ui/StrokeButton";
 import { UserNoteCard } from "../components/ui/UserNoteCard";
 import {
@@ -137,6 +141,13 @@ function CardFront({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const barColor = CATEGORY_BAR[note.category] ?? "#818cf8";
+
+  useReviewPronunciationAutoplay({
+    enabled: shouldAutoplayReviewPronunciation(note.category, cardType),
+    noteId: note.id,
+    word: note.content,
+    audioUrl: note.pronunciationAudioUrl,
+  });
 
   const wordLen = note.content.length;
   const firstLetter = note.content[0] ?? "";
@@ -401,6 +412,17 @@ const SPACE_FLIP_INTERACTIVE_SELECTOR = [
   "[data-review-card-interactive='true']",
 ].join(", ");
 
+/** 收藏 / 记得 / 不记得 / 斩：仅鼠标，禁止 Tab 与空格/回车触发 */
+const REVIEW_RATING_MOUSE_ONLY_PROPS = {
+  tabIndex: -1,
+  onKeyDown: (e: React.KeyboardEvent) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  },
+} as const;
+
 function shouldIgnoreSpaceFlip(event: KeyboardEvent) {
   if (event.defaultPrevented) return true;
 
@@ -410,6 +432,9 @@ function shouldIgnoreSpaceFlip(event: KeyboardEvent) {
 
   // 侧栏/顶栏：保留原生键盘行为（空格激活链接或按钮）。
   if (target.closest("aside") || target.closest("header")) return true;
+
+  // 底部评分条：空格一律翻面，不触发按钮（仅鼠标可点）。
+  if (target.closest("[data-review-rating-bar]")) return false;
 
   return target.closest(SPACE_FLIP_INTERACTIVE_SELECTOR) !== null;
 }
@@ -2625,6 +2650,7 @@ function ReviewFavButton({ noteId }: { noteId: string }) {
       type="button"
       onClick={() => toggleFavorite(noteId)}
       className="pill-btn"
+      {...REVIEW_RATING_MOUSE_ONLY_PROPS}
       style={
         {
           ["--btn-color" as string]: color,
@@ -2776,13 +2802,14 @@ export default function ReviewCards() {
     return () => window.clearTimeout(timer);
   }, [saveNotice?.text]);
 
-  // Spacebar flip
+  // Spacebar flip（capture：优先于底部评分按钮的原生空格激活）
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.code !== "Space") return;
       if (shouldIgnoreSpaceFlip(e)) return;
 
       e.preventDefault();
+      e.stopPropagation();
       setFlipped((f) => !f);
     };
     window.addEventListener("keydown", handler, { capture: true });
@@ -3552,13 +3579,17 @@ export default function ReviewCards() {
               </AnimatePresence>
             </div>
 
-            {/* Rating buttons + favorite — 翻转前后布局一致 */}
-            <div className="shrink-0 pb-6 flex flex-wrap items-center justify-center gap-10">
+            {/* Rating buttons + favorite — 仅鼠标；空格只翻面 */}
+            <div
+              data-review-rating-bar
+              className="shrink-0 pb-6 flex flex-wrap items-center justify-center gap-10"
+            >
               <ReviewFavButton noteId={card.id} />
               <StrokeButton
                 disabled={slashState === "slashing"}
                 color="#fb7185"
                 onClick={() => handleRate("again")}
+                {...REVIEW_RATING_MOUSE_ONLY_PROPS}
               >
                 😞 不记得
               </StrokeButton>
@@ -3566,14 +3597,17 @@ export default function ReviewCards() {
                 disabled={slashState === "slashing"}
                 color="#34d399"
                 onClick={() => handleRate("easy")}
+                {...REVIEW_RATING_MOUSE_ONLY_PROPS}
               >
                 😊 记得
               </StrokeButton>
               <motion.button
+                type="button"
                 disabled={slashState === "slashing"}
                 onClick={() => {
                   void handleSlashMaster();
                 }}
+                {...REVIEW_RATING_MOUSE_ONLY_PROPS}
                 whileTap={{ scale: 0.96 }}
                 className="h-11 px-6 rounded-full border text-[15px] font-semibold transition-all disabled:opacity-60"
                 style={{

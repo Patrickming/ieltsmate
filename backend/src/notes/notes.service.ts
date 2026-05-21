@@ -44,33 +44,78 @@ export class NotesService {
       }
     }
 
-    const uk = await this.dictionary.lookupBritishPronunciation(note.content)
-    if (uk?.phonetic) {
-      const updated = await this.persistBritishPronunciation(noteId, uk)
-      return {
-        phonetic: updated.phonetic,
-        audioUrl: updated.pronunciationAudioUrl ?? null,
-        source: 'dictionary' as const,
-      }
-    }
-
-    const aiPhonetic = await this.generatePhoneticWithAi(note.content)
-    if (!aiPhonetic) {
+    const saved = await this.ensurePhoneticOnNoteSilent(noteId, note.content)
+    if (!saved?.phonetic) {
       throw new NotFoundException('词典与 AI 均未生成可用音标')
     }
-
-    const updated = await this.prisma.note.update({
-      where: { id: noteId },
-      data: {
-        phonetic: aiPhonetic,
-        ...(uk?.audioUrl ? { pronunciationAudioUrl: uk.audioUrl } : {}),
-      },
-      include: noteInclude,
-    })
     return {
-      phonetic: updated.phonetic,
-      audioUrl: updated.pronunciationAudioUrl ?? null,
-      source: 'ai' as const,
+      phonetic: saved.phonetic,
+      audioUrl: saved.pronunciationAudioUrl ?? null,
+      source: saved.source,
+    }
+  }
+
+  /**
+   * 复习预热：词典优先写回笔记；无音标时用 AI 生成。失败不抛错、不阻断复习。
+   */
+  async ensurePhoneticOnNoteSilent(
+    noteId: string,
+    lookupText?: string,
+  ): Promise<{
+    phonetic: string
+    pronunciationAudioUrl: string | null
+    source: 'note' | 'dictionary' | 'ai'
+  } | null> {
+    try {
+      const note = await this.prisma.note.findUnique({
+        where: { id: noteId },
+        select: { content: true, phonetic: true, pronunciationAudioUrl: true },
+      })
+      if (!note) return null
+
+      const text = (lookupText ?? note.content).trim()
+      if (!text) return null
+
+      const existingPhonetic = note.phonetic?.trim()
+      if (existingPhonetic) {
+        return {
+          phonetic: existingPhonetic,
+          pronunciationAudioUrl: note.pronunciationAudioUrl ?? null,
+          source: 'note',
+        }
+      }
+
+      const uk = await this.dictionary.lookupBritishPronunciation(text)
+      if (uk?.phonetic) {
+        const updated = await this.persistBritishPronunciation(noteId, uk)
+        return {
+          phonetic: updated.phonetic ?? uk.phonetic,
+          pronunciationAudioUrl: updated.pronunciationAudioUrl ?? null,
+          source: 'dictionary',
+        }
+      }
+
+      const aiPhonetic = await this.generatePhoneticWithAi(text)
+      if (!aiPhonetic) return null
+
+      const updated = await this.prisma.note.update({
+        where: { id: noteId },
+        data: {
+          phonetic: aiPhonetic,
+          ...(uk?.audioUrl ? { pronunciationAudioUrl: uk.audioUrl } : {}),
+        },
+        include: noteInclude,
+      })
+      return {
+        phonetic: updated.phonetic ?? aiPhonetic,
+        pronunciationAudioUrl: updated.pronunciationAudioUrl ?? null,
+        source: 'ai',
+      }
+    } catch (err) {
+      this.logger.warn(
+        `ensurePhoneticOnNoteSilent failed noteId=${noteId}: ${err instanceof Error ? err.message : String(err)}`,
+      )
+      return null
     }
   }
 
@@ -126,17 +171,9 @@ export class NotesService {
     return this.persistBritishPronunciation(noteId, uk)
   }
 
-  /** 复习生成后静默写回笔记，失败不阻断复习流程 */
-  async saveBritishPronunciationToNote(noteId: string, lookupText: string): Promise<void> {
-    try {
-      const uk = await this.dictionary.lookupBritishPronunciation(lookupText)
-      if (!uk?.phonetic) return
-      await this.persistBritishPronunciation(noteId, uk)
-    } catch (err) {
-      this.logger.warn(
-        `saveBritishPronunciationToNote failed noteId=${noteId}: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    }
+  /** 复习预热后静默写回笔记（词典优先，无音标则 AI），失败不阻断复习流程 */
+  async saveBritishPronunciationToNote(noteId: string, lookupText: string) {
+    return this.ensurePhoneticOnNoteSilent(noteId, lookupText)
   }
 
   private async persistBritishPronunciation(
